@@ -287,6 +287,6 @@ class CarbonScanRDD[V: ClassTag](
     )
 
     val sortedNodesList = sortedList.map(nodeCount => nodeCount.getKey).take(2)
-    firstOptionLocation ++ sortedNodesList
+    firstOptionLocation
   }
 }
