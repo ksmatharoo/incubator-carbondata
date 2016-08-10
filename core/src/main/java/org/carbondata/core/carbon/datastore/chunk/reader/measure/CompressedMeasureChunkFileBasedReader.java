@@ -20,7 +20,10 @@ package org.carbondata.core.carbon.datastore.chunk.reader.measure;
 
 import java.util.List;
 
+import org.carbondata.common.logging.LogService;
+import org.carbondata.common.logging.LogServiceFactory;
 import org.carbondata.core.carbon.datastore.chunk.MeasureColumnDataChunk;
+import org.carbondata.core.carbon.datastore.chunk.reader.dimension.CompressedDimensionChunkFileBasedReader;
 import org.carbondata.core.carbon.metadata.blocklet.datachunk.DataChunk;
 import org.carbondata.core.datastorage.store.FileHolder;
 import org.carbondata.core.datastorage.store.compression.ValueCompressionModel;
@@ -32,6 +35,8 @@ import org.carbondata.core.datastorage.store.dataholder.CarbonReadDataHolder;
  */
 public class CompressedMeasureChunkFileBasedReader extends AbstractMeasureChunkReader {
 
+  private static final LogService LOGGER =
+      LogServiceFactory.getLogService(CompressedMeasureChunkFileBasedReader.class.getName());
   /**
    * Constructor to get minimum parameter to create instance of this class
    *
@@ -70,6 +75,10 @@ public class CompressedMeasureChunkFileBasedReader extends AbstractMeasureChunkR
    */
   @Override public MeasureColumnDataChunk readMeasureChunk(FileHolder fileReader, int blockIndex) {
     MeasureColumnDataChunk datChunk = new MeasureColumnDataChunk();
+
+    LOGGER.error(
+        filePath + " +++ measuredatapageoffset " + measureColumnChunk.get(blockIndex).getDataPageOffset()
+            + " ++ measuredatapagelength: " + measureColumnChunk.get(blockIndex).getDataPageLength());
     // create a new uncompressor
     ValueCompressonHolder.UnCompressValue copy = values[blockIndex].getNew();
     // read data from file and set to uncompressor

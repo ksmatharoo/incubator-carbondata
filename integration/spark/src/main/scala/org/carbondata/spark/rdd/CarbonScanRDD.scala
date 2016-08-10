@@ -192,8 +192,10 @@ class CarbonScanRDD[V: ClassTag](
 
         }
       } catch {
-        case e: Exception =>
+        case e: Throwable =>
+          clearDictionaryCache(queryModel.getColumnToDictionaryMapping)
           LOGGER.error(e)
+          // updateCubeAndLevelCacheStatus(levelCacheKeys)
           if (null != e.getMessage) {
             sys.error("Exception occurred in query execution :: " + e.getMessage)
           } else {

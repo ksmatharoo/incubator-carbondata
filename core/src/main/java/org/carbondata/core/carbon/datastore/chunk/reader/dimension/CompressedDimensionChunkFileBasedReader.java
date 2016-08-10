@@ -20,6 +20,8 @@ package org.carbondata.core.carbon.datastore.chunk.reader.dimension;
 
 import java.util.List;
 
+import org.carbondata.common.logging.LogService;
+import org.carbondata.common.logging.LogServiceFactory;
 import org.carbondata.core.carbon.datastore.chunk.DimensionChunkAttributes;
 import org.carbondata.core.carbon.datastore.chunk.DimensionColumnDataChunk;
 import org.carbondata.core.carbon.datastore.chunk.impl.ColumnGroupDimensionDataChunk;
@@ -35,6 +37,9 @@ import org.carbondata.core.util.CarbonUtil;
  * Compressed dimension chunk reader class
  */
 public class CompressedDimensionChunkFileBasedReader extends AbstractChunkReader {
+
+  private static final LogService LOGGER =
+      LogServiceFactory.getLogService(CompressedDimensionChunkFileBasedReader.class.getName());
 
   /**
    * Constructor to get minimum parameter to create instance of this class
@@ -79,7 +84,10 @@ public class CompressedDimensionChunkFileBasedReader extends AbstractChunkReader
     int[] invertedIndexes = null;
     int[] invertedIndexesReverse = null;
     int[] rlePage = null;
-
+    LOGGER.error(
+        filePath + " +++ datapageoffset " + dimensionColumnChunk.get(blockIndex).getDataPageOffset()
+            + " ++ datapagelength: " + dimensionColumnChunk.get(blockIndex).getDataPageLength()
+            + " ++rlepage: " + dimensionColumnChunk.get(blockIndex).getRlePageOffset() +" ++rleoffset: "+dimensionColumnChunk.get(blockIndex).getRlePageLength());
     // first read the data and uncompressed it
     dataPage = COMPRESSOR.unCompress(fileReader
         .readByteArray(filePath, dimensionColumnChunk.get(blockIndex).getDataPageOffset(),
