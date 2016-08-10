@@ -76,25 +76,30 @@ public class CompressedMeasureChunkFileBasedReader extends AbstractMeasureChunkR
   @Override public MeasureColumnDataChunk readMeasureChunk(FileHolder fileReader, int blockIndex) {
     MeasureColumnDataChunk datChunk = new MeasureColumnDataChunk();
 
-    LOGGER.error(
-        filePath + " +++ measuredatapageoffset " + measureColumnChunk.get(blockIndex).getDataPageOffset()
-            + " ++ measuredatapagelength: " + measureColumnChunk.get(blockIndex).getDataPageLength());
-    // create a new uncompressor
-    ValueCompressonHolder.UnCompressValue copy = values[blockIndex].getNew();
-    // read data from file and set to uncompressor
-    copy.setValue(fileReader
-        .readByteArray(filePath, measureColumnChunk.get(blockIndex).getDataPageOffset(),
-            measureColumnChunk.get(blockIndex).getDataPageLength()));
-    // get the data holder after uncompressing
-    CarbonReadDataHolder measureDataHolder =
-        copy.uncompress(compressionModel.getChangedDataType()[blockIndex])
-            .getValues(compressionModel.getDecimal()[blockIndex],
-                compressionModel.getMaxValue()[blockIndex]);
-    // set the data chunk
-    datChunk.setMeasureDataHolder(measureDataHolder);
-    // set the enun value indexes
-    datChunk
-        .setNullValueIndexHolder(measureColumnChunk.get(blockIndex).getNullValueIndexForColumn());
+    try {
+      // create a new uncompressor
+      ValueCompressonHolder.UnCompressValue copy = values[blockIndex].getNew();
+      // read data from file and set to uncompressor
+      copy.setValue(fileReader
+          .readByteArray(filePath, measureColumnChunk.get(blockIndex).getDataPageOffset(),
+              measureColumnChunk.get(blockIndex).getDataPageLength()));
+      // get the data holder after uncompressing
+      CarbonReadDataHolder measureDataHolder =
+          copy.uncompress(compressionModel.getChangedDataType()[blockIndex])
+              .getValues(compressionModel.getDecimal()[blockIndex],
+                  compressionModel.getMaxValue()[blockIndex]);
+      // set the data chunk
+      datChunk.setMeasureDataHolder(measureDataHolder);
+      // set the enun value indexes
+      datChunk
+          .setNullValueIndexHolder(measureColumnChunk.get(blockIndex).getNullValueIndexForColumn());
+    } catch (Exception e) {
+      LOGGER.error(
+          filePath + " +++ measuredatapageoffset " + measureColumnChunk.get(blockIndex).getDataPageOffset()
+              + " ++ measuredatapagelength: " + measureColumnChunk.get(blockIndex).getDataPageLength());
+      LOGGER.error(e);
+    }
+
     return datChunk;
   }
 
