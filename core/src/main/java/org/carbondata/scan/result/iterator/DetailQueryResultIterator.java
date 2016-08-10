@@ -52,21 +52,36 @@ public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator
         future = execute();
       }
       result = future.get();
-      nextBatch = false;
-      if (hasNext()) {
-        nextBatch = true;
-        future = execute();
-      } else {
-        fileReader.finish();
-        execService.shutdown();
-        execService.awaitTermination(2, TimeUnit.HOURS);
-      }
+      future = null;
+//      nextBatch = false;
+//      if (hasNext()) {
+//        nextBatch = true;
+//        future = execute();
+//      } else {
+//        fileReader.finish();
+//        execService.shutdown();
+//        execService.awaitTermination(2, TimeUnit.HOURS);
+//      }
     } catch (Exception ex) {
       fileReader.finish();
       execService.shutdown();
       throw new RuntimeException(ex);
     }
     return result;
+  }
+
+  @Override public boolean hasNext() {
+    boolean b = super.hasNext();
+    if(!b) {
+      fileReader.finish();
+      execService.shutdown();
+      try {
+        execService.awaitTermination(2, TimeUnit.HOURS);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return b;
   }
 
   private Future<BatchResult> execute() {
