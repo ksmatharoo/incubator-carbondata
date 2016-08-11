@@ -37,7 +37,7 @@ import org.carbondata.scan.result.BatchResult;
  */
 public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator {
 
-  private ExecutorService execService = Executors.newFixedThreadPool(1);
+//  private ExecutorService execService = Executors.newFixedThreadPool(1);
 
   private Future<BatchResult> future;
 
@@ -46,36 +46,38 @@ public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator
   }
 
   @Override public BatchResult next() {
-    BatchResult result;
-    try {
-      if (future == null) {
-        future = execute();
-      }
-      result = future.get();
-      nextBatch = false;
-      if (hasNext()) {
-        nextBatch = true;
-        future = execute();
-      } else {
-        execService.shutdown();
-        execService.awaitTermination(2, TimeUnit.HOURS);
-        fileReader.finish();
-      }
-    } catch (Exception ex) {
-      execService.shutdown();
-      fileReader.finish();
-      throw new RuntimeException(ex);
-    }
-    return result;
+//    BatchResult result;
+//    try {
+//      if (future == null) {
+//        future = execute();
+//      }
+//      result = future.get();
+//      nextBatch = false;
+//      if (hasNext()) {
+//        nextBatch = true;
+//        future = execute();
+//      } else {
+//        execService.shutdown();
+//        execService.awaitTermination(2, TimeUnit.HOURS);
+//        fileReader.finish();
+//      }
+//    } catch (Exception ex) {
+//      execService.shutdown();
+//      fileReader.finish();
+//      throw new RuntimeException(ex);
+//    }
+    BatchResult batchResult = new BatchResult();
+    batchResult.setRows(dataBlockIterator.next());
+    return batchResult;
   }
 
-  private Future<BatchResult> execute() {
-    return execService.submit(new Callable<BatchResult>() {
-      @Override public BatchResult call() throws QueryExecutionException {
-        BatchResult batchResult = new BatchResult();
-        batchResult.setRows(dataBlockIterator.next());
-        return batchResult;
-      }
-    });
-  }
+//  private Future<BatchResult> execute() {
+//    return execService.submit(new Callable<BatchResult>() {
+//      @Override public BatchResult call() throws QueryExecutionException {
+//        BatchResult batchResult = new BatchResult();
+//        batchResult.setRows(dataBlockIterator.next());
+//        return batchResult;
+//      }
+//    });
+//  }
 }

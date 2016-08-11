@@ -72,7 +72,7 @@ class CarbonScanRDD[V: ClassTag](
     baseStoreLocation: String)
   extends RDD[V](sc, Nil) with Logging {
 
-  val defaultParallelism = 1//sc.defaultParallelism
+  val defaultParallelism = sc.defaultParallelism
 
   override def getPartitions: Array[Partition] = {
     val statisticRecorder = new QueryStatisticsRecorder(queryModel.getQueryId)
