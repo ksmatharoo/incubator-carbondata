@@ -57,13 +57,13 @@ public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator
         nextBatch = true;
         future = execute();
       } else {
-        fileReader.finish();
         execService.shutdown();
         execService.awaitTermination(2, TimeUnit.HOURS);
+        fileReader.finish();
       }
     } catch (Exception ex) {
-      fileReader.finish();
       execService.shutdown();
+      fileReader.finish();
       throw new RuntimeException(ex);
     }
     return result;

@@ -61,7 +61,7 @@ public class DFSFileHolderImpl implements FileHolder {
    * @param filePath fully qualified file path
    * @return channel
    */
-  private FSDataInputStream updateCache(String filePath) {
+  private synchronized FSDataInputStream updateCache(String filePath) {
     FSDataInputStream fileChannel = fileNameAndStreamCache.get(filePath);
     try {
       if (null == fileChannel) {
@@ -138,7 +138,7 @@ public class DFSFileHolderImpl implements FileHolder {
     return i;
   }
 
-  @Override public void finish() {
+  @Override public synchronized void finish() {
     for (Entry<String, FSDataInputStream> entry : fileNameAndStreamCache.entrySet()) {
       try {
         FSDataInputStream channel = entry.getValue();
@@ -149,6 +149,7 @@ public class DFSFileHolderImpl implements FileHolder {
         LOGGER.error(exception, exception.getMessage());
       }
     }
+    fileNameAndStreamCache.clear();
 
   }
 
