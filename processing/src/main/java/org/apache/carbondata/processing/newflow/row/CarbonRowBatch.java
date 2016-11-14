@@ -28,13 +28,13 @@ import java.util.List;
  */
 public class CarbonRowBatch {
 
-  private List<CarbonRow> rowBatch = new ArrayList<>();
+  private List<MutableCarbonRow> rowBatch = new ArrayList<>();
 
-  public void addRow(CarbonRow carbonRow) {
+  public void addRow(MutableCarbonRow carbonRow) {
     rowBatch.add(carbonRow);
   }
 
-  public Iterator<CarbonRow> getBatchIterator() {
+  public Iterator<MutableCarbonRow> getBatchIterator() {
     return rowBatch.iterator();
   }
 

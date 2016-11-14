@@ -1,97 +1,37 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
- */
-
 package org.apache.carbondata.processing.newflow.row;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
 
 /**
  * This row class is used to transfer the row data from one step to other step
  */
-public class CarbonRow {
+public interface CarbonRow {
 
-  private Object[] data;
+  Object[] getData();
 
-  public CarbonRow(Object[] data) {
-    this.data = data;
-  }
+  void setData(Object[] data);
 
-  public Object[] getData() {
-    return data;
-  }
+  int getInt(int ordinal);
 
-  public void setData(Object[] data) {
-    this.data = data;
-  }
+  long getLong(int ordinal);
 
-  public int getInt(int ordinal) {
-    return (int) data[ordinal];
-  }
+  float getFloat(int ordinal);
 
-  public long getLong(int ordinal) {
-    return (long) data[ordinal];
-  }
+  double getDouble(int ordinal);
 
-  public float getFloat(int ordinal) {
-    return (float) data[ordinal];
-  }
+  BigDecimal getDecimal(int ordinal);
 
-  public double getDouble(int ordinal) {
-    return (double) data[ordinal];
-  }
+  String getString(int ordinal);
 
-  public BigDecimal getDecimal(int ordinal) {
-    return (BigDecimal) data[ordinal];
-  }
+  Object getObject(int ordinal);
 
-  public String getString(int ordinal) {
-    return (String) data[ordinal];
-  }
+  byte[] getBinary(int ordinal);
 
-  public Object getObject(int ordinal) {
-    return data[ordinal];
-  }
+  Object[] getObjectArray(int ordinal);
 
-  public byte[] getBinary(int ordinal) {
-    return (byte[]) data[ordinal];
-  }
+  int[] getIntArray(int ordinal);
 
-  public Object[] getObjectArray(int ordinal) {
-    return (Object[]) data[ordinal];
-  }
+  void update(Object value, int ordinal);
 
-  public int[] getIntArray(int ordinal) {
-    return (int[]) data[ordinal];
-  }
-
-  public void update(Object value, int ordinal) {
-    data[ordinal] = value;
-  }
-
-  public CarbonRow getCopy() {
-    Object[] copy = new Object[data.length];
-    System.arraycopy(data, 0, copy, 0, copy.length);
-    return new CarbonRow(copy);
-  }
-
-  @Override public String toString() {
-    return Arrays.toString(data);
-  }
+  CarbonRow getCopy();
 }
