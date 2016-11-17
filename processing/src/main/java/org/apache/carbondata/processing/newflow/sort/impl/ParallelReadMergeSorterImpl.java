@@ -34,6 +34,7 @@ import org.apache.carbondata.processing.newflow.DataField;
 import org.apache.carbondata.processing.newflow.exception.CarbonDataLoadingException;
 import org.apache.carbondata.processing.newflow.row.CarbonRow;
 import org.apache.carbondata.processing.newflow.row.CarbonRowBatch;
+import org.apache.carbondata.processing.newflow.row.MutableCarbonRow;
 import org.apache.carbondata.processing.newflow.sort.Sorter;
 import org.apache.carbondata.processing.sortandgroupby.exception.CarbonSortKeyAndGroupByException;
 import org.apache.carbondata.processing.sortandgroupby.sortdata.SortDataRows;
@@ -137,7 +138,7 @@ public class ParallelReadMergeSorterImpl implements Sorter {
         int counter = 0;
         CarbonRowBatch rowBatch = new CarbonRowBatch();
         while (finalMerger.hasNext() && counter < batchSize) {
-          rowBatch.addRow(new CarbonRow(finalMerger.next()));
+          rowBatch.addRow(new MutableCarbonRow(finalMerger.next()));
           counter++;
         }
         return rowBatch;
