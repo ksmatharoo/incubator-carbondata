@@ -894,6 +894,34 @@ public final class CarbonCommonConstants {
    */
   public static final String DATA_LOAD_BATCH_SIZE_DEFAULT = "1000";
 
+  /**
+   * to enable offheap sort
+   */
+  public static final String ENABLE_UNSAFE_SORT = "enable.unsafe.sort";
+
+  /**
+   * to enable offheap sort
+   */
+  public static final String ENABLE_UNSAFE_SORT_DEFAULT = "true";
+
+  /**
+   * to enable offheap sort
+   */
+  public static final String ENABLE_OFFHEAP_SORT = "enable.offheap.sort";
+
+  /**
+   * to enable offheap sort
+   */
+  public static final String ENABLE_OFFHEAP_SORT_DEFAULT = "true";
+
+  public static final String OFFHEAP_SORT_CHUNK_SIZE_IN_MB = "offheap.sort.chunk.size.inmb";
+
+  public static final String OFFHEAP_SORT_CHUNK_SIZE_IN_MB_DEFAULT = "50";
+
+  public static final String IN_MEMORY_FOR_SORT_DATA_IN_MB = "sort.inmemory.size.inmb";
+
+  public static final String IN_MEMORY_FOR_SORT_DATA_IN_MB_DEFAULT = "1024";
+
   private CarbonCommonConstants() {
   }
 }
