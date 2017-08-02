@@ -34,9 +34,13 @@ import org.apache.carbondata.core.util.{CarbonProperties, CarbonSessionInfo, Car
 abstract class CarbonRDD[T: ClassTag](@transient sc: SparkContext,
     @transient private var deps: Seq[Dependency[_]]) extends RDD[T](sc, deps) {
 
-  val carbonSessionInfo: CarbonSessionInfo = ThreadLocalSessionInfo.getCarbonSessionInfo
-
-//  val addedProperty = CarbonProperties.getInstance().getAddedProperty
+  val carbonSessionInfo: CarbonSessionInfo = {
+    val info = ThreadLocalSessionInfo.getCarbonSessionInfo
+    if (info != null && info.getSessionParams != null) {
+      info.getSessionParams.addExtraProperties(CarbonProperties.getInstance().getAddedProperty)
+    }
+    info
+  }
 
   /** Construct an RDD with just a one-to-one dependency on one parent */
   def this(@transient oneParent: RDD[_]) =
@@ -50,7 +54,10 @@ abstract class CarbonRDD[T: ClassTag](@transient sc: SparkContext,
     val carbonTaskInfo = new CarbonTaskInfo
     carbonTaskInfo.setTaskId(System.nanoTime)
     ThreadLocalTaskInfo.setCarbonTaskInfo(carbonTaskInfo)
-//    addedProperty.asScala.map(f => CarbonProperties.getInstance().addProperty(f._1, f._2))
+    if (carbonSessionInfo.getSessionParams != null) {
+      carbonSessionInfo.getSessionParams.getAddedProps.asScala.
+        map(f => CarbonProperties.getInstance().addProperty(f._1, f._2))
+    }
     internalCompute(split, context)
   }
 }

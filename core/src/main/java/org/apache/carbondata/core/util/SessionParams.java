@@ -41,8 +41,11 @@ public class SessionParams implements Serializable {
 
   private Map<String, String> sProps;
 
+  private Map<String, String> addedProps;
+
   public SessionParams() {
     sProps = new HashMap<>();
+    addedProps = new HashMap<>();
   }
 
   /**
@@ -68,6 +71,15 @@ public class SessionParams implements Serializable {
       sProps.put(key, value);
     }
     return this;
+  }
+
+  public SessionParams addExtraProperties(Map<String, String> addedProps) {
+    this.addedProps.putAll(addedProps);
+    return this;
+  }
+
+  public Map<String, String> getAddedProps() {
+    return addedProps;
   }
 
   /**
