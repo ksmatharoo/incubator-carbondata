@@ -70,20 +70,21 @@ class SDVSuites extends Suites with BeforeAndAfterAll {
  */
 class SDVSuites1 extends Suites with BeforeAndAfterAll {
 
-  val suites =                 new AlterTableTestCase ::
-                               new BadRecordTestCase ::
-                               new BatchSortLoad1TestCase ::
-                               new BatchSortLoad2TestCase ::
-                               new BatchSortQueryTestCase ::
-                               new ColumndictTestCase ::
-                               new DataLoadingTestCase ::
-                               new DataLoadingV3TestCase ::
-                               new InvertedindexTestCase ::
-                               new OffheapQuery1TestCase ::
-                               new OffheapQuery2TestCase ::
-                               new OffheapSort1TestCase ::
-                               new OffheapSort2TestCase ::
-                               new PartitionTestCase ::
+  val suites =
+//    new AlterTableTestCase ::
+//                               new BadRecordTestCase ::
+//                               new BatchSortLoad1TestCase ::
+//                               new BatchSortLoad2TestCase ::
+//                               new BatchSortQueryTestCase ::
+//                               new ColumndictTestCase ::
+//                               new DataLoadingTestCase ::
+//                               new DataLoadingV3TestCase ::
+//                               new InvertedindexTestCase ::
+//                               new OffheapQuery1TestCase ::
+//                               new OffheapQuery2TestCase ::
+//                               new OffheapSort1TestCase ::
+//                               new OffheapSort2TestCase ::
+//                               new PartitionTestCase ::
                                new QueriesBasicTestCase :: Nil
 
   override val nestedSuites = suites.toIndexedSeq
@@ -100,19 +101,20 @@ class SDVSuites1 extends Suites with BeforeAndAfterAll {
  */
 class SDVSuites2 extends Suites with BeforeAndAfterAll {
 
-  val suites =    new QueriesBVATestCase ::
-                  new QueriesCompactionTestCase ::
-                  new QueriesExcludeDictionaryTestCase ::
-                  new QueriesIncludeDictionaryTestCase ::
-                  new QueriesNormalTestCase ::
-                  new QueriesRangeFilterTestCase ::
-                  new QueriesSparkBlockDistTestCase ::
-                  new ShowLoadsTestCase ::
-                  new SinglepassTestCase ::
-                  new SortColumnTestCase ::
-                  new TimestamptypesTestCase ::
-                  new V3offheapvectorTestCase ::
-                  new Vector1TestCase ::
+  val suites =
+//    new QueriesBVATestCase ::
+//                  new QueriesCompactionTestCase ::
+//                  new QueriesExcludeDictionaryTestCase ::
+//                  new QueriesIncludeDictionaryTestCase ::
+//                  new QueriesNormalTestCase ::
+//                  new QueriesRangeFilterTestCase ::
+//                  new QueriesSparkBlockDistTestCase ::
+//                  new ShowLoadsTestCase ::
+//                  new SinglepassTestCase ::
+//                  new SortColumnTestCase ::
+//                  new TimestamptypesTestCase ::
+//                  new V3offheapvectorTestCase ::
+//                  new Vector1TestCase ::
                   new Vector2TestCase :: Nil
 
   override val nestedSuites = suites.toIndexedSeq
