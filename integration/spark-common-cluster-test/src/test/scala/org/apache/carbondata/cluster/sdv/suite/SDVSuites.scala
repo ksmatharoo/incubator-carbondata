@@ -20,6 +20,7 @@ import org.apache.spark.sql.test.TestQueryExecutor
 import org.scalatest.{BeforeAndAfterAll, Suites}
 
 import org.apache.carbondata.cluster.sdv.generated._
+import org.apache.carbondata.cluster.sdv.tpch.TpchPerformanceTestCase
 
 /**
  * Suite class for all tests.
@@ -130,6 +131,22 @@ class SDVSuites3 extends Suites with BeforeAndAfterAll {
                     new QueriesRangeFilterTestCase ::
                     new QueriesSparkBlockDistTestCase ::
                     new DataLoadingV3TestCase :: Nil
+
+  override val nestedSuites = suites.toIndexedSeq
+
+  override protected def afterAll() = {
+    println("---------------- Stopping spark -----------------")
+    TestQueryExecutor.INSTANCE.stop()
+    println("---------------- Stopped spark -----------------")
+  }
+}
+
+/**
+ * Suite class for all tests.
+ */
+class TPCHSuite extends Suites with BeforeAndAfterAll {
+
+  val suites =      new TpchPerformanceTestCase :: Nil
 
   override val nestedSuites = suites.toIndexedSeq
 

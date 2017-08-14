@@ -19,7 +19,7 @@ package org.apache.spark.sql.test
 
 import org.apache.spark.SparkConf
 import org.apache.spark.sql._
-import org.apache.spark.sql.test.TestQueryExecutor.{hdfsUrl, integrationPath, warehouse}
+import org.apache.spark.sql.test.TestQueryExecutor.{hdfsUrl, integrationPath, tpchDataPath, warehouse}
 
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
@@ -51,6 +51,9 @@ object Spark2TestQueryExecutor {
   import org.apache.spark.sql.CarbonSession._
 
   val conf = new SparkConf()
+  conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
+    .set("hive.exec.dynamic.partition", "true")
+    .set("hive.exec.max.dynamic.partitions", "10000")
   if (!TestQueryExecutor.masterUrl.startsWith("local")) {
     conf.setJars(TestQueryExecutor.jars).
       set("spark.driver.memory", "6g").
@@ -58,6 +61,14 @@ object Spark2TestQueryExecutor {
       set("spark.executor.cores", "2").
       set("spark.executor.instances", "2").
       set("spark.cores.max", "4")
+    if (!tpchDataPath.equals("none")) {
+      conf.setJars(TestQueryExecutor.jars).
+        set("spark.driver.memory", "6g").
+        set("spark.executor.memory", "40g").
+        set("spark.executor.cores", "6").
+        set("spark.executor.instances", "2").
+        set("spark.cores.max", "12")
+    }
     FileFactory.getConfiguration.
       set("dfs.client.block.write.replace-datanode-on-failure.policy", "NEVER")
   }
@@ -74,9 +85,11 @@ object Spark2TestQueryExecutor {
     System.setProperty(CarbonCommonConstants.HDFS_TEMP_LOCATION, warehouse)
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.LOCK_TYPE,
       CarbonCommonConstants.CARBON_LOCK_TYPE_HDFS)
-    ResourceRegisterAndCopier.
-      copyResourcesifNotExists(hdfsUrl, s"$integrationPath/spark-common-test/src/test/resources",
-        s"$integrationPath//spark-common-cluster-test/src/test/resources/testdatafileslist.txt")
+    if (tpchDataPath.equals("none")) {
+      ResourceRegisterAndCopier.
+        copyResourcesifNotExists(hdfsUrl, s"$integrationPath/spark-common-test/src/test/resources",
+          s"$integrationPath//spark-common-cluster-test/src/test/resources/testdatafileslist.txt")
+    }
   }
   FileFactory.getConfiguration.
     set("dfs.client.block.write.replace-datanode-on-failure.policy", "NEVER")

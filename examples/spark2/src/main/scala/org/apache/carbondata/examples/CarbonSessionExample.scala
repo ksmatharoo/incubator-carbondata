@@ -29,14 +29,15 @@ object CarbonSessionExample {
   def main(args: Array[String]) {
     val rootPath = new File(this.getClass.getResource("/").getPath
                             + "../../../..").getCanonicalPath
-    val storeLocation = s"$rootPath/examples/spark2/target/store"
-    val warehouse = s"$rootPath/examples/spark2/target/warehouse"
+//    val storeLocation = s"$rootPath/examples/spark2/target/store"
+    val warehouse = s"hdfs://localhost:9000/warehouse"
     val metastoredb = s"$rootPath/examples/spark2/target"
 
     CarbonProperties.getInstance()
       .addProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT, "yyyy/MM/dd HH:mm:ss")
       .addProperty(CarbonCommonConstants.CARBON_DATE_FORMAT, "yyyy/MM/dd")
       .addProperty(CarbonCommonConstants.ENABLE_UNSAFE_COLUMN_PAGE_LOADING, "true")
+       .addProperty(CarbonCommonConstants.LOCK_TYPE, CarbonCommonConstants.CARBON_LOCK_TYPE_HDFS)
 
     import org.apache.spark.sql.CarbonSession._
     val spark = SparkSession
@@ -45,7 +46,7 @@ object CarbonSessionExample {
       .appName("CarbonSessionExample")
       .config("spark.sql.warehouse.dir", warehouse)
       .config("spark.driver.host", "localhost")
-      .getOrCreateCarbonSession(storeLocation, metastoredb)
+      .getOrCreateCarbonSession(null, metastoredb)
 
     spark.sparkContext.setLogLevel("WARN")
 

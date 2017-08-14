@@ -126,6 +126,7 @@ class QueryTest extends PlanTest with Suite {
   val sqlContext: SQLContext = TestQueryExecutor.INSTANCE.sqlContext
 
   val resourcesPath = TestQueryExecutor.resourcesPath
+  val warehouse = TestQueryExecutor.warehouse
 }
 
 object QueryTest {

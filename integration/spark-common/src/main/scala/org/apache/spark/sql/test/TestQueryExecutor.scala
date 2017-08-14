@@ -70,6 +70,16 @@ object TestQueryExecutor {
     }
   }
 
+  val tpchDataPath = {
+    val property = System.getProperty("tpch.local.datapath")
+    if (property == null) {
+      "none"
+    } else {
+      LOGGER.info("TPCH PATH taken : " + property)
+      property
+    }
+  }
+
   val resourcesPath = if (hdfsUrl.startsWith("hdfs://")) {
     hdfsUrl
   } else {
@@ -92,7 +102,11 @@ object TestQueryExecutor {
     val carbonFile = FileFactory.
       getCarbonFile(s"$hdfsUrl/warehouse", FileFactory.getFileType(s"$hdfsUrl/warehouse"))
     FileFactory.deleteAllCarbonFilesOfDir(carbonFile)
-    s"$hdfsUrl/warehouse_" + System.nanoTime()
+    if (!tpchDataPath.equals("none")) {
+      s"$hdfsUrl/tpchwarehouse"
+    } else {
+      s"$hdfsUrl/warehouse_" + System.nanoTime()
+    }
   } else {
     s"$integrationPath/spark-common/target/warehouse"
   }
