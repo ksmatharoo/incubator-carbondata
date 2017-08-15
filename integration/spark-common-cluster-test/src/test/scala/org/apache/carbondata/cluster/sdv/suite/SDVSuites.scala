@@ -20,7 +20,7 @@ import org.apache.spark.sql.test.TestQueryExecutor
 import org.scalatest.{BeforeAndAfterAll, Suites}
 
 import org.apache.carbondata.cluster.sdv.generated._
-import org.apache.carbondata.cluster.sdv.tpch.TpchPerformanceTestCase
+import org.apache.carbondata.cluster.sdv.tpch.{TpchPerformanceTestCase, TpchPerformanceTestCase1}
 
 /**
  * Suite class for all tests.
@@ -146,7 +146,7 @@ class SDVSuites3 extends Suites with BeforeAndAfterAll {
  */
 class TPCHSuite extends Suites with BeforeAndAfterAll {
 
-  val suites =      new TpchPerformanceTestCase :: Nil
+  val suites =      new TpchPerformanceTestCase1 :: Nil
 
   override val nestedSuites = suites.toIndexedSeq
 

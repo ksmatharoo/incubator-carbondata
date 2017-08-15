@@ -51,9 +51,6 @@ object Spark2TestQueryExecutor {
   import org.apache.spark.sql.CarbonSession._
 
   val conf = new SparkConf()
-  conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
-    .set("hive.exec.dynamic.partition", "true")
-    .set("hive.exec.max.dynamic.partitions", "10000")
   if (!TestQueryExecutor.masterUrl.startsWith("local")) {
     conf.setJars(TestQueryExecutor.jars).
       set("spark.driver.memory", "6g").
@@ -62,6 +59,15 @@ object Spark2TestQueryExecutor {
       set("spark.executor.instances", "2").
       set("spark.cores.max", "4")
     if (!tpchDataPath.equals("none")) {
+      conf.set("hive.exec.dynamic.partition.mode", "nonstrict")
+        .set("hive.exec.dynamic.partition", "true")
+        .set("hive.exec.max.dynamic.partitions", "10000")
+        .set("parquet.filter.statistics.enabled","true")
+        .set("parquet.filter.dictionary.enabled","true")
+        .set("spark.sql.parquet.filterPushdown","true")
+        .set("spark.sql.hive.convertMetastoreParquet","true")
+        .set("spark.sql.parquet.mergeSchema","false")
+        .set("spark.sql.hive.convertMetastoreParquet.mergeSchema","false")
       conf.setJars(TestQueryExecutor.jars).
         set("spark.driver.memory", "6g").
         set("spark.executor.memory", "40g").
