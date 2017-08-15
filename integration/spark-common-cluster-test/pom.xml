@@ -152,6 +152,7 @@
             <spark.master.url>${spark.master.url}</spark.master.url>
             <hdfs.url>${hdfs.url}</hdfs.url>
             <tpch.local.datapath>${tpch.local.datapath}</tpch.local.datapath>
+            <tpch.test.type>${tpch.test.type}</tpch.test.type>
           </systemProperties>
         </configuration>
         <executions>

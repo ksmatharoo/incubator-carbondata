@@ -17,14 +17,16 @@
 
 package org.apache.carbondata.cluster.sdv.tpch
 
-import java.io.{File, FileWriter}
+import java.io.{BufferedReader, File, FileReader, FileWriter}
 import java.util
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.common.util.QueryTest
 import org.apache.spark.sql.test.TestQueryExecutor
+import org.apache.spark.sql.test.TestQueryExecutor.integrationPath
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.util.CarbonProperties
@@ -34,6 +36,23 @@ import org.apache.carbondata.core.util.CarbonProperties
  */
 class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
 
+
+
+  val (testType, testMessage) = {
+    val str = System.getProperty("tpch.test.type")
+    if (str == null) {
+      ("default", "Both Carbon and Parquet sorted while loading")
+    } else {
+      str match {
+        case "nosort" =>
+          ("nosort", "Both Carbon and Parquet are not sorted while loading")
+        case "globalsort" =>
+          ("globalsort", "Carbon is global sorted and Parquet is sorted")
+        case _ =>
+          ("default", "Both Carbon and Parquet sorted while loading")
+      }
+    }
+  }
 
   override def beforeAll() = {
     CarbonProperties.getInstance().
@@ -111,293 +130,12 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     ("Q22", "select cntrycode, count(*) as numcust, sum(c_acctbal) as totacctbal from ( select substring(c_phone,1 ,2) as cntrycode, c_acctbal from customer where substring(c_phone ,1,2) in ('13','31','23','29','30','18','17') and c_acctbal > ( select avg(c_acctbal) from customer where c_acctbal > 0.00 and substring(c_phone,1,2) in ('13', '31', '23', '29', '30', '18', '17') ) and not exists ( select * from orders where o_custkey = c_custkey ) ) as custsale group by cntrycode order by cntrycode")
   )
 
-  val createCarbonQueries = Seq(
-    s"""create table if not exists SUPPLIER(
-      S_COMMENT string,
-      S_SUPPKEY string,
-      S_NAME string,
-      S_ADDRESS string,
-      S_NATIONKEY string,
-      S_PHONE string,
-      S_ACCTBAL double
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='S_COMMENT, S_SUPPKEY, S_NAME, S_ADDRESS, S_NATIONKEY, S_PHONE' , 'table_blocksize'='300')""".stripMargin,
+  val createCarbonQueries = readCreateSQL(getCreateFile(true))
 
-    s"""create table if not exists PARTSUPP (
-      PS_PARTKEY string,
-      PS_SUPPKEY  string,
-      PS_AVAILQTY  int,
-      PS_SUPPLYCOST  double,
-      PS_COMMENT  string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='PS_PARTKEY, PS_SUPPKEY, PS_COMMENT', 'table_blocksize'='300')""".stripMargin,
+  val createParquetQueries = readCreateSQL(getCreateFile(false))
 
-    s"""create table if not exists CUSTOMER(
-      C_MKTSEGMENT string,
-      C_NATIONKEY string,
-      C_CUSTKEY string,
-      C_NAME string,
-      C_ADDRESS string,
-      C_PHONE string,
-      C_ACCTBAL double,
-      C_COMMENT string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='C_CUSTKEY,C_NAME,C_ADDRESS,C_PHONE,C_COMMENT', 'table_blocksize'='300')""".stripMargin,
+  val createHiveQueries = readCreateSQL("tpch_hive_create.sql")
 
-    s"""create table if not exists NATION (
-      N_NAME string,
-      N_NATIONKEY string,
-      N_REGIONKEY string,
-      N_COMMENT  string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='N_COMMENT', 'table_blocksize'='300')""".stripMargin,
-
-    s"""create table if not exists REGION(
-      R_NAME string,
-      R_REGIONKEY string,
-      R_COMMENT string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='R_COMMENT', 'table_blocksize'='300')""".stripMargin,
-
-    s"""create table if not exists PART(
-      P_BRAND string,
-      P_SIZE int,
-      P_CONTAINER string,
-      P_TYPE string,
-      P_PARTKEY string,
-      P_NAME string,
-      P_MFGR string,
-      P_RETAILPRICE double,
-      P_COMMENT string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_INCLUDE'='P_SIZE','DICTIONARY_EXCLUDE'='P_PARTKEY, P_NAME, P_COMMENT', 'table_blocksize'='300')""".stripMargin,
-
-    s"""create table if not exists lineitem(
-      L_SHIPDATE date,
-      L_SHIPMODE string,
-      L_SHIPINSTRUCT string,
-      L_RETURNFLAG string,
-      L_RECEIPTDATE date,
-      L_ORDERKEY string,
-      L_PARTKEY string,
-      L_SUPPKEY   string,
-      L_LINENUMBER int,
-      L_QUANTITY double,
-      L_EXTENDEDPRICE double,
-      L_DISCOUNT double,
-      L_TAX double,
-      L_LINESTATUS string,
-      L_COMMITDATE date,
-      L_COMMENT  string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='L_ORDERKEY, L_PARTKEY, L_SUPPKEY, L_COMMENT', 'table_blocksize'='300', 'no_inverted_index'='L_ORDERKEY, L_PARTKEY, L_SUPPKEY, L_COMMENT')""".stripMargin,
-
-    s"""create table if not exists ORDERS(
-      O_ORDERDATE date,
-      O_ORDERPRIORITY string,
-      O_ORDERSTATUS string,
-      O_ORDERKEY string,
-      O_CUSTKEY string,
-      O_TOTALPRICE double,
-      O_CLERK string,
-      O_SHIPPRIORITY int,
-      O_COMMENT string
-    ) STORED BY 'org.apache.carbondata.format'
-    TBLPROPERTIES ('DICTIONARY_EXCLUDE'='O_ORDERKEY, O_CUSTKEY, O_CLERK, O_COMMENT', 'table_blocksize'='300','no_inverted_index'='O_ORDERKEY, O_CUSTKEY, O_CLERK, O_COMMENT')""".stripMargin
-  )
-
-  val createParquetQueries = Seq(
-    s"""create table if not exists SUPPLIER(
-      S_SUPPKEY string,
-      S_NAME string,
-      S_ADDRESS string,
-      S_NATIONKEY string,
-      S_PHONE string,
-      S_ACCTBAL double,
-      S_COMMENT string
-    )
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-    s"""create table if not exists PARTSUPP (
-      PS_PARTKEY string,
-      PS_SUPPKEY  string,
-      PS_AVAILQTY  int,
-      PS_SUPPLYCOST  double,
-      PS_COMMENT  string
-    )
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-    s"""create table if not exists CUSTOMER(
-      c_mktsegment string,
-      C_CUSTKEY string,
-      C_NAME string,
-      C_ADDRESS string,
-      C_NATIONKEY string,
-      C_PHONE string,
-      C_ACCTBAL double,
-      C_COMMENT string
-    )
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-
-    s"""create table if not exists NATION (
-      N_NATIONKEY string,
-      N_REGIONKEY string,
-      N_COMMENT  string
-    )
-    partitioned by (n_name string)
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-    s"""create table if not exists REGION(
-      R_REGIONKEY string,
-      R_COMMENT string
-    )
-    partitioned by (r_name string)
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-    s"""create table if not exists PART(
-      P_BRAND string,
-      P_PARTKEY string,
-      P_NAME string,
-      P_MFGR string,
-      P_TYPE string,
-      P_SIZE int,
-      P_CONTAINER string,
-      P_RETAILPRICE double,
-      P_COMMENT string
-    )
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-    s"""create table if not exists lineitem(
-      L_SHIPDATE date,
-      L_ORDERKEY string,
-      L_PARTKEY string,
-      L_SUPPKEY   string,
-      L_LINENUMBER int,
-      L_QUANTITY double,
-      L_EXTENDEDPRICE double,
-      L_DISCOUNT double,
-      L_TAX double,
-      L_RETURNFLAG string,
-      L_LINESTATUS string,
-      L_COMMITDATE date,
-      L_RECEIPTDATE date,
-      L_SHIPINSTRUCT string,
-      L_SHIPMODE string,
-      L_COMMENT  string
-    )
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin,
-
-    s"""create table if not exists ORDERS(
-      O_ORDERDATE date,
-      O_ORDERKEY string,
-      O_CUSTKEY string,
-      O_ORDERSTATUS string,
-      O_TOTALPRICE double,
-      O_ORDERPRIORITY string,
-      O_CLERK string,
-      O_SHIPPRIORITY int,
-      O_COMMENT  string
-    )
-    stored as parquet
-    tblproperties("parquet.compression"="snappy")""".stripMargin
-  )
-
-  val createHiveQueries = Seq(
-
-    s"""create table if not exists SUPPLIER(
-      S_SUPPKEY string,
-      S_NAME string,
-      S_ADDRESS string,
-      S_NATIONKEY string,
-      S_PHONE string,
-      S_ACCTBAL double,
-      S_COMMENT string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-    s"""create table if not exists PARTSUPP (
-      PS_PARTKEY string,
-      PS_SUPPKEY  string,
-      PS_AVAILQTY  int,
-      PS_SUPPLYCOST  double,
-      PS_COMMENT  string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-    s"""create table if not exists CUSTOMER(
-      C_CUSTKEY string,
-      C_NAME string,
-      C_ADDRESS string,
-      C_NATIONKEY string,
-      C_PHONE string,
-      C_ACCTBAL double,
-      C_MKTSEGMENT string,
-      C_COMMENT string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-
-    s"""create table if not exists NATION (
-      N_NATIONKEY string,
-      N_NAME string,
-      N_REGIONKEY string,
-      N_COMMENT  string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-    s"""create table if not exists REGION(
-      R_REGIONKEY string,
-      R_NAME string,
-      R_COMMENT string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-    s"""create table if not exists PART(
-      P_PARTKEY string,
-      P_NAME string,
-      P_MFGR string,
-      P_BRAND string,
-      P_TYPE string,
-      P_SIZE int,
-      P_CONTAINER string,
-      P_RETAILPRICE double,
-      P_COMMENT string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-    s"""create table if not exists lineitem(
-      L_ORDERKEY string,
-      L_PARTKEY string,
-      L_SUPPKEY   string,
-      L_LINENUMBER int,
-      L_QUANTITY double,
-      L_EXTENDEDPRICE double,
-      L_DISCOUNT double,
-      L_TAX double,
-      L_RETURNFLAG string,
-      L_LINESTATUS string,
-      L_SHIPDATE date,
-      L_COMMITDATE date,
-      L_RECEIPTDATE date,
-      L_SHIPINSTRUCT string,
-      L_SHIPMODE string,
-      L_COMMENT  string
-    ) row format delimited fields terminated by '|'""".stripMargin,
-
-    s"""create table if not exists ORDERS(
-      O_ORDERKEY string,
-      O_CUSTKEY string,
-      O_ORDERSTATUS string,
-      O_TOTALPRICE double,
-      O_ORDERDATE date,
-      O_ORDERPRIORITY string,
-      O_CLERK string,
-      O_SHIPPRIORITY int,
-      O_COMMENT  string
-    ) row format delimited fields terminated by '|'""".stripMargin
-  )
   val loadHiveQueries = Seq(
 
     ("LINEITEM", s"""load data LOCAL inpath "$tpchPath/lineitem.tbl" OVERWRITE into table lineitem""".stripMargin),
@@ -417,76 +155,97 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     ("ORDERS", s"""load data LOCAL inpath "$tpchPath/orders.tbl" OVERWRITE into table ORDERS""".stripMargin)
   )
 
-  val loadParquetQueries = Seq(
+  val loadParquetQueries = readLoadSQL(getLoadFile(false))
 
-    ("SUPPLIER",s"""insert into table supplier select * from $srcDatabase.supplier""".stripMargin),
+  val loadCarbonQueries = readLoadSQL(getLoadFile(true))
 
-    ("ORDERS",s"""insert into table ORDERS select
-      O_ORDERDATE,
-      O_ORDERKEY,
-      O_CUSTKEY,
-      O_ORDERSTATUS,
-      O_TOTALPRICE,
-      O_ORDERPRIORITY,
-      O_CLERK,
-      O_SHIPPRIORITY,
-      O_COMMENT from $srcDatabase.ORDERS sort by O_ORDERDATE,O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS""".stripMargin),
+  def getCreateFile(carbon: Boolean): String = {
+    testType match {
+      case "default" =>
+        if (carbon) {
+          "tpch_carbon_create_default.sql"
+        } else {
+          "tpch_parquet_create_default.sql"
+        }
+      case "nosort" =>
+        if (carbon) {
+          "tpch_carbon_create_nosort.sql"
+        } else {
+          "tpch_parquet_create_default.sql"
+        }
+      case "globalsort" =>
+        if (carbon) {
+          "tpch_carbon_create_default.sql"
+        } else {
+          "tpch_parquet_create_default.sql"
+        }
+      case _ =>
+        if (carbon) {
+          "tpch_carbon_create_default.sql"
+        } else {
+          "tpch_parquet_create_default.sql"
+        }
+    }
+  }
 
-    ("LINEITEM", s"""insert into table lineitem select L_SHIPDATE,L_ORDERKEY,L_PARTKEY,L_SUPPKEY,L_LINENUMBER,L_QUANTITY,L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT from $srcDatabase.lineitem sort BY l_shipdate,L_ORDERKEY,L_PARTKEY,L_SUPPKEY""".stripMargin),
+  def getLoadFile(carbon: Boolean): String = {
+    testType match {
+      case "default" =>
+        if (carbon) {
+          "tpch_carbon_load_default.sql"
+        } else {
+          "tpch_parquet_load_default.sql"
+        }
+      case "nosort" =>
+        if (carbon) {
+          "tpch_carbon_load_default.sql"
+        } else {
+          "tpch_parquet_load_nosort.sql"
+        }
+      case "globalsort" =>
+        if (carbon) {
+          "tpch_carbon_load_global_sort.sql"
+        } else {
+          "tpch_parquet_load_default.sql"
+        }
+      case _ =>
+        if (carbon) {
+          "tpch_carbon_load_default.sql"
+        } else {
+          "tpch_parquet_load_default.sql"
+        }
+    }
+  }
 
-    ("PARTSUPP",s"""insert into table PARTSUPP select * from $srcDatabase.partsupp sort by PS_PARTKEY""".stripMargin),
+  def readCreateSQL(fileName: String): Seq[String] = {
+    println("Reading create file: "+fileName)
+    val file = new File(s"$integrationPath//spark-common-cluster-test/src/test/resources/$fileName")
+    val reader = new BufferedReader(new FileReader(file))
+    var str = reader.readLine()
+    val buffer = new ArrayBuffer[String]()
+    while (str != null) {
+      buffer += str
+      str = reader.readLine()
+    }
+    reader.close()
+    buffer
+  }
 
-    ("NATION",s"""insert into table nation partition(N_NAME) select N_NATIONKEY,N_REGIONKEY,N_COMMENT,n_name from $srcDatabase.nation""".stripMargin),
-
-    ("REGION",s"""insert into table REGION partition(r_name) select
-    R_REGIONKEY,
-    R_COMMENT,
-    r_name
-    from $srcDatabase.region""".stripMargin),
-
-    ("PART",s"""insert into TABLE PART
-    select
-    P_BRAND,
-    P_PARTKEY,
-    P_NAME,
-    P_MFGR,
-    P_TYPE,
-    P_SIZE,
-    P_CONTAINER,
-    P_RETAILPRICE,
-    P_COMMENT
-    from $srcDatabase.part sort by P_BRAND,P_PARTKEY,P_NAME """.stripMargin),
-
-    ("CUSTOMER",s"""insert into table CUSTOMER select
-    C_MKTSEGMENT,
-    C_CUSTKEY,
-    C_NAME,
-    C_ADDRESS,
-    C_NATIONKEY,
-    C_PHONE,
-    C_ACCTBAL,
-    C_COMMENT
-    from $srcDatabase.customer order by C_MKTSEGMENT """.stripMargin)
-  )
-
-  val loadCarbonQueries = Seq(
-
-    ("LINEITEM", s"""load data inpath "$warehouse/$srcDatabase.db/lineitem/lineitem.tbl" into table lineitem options('DELIMITER'='|','FILEHEADER'='L_ORDERKEY,L_PARTKEY,L_SUPPKEY,L_LINENUMBER,L_QUANTITY,L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG,L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE,L_COMMENT')""".stripMargin),
-
-    ("SUPPLIER", s"""load data inpath "$warehouse/$srcDatabase.db/supplier/supplier.tbl" into table SUPPLIER options('DELIMITER'='|','FILEHEADER'='S_SUPPKEY,S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT')""".stripMargin),
-
-    ("PARTSUPP", s"""load data inpath "$warehouse/$srcDatabase.db/partsupp/partsupp.tbl" into table PARTSUPP options('DELIMITER'='|','FILEHEADER'='PS_PARTKEY,PS_SUPPKEY,PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT')""".stripMargin),
-
-    ("CUSTOMER", s"""load data inpath "$warehouse/$srcDatabase.db/customer/customer.tbl" into  table CUSTOMER options('DELIMITER'='|','FILEHEADER'='C_CUSTKEY,C_NAME,C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT')""".stripMargin),
-
-    ("NATION", s"""load data inpath "$warehouse/$srcDatabase.db/nation/nation.tbl" into table NATION options('DELIMITER'='|','FILEHEADER'='N_NATIONKEY,N_NAME,N_REGIONKEY,N_COMMENT')""".stripMargin),
-
-    ("REGION", s"""load data inpath "$warehouse/$srcDatabase.db/region/region.tbl" into table REGION options('DELIMITER'='|','FILEHEADER'='R_REGIONKEY,R_NAME,R_COMMENT')""".stripMargin),
-
-    ("PART", s"""load data inpath "$warehouse/$srcDatabase.db/part/part.tbl" into table PART options('DELIMITER'='|','FILEHEADER'='P_PARTKEY,P_NAME,P_MFGR,P_BRAND,P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT')""".stripMargin),
-
-    ("ORDERS", s"""load data inpath "$warehouse/$srcDatabase.db/orders/orders.tbl" into table ORDERS options('DELIMITER'='|','FILEHEADER'='O_ORDERKEY,O_CUSTKEY,O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY,O_COMMENT')""".stripMargin)
-  )
+  def readLoadSQL(fileName: String): Seq[(String, String)] = {
+    println("Reading Load file: "+fileName)
+    val file = new File(s"$integrationPath//spark-common-cluster-test/src/test/resources/$fileName")
+    val reader = new BufferedReader(new FileReader(file))
+    var str1 = reader.readLine()
+    var str2 = reader.readLine()
+    val buffer = new ArrayBuffer[(String, String)]()
+    while (str1 != null && str2 != null) {
+      buffer += ((str1.replace("#", ""), str2.replace("$warehouse", warehouse)))
+      str1 = reader.readLine()
+      str2 = reader.readLine()
+    }
+    reader.close()
+    buffer
+  }
 
   test("load hive queries") {
     sql(s"drop database if exists $srcDatabase cascade").collect()
@@ -505,14 +264,23 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     queries.foreach { q =>
       var rows:Array[Row] = null
       println("Executing Carbon : "+q._1)
+      var queryPass = true
       var t= time {
-        rows = sql(q._2).collect()
+        try {
+          rows = sql(q._2).collect()
+        } catch {
+          case _ => queryPass = false
+        }
       }
       var d = carbonQueryTime.get(q._1)
-      if (d != null) {
-        d = Result(d.rowCount+rows.length, d.time + t)
+      if (queryPass) {
+        if (d != null) {
+          d = Result(d.rowCount + rows.length, d.time + t)
+        } else {
+          d = Result(rows.length, t)
+        }
       } else {
-        d = Result(rows.length, t)
+        d = Result(0, -1)
       }
       println(d)
       carbonQueryTime.put(q._1, d)
@@ -526,28 +294,29 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     queries.foreach { q =>
       var rows:Array[Row] = null
       println("Executing Parquet : "+q._1)
+      var queryPass = true
       var t= time {
-        rows = sql(q._2).collect()
+        try {
+          rows = sql(q._2).collect()
+        } catch {
+          case _ => queryPass = false
+        }
       }
       var d = parquetQueryTime.get(q._1)
-      if (d != null) {
-        d = Result(d.rowCount+rows.length, d.time + t)
+      if (queryPass) {
+        if (d != null) {
+          d = Result(d.rowCount + rows.length, d.time + t)
+        } else {
+          d = Result(rows.length, t)
+        }
       } else {
-        d = Result(rows.length, t)
+        d = Result(0, -1)
       }
       println(d)
       parquetQueryTime.put(q._1, d)
     }
     println(parquetLoadTime)
     println(parquetQueryTime)
-    println("run on hive")
-    sql(s"use $srcDatabase").collect()
-    var rows:Array[Row] = null
-    val t = time {
-      rows = sql(
-        "select c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice, sum(l_quantity) from customer, orders, lineitem where o_orderkey in ( select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300 ) and c_custkey = o_custkey and o_orderkey = l_orderkey group by c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice order by o_totalprice desc, o_orderdate").collect()
-    }
-    println(Result(rows.length, t))
   }
 
   test("generate result") {
@@ -566,8 +335,16 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     sql(s"use $database")
     loadCarbonQueries.foreach {q =>
       println("Loading Carbon : "+q._1)
-      val t= time {
-        sql(q._2).collect()
+      var queryPass = true
+      var t= time {
+        try {
+          sql(q._2).collect()
+        } catch {
+          case _ => queryPass = false
+        }
+      }
+      if (!queryPass) {
+        t = -1
       }
       println("Time is "+ t +" and Count of "+q._1)
       sql("select count(*) from "+ q._1 ).show()
@@ -585,8 +362,16 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     }
     loadParquetQueries.foreach {q =>
       println("Loading Parquet : "+q._1)
-      val t= time {
-        sql(q._2).collect()
+      var queryPass = true
+      var t= time {
+        try {
+          sql(q._2).collect()
+        } catch {
+          case _ => queryPass = false
+        }
+      }
+      if (!queryPass) {
+        t = -1
       }
       println("Time is "+ t +" and Count of "+q._1)
       sql("select count(*) from "+ q._1 ).show()
@@ -607,6 +392,7 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
       s"""
          |<body>
          |      <h1>TPCH Load Performance</h1>
+         |      <h2>$testMessage</h2>
          |      <table border = "1">
          |         <tr style = "color:black; font-size:18px;" bgcolor = "green">
          |            <td >Table Name</td>
@@ -617,14 +403,23 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     carbonLoadTime.asScala.foreach {f =>
       builder.append(s"""<tr style = "color:black; font-size:15px;" bgcolor = "yellow">""")
       builder.append(s"""<td>${f._1}</td>""")
-      builder.append(s"""<td>${f._2}</td>""")
-      builder.append(s"""<td>${parquetLoadTime.get(f._1)}</td>""")
+      if (f._2 < 0) {
+        builder.append(s"""<td>FAIL</td>""")
+      } else {
+        builder.append(s"""<td>${ f._2 }</td>""")
+      }
+      if (parquetLoadTime.get(f._1) < 0) {
+        builder.append(s"""<td>FAIL</td>""")
+      } else {
+        builder.append(s"""<td>${parquetLoadTime.get(f._1)}</td>""")
+      }
       builder.append(s"""</tr>""")
     }
     builder.append(s"""</table>""")
     builder.append(
       s"""
          |<h1>TPCH Query Performance</h1>
+         |<h2>$testMessage</h2>
          |      <table border = "1">
          |         <tr style = "color:black; font-size:18px;" bgcolor = "green">
          |            <td>Queries</td>
@@ -636,10 +431,22 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
        """)
     carbonQueryTime.asScala.foreach{ f =>
       builder.append(s"""<tr style = "color:black; font-size:15px;" bgcolor = "yellow">""")
-      builder.append(s"""<td>${f._1}</td>""")
-      builder.append(s"""<td>${f._2.time}</td>""")
       val result = parquetQueryTime.get(f._1)
-      builder.append(s"""<td>${result.time}</td>""")
+      builder.append(s"""<td>${f._1}</td>""")
+      if (f._2.time < 0) {
+        builder.append(s"""<td bgcolor = "red">FAIL</td>""")
+      } else {
+        if (f._2.time > result.time) {
+          builder.append(s"""<td bgcolor = "red">${ f._2.time }</td>""")
+        } else {
+          builder.append(s"""<td bgcolor = "green">${ f._2.time }</td>""")
+        }
+      }
+      if (result.time < 0) {
+        builder.append(s"""<td>FAIL</td>""")
+      } else {
+        builder.append(s"""<td>${result.time}</td>""")
+      }
       builder.append(s"""<td>${f._2.rowCount}</td>""")
       builder.append(s"""<td>${result.rowCount}</td>""")
       builder.append(s"""</tr>""")
