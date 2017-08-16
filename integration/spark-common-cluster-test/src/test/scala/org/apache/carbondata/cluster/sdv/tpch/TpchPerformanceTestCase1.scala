@@ -29,6 +29,7 @@ import org.apache.spark.sql.test.TestQueryExecutor
 import org.apache.spark.sql.test.TestQueryExecutor.integrationPath
 import org.scalatest.BeforeAndAfterAll
 
+import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.util.CarbonProperties
 
 /**
@@ -71,14 +72,17 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
 
   var srcDatabase = "tpchhive"
 
-  val carbonLoadTime = new util.LinkedHashMap[String, Double]()
+  val carbonLoadTime = new util.LinkedHashMap[String, LoadResult]()
   val carbonQueryTime = new util.LinkedHashMap[String, Result]()
-  val parquetLoadTime = new util.LinkedHashMap[String, Double]()
+  val parquetLoadTime = new util.LinkedHashMap[String, LoadResult]()
+  val rawDataSize = new util.LinkedHashMap[String, Double]()
   val parquetQueryTime = new util.LinkedHashMap[String, Result]()
 
   val tpchPath = TestQueryExecutor.tpchDataPath
 
   case class Result(rowCount:Int, time: Double)
+
+  case class LoadResult(size: Double, time: Double)
 
   val queries = Seq(
     ("Q1", "select l_returnflag, l_linestatus, sum(l_quantity) as sum_qty, sum(l_extendedprice) as sum_base_price, sum(l_extendedprice*(1-l_discount)) as sum_disc_price, sum(l_extendedprice*(1-l_discount)*(1+l_tax)) as sum_charge, avg(l_quantity) as avg_qty, avg(l_extendedprice) as avg_price, avg(l_discount) as avg_disc, count(*) as count_order from lineitem where l_shipdate <= date('1998-09-02') group by l_returnflag, l_linestatus order by l_returnflag, l_linestatus"),
@@ -256,6 +260,8 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     }
     loadHiveQueries.foreach { q =>
       sql(q._2).collect()
+      val size = FileFactory.getDirectorySize(warehouse+s"/$srcDatabase.db/${q._1.toLowerCase}")
+      rawDataSize.put(q._1, (size/(1024 * 1024)))
     }
   }
 
@@ -348,7 +354,8 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
       }
       println("Time is "+ t +" and Count of "+q._1)
       sql("select count(*) from "+ q._1 ).show()
-      carbonLoadTime.put(q._1, t)
+      val size = FileFactory.getDirectorySize(warehouse+s"/$database/${q._1.toLowerCase}")
+      carbonLoadTime.put(q._1, LoadResult((size/(1024 * 1024)), t))
     }
   }
 
@@ -375,7 +382,8 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
       }
       println("Time is "+ t +" and Count of "+q._1)
       sql("select count(*) from "+ q._1 ).show()
-      parquetLoadTime.put(q._1, t)
+      val size = FileFactory.getDirectorySize(warehouse+s"/$database.db/${q._1.toLowerCase}")
+      parquetLoadTime.put(q._1, LoadResult((size/(1024 * 1024)), t))
     }
   }
 
@@ -397,22 +405,30 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
          |         <tr style = "color:black; font-size:18px;" bgcolor = "green">
          |            <td >Table Name</td>
          |            <td>Carbon</td>
+         |            <td>Carbon Size(MB)</td>
          |	          <td>Parquet</td>
+         |	          <td>Parquet Size(MB)</td>
+         |	          <td>Raw Data Size(MB)</td>
          |         </tr>
        """)
     carbonLoadTime.asScala.foreach {f =>
       builder.append(s"""<tr style = "color:black; font-size:15px;" bgcolor = "yellow">""")
       builder.append(s"""<td>${f._1}</td>""")
-      if (f._2 < 0) {
+      if (f._2.time < 0) {
+        builder.append(s"""<td>FAIL</td>""")
         builder.append(s"""<td>FAIL</td>""")
       } else {
-        builder.append(s"""<td>${ f._2 }</td>""")
+        builder.append(s"""<td>${ f._2.time }</td>""")
+        builder.append(s"""<td>${ f._2.size }</td>""")
       }
-      if (parquetLoadTime.get(f._1) < 0) {
+      if (parquetLoadTime.get(f._1).time < 0) {
+        builder.append(s"""<td>FAIL</td>""")
         builder.append(s"""<td>FAIL</td>""")
       } else {
-        builder.append(s"""<td>${parquetLoadTime.get(f._1)}</td>""")
+        builder.append(s"""<td>${parquetLoadTime.get(f._1).time}</td>""")
+        builder.append(s"""<td>${parquetLoadTime.get(f._1).size}</td>""")
       }
+      builder.append(s"""<td>${ rawDataSize.get(f._1) }</td>""")
       builder.append(s"""</tr>""")
     }
     builder.append(s"""</table>""")
