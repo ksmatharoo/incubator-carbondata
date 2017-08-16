@@ -29,10 +29,11 @@ import org.apache.carbondata.core.scan.result.vector.CarbonColumnarBatch;
 public class VectorDetailQueryResultIterator extends AbstractDetailQueryResultIterator<Object> {
 
   private final Object lock = new Object();
-
+  QueryModel queryModel;
   public VectorDetailQueryResultIterator(List<BlockExecutionInfo> infos, QueryModel queryModel,
       ExecutorService execService) {
     super(infos, queryModel, execService);
+    this.queryModel = queryModel;
   }
 
   @Override public Object next() {
@@ -40,11 +41,13 @@ public class VectorDetailQueryResultIterator extends AbstractDetailQueryResultIt
   }
 
   public void processNextBatch(CarbonColumnarBatch columnarBatch) {
+    long time = System.nanoTime();
     synchronized (lock) {
       updateDataBlockIterator();
       if (dataBlockIterator != null) {
         dataBlockIterator.processNextBatch(columnarBatch);
       }
     }
+    queryModel.fetchTime += (System.nanoTime() - time);
   }
 }

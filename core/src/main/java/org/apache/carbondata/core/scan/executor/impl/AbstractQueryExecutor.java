@@ -210,9 +210,10 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
     }
     return tableBlockUniqueIdentifiers;
   }
-
+  QueryModel queryModel;
   protected List<BlockExecutionInfo> getBlockExecutionInfos(QueryModel queryModel)
       throws IOException, QueryExecutionException {
+    this.queryModel = queryModel;
     initQuery(queryModel);
     List<BlockExecutionInfo> blockExecutionInfoList = new ArrayList<BlockExecutionInfo>();
     // fill all the block execution infos for all the blocks selected in
@@ -546,6 +547,7 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
    * @throws QueryExecutionException
    */
   @Override public void finish() throws QueryExecutionException {
+    LOGGER.info("&&&&&&&&&&&& "+queryModel.getQueryId()+" "+ (queryModel.fetchTime/(1000*1000)));
     CarbonUtil.clearBlockCache(queryProperties.dataBlocks);
     if (null != queryIterator) {
       queryIterator.close();
