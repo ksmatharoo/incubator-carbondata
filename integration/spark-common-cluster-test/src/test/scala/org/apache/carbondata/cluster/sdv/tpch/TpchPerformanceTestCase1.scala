@@ -416,7 +416,7 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
          |      <h1>TPCH Load Performance</h1>
          |      <h2>$testMessage</h2>
          |      <table border = "1">
-         |         <tr style = "color:black; font-size:18px;" bgcolor = "green">
+         |         <tr style = "color:black; font-size:18px;" bgcolor = "orange">
          |            <td >Table Name</td>
          |            <td>Carbon</td>
          |            <td>Carbon Size(MB)</td>
@@ -451,7 +451,7 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
          |<h1>TPCH Query Performance</h1>
          |<h2>$testMessage</h2>
          |      <table border = "1">
-         |         <tr style = "color:black; font-size:18px;" bgcolor = "green">
+         |         <tr style = "color:black; font-size:18px;" bgcolor = "orange">
          |            <td>Queries</td>
          |            <td>Carbon</td>
          |	          <td>Parquet</td>

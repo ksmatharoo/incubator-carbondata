@@ -51,6 +51,7 @@ object Spark2TestQueryExecutor {
   import org.apache.spark.sql.CarbonSession._
 
   val conf = new SparkConf()
+  conf.setSparkHome("/home/root1/spark1").set("spark.yarn.executor.memoryOverhead", "1024")
   if (!TestQueryExecutor.masterUrl.startsWith("local")) {
     conf.setJars(TestQueryExecutor.jars).
       set("spark.driver.memory", "6g").
