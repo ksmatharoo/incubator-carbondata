@@ -49,6 +49,8 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
           ("nosort", "Both Carbon and Parquet are not sorted while loading")
         case "globalsort" =>
           ("globalsort", "Carbon is global sorted and Parquet is sorted")
+        case "partition" =>
+          ("partition", "Carbon is sorted and Parquet is partitioned")
         case _ =>
           ("default", "Both Carbon and Parquet sorted while loading")
       }
@@ -183,6 +185,12 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
         } else {
           "tpch_parquet_create_default.sql"
         }
+      case "partition" =>
+        if (carbon) {
+          "tpch_carbon_create_default.sql"
+        } else {
+          "tpch_parquet_create_partition.sql"
+        }
       case _ =>
         if (carbon) {
           "tpch_carbon_create_default.sql"
@@ -211,6 +219,12 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
           "tpch_carbon_load_global_sort.sql"
         } else {
           "tpch_parquet_load_default.sql"
+        }
+      case "partition" =>
+        if (carbon) {
+          "tpch_carbon_load_default.sql"
+        } else {
+          "tpch_parquet_load_partition.sql"
         }
       case _ =>
         if (carbon) {

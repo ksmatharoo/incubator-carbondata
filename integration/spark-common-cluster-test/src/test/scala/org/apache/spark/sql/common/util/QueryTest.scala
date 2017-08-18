@@ -105,7 +105,9 @@ class QueryTest extends PlanTest with Suite {
   }
 
   def sql(sqlText: String): DataFrame = {
+    TestQueryExecutor.INSTANCE.sqlContext.sparkSession.sparkContext.setJobGroup("", sqlText)
     val frame = TestQueryExecutor.INSTANCE.sql(sqlText)
+
     val plan = frame.queryExecution.logical
     if (TestQueryExecutor.hdfsUrl.startsWith("hdfs")) {
       plan match {
