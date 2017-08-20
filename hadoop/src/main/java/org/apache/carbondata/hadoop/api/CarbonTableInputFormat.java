@@ -113,6 +113,8 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
   // a cache for carbon table, it will be used in task side
   private CarbonTable carbonTable;
 
+  private Expression filterExpression;
+
   /**
    * Set the `tableInfo` in `configuration`
    */
@@ -161,6 +163,14 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
     }
   }
 
+  public void setTableInfo(TableInfo tableInfo) {
+    CarbonTable carbonTable = null;
+    if (tableInfo != null) {
+      carbonTable = CarbonTable.buildFromTableInfo(tableInfo);
+    }
+    this.carbonTable = carbonTable;
+  }
+
   public static void setTablePath(Configuration configuration, String tablePath)
       throws IOException {
     configuration.set(FileInputFormat.INPUT_DIR, tablePath);
@@ -186,6 +196,10 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
     } catch (Exception e) {
       throw new RuntimeException("Error while setting filter expression to Job", e);
     }
+  }
+
+  public void setFilterPredicates(Expression filterExpression) {
+    this.filterExpression = filterExpression;
   }
 
   public static void setColumnProjection(Configuration configuration, CarbonProjection projection) {
@@ -459,6 +473,9 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
 
   protected Expression getFilterPredicates(Configuration configuration) {
     try {
+      if (filterExpression != null) {
+        return filterExpression;
+      }
       String filterExprString = configuration.get(FILTER_PREDICATE);
       if (filterExprString == null) {
         return null;
@@ -700,17 +717,31 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
   public static void setDataTypeConverter(Configuration configuration, DataTypeConverter converter)
       throws IOException {
     if (null != converter) {
-      configuration.set(CARBON_CONVERTER,
-          ObjectSerializationUtil.convertObjectToString(converter));
+      configuration.set(CARBON_CONVERTER, converter.getClass().getName());
     }
   }
 
   public static DataTypeConverter getDataTypeConverter(Configuration configuration)
       throws IOException {
-    String converter = configuration.get(CARBON_CONVERTER);
-    if (converter == null) {
-      return new DataTypeConverterImpl();
+    String converterStr = configuration.get(CARBON_CONVERTER);
+    //By default it uses DataTypeConverter  class
+    DataTypeConverter converter = null;
+    if (converterStr != null) {
+      try {
+        Class<?> myClass = Class.forName(converterStr);
+        Constructor<?> constructor = myClass.getConstructors()[0];
+        Object object = constructor.newInstance();
+        if (object instanceof CarbonReadSupport) {
+          converter = (DataTypeConverter) object;
+        }
+      } catch (ClassNotFoundException ex) {
+        LOG.error("Class " + converterStr + "not found", ex);
+      } catch (Exception ex) {
+        LOG.error("Error while creating " + converterStr, ex);
+      }
+    } else {
+      converter =  new DataTypeConverterImpl();
     }
-    return (DataTypeConverter) ObjectSerializationUtil.convertStringToObject(converter);
+    return converter;
   }
 }

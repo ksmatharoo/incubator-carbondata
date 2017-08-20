@@ -57,6 +57,20 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     }
   }
 
+  val (loadHive, loadTables) = {
+    val hiveStr = System.getProperty("tpch.load.hive")
+    var hiveLoad = true
+    if (hiveStr != null) {
+      hiveLoad = hiveStr.toBoolean
+    }
+    val loadStr = System.getProperty("tpch.create.load.tables")
+    var loadBoolean = true
+    if (loadStr != null) {
+      loadBoolean = loadStr.toBoolean
+    }
+    (hiveLoad, loadBoolean)
+  }
+
   override def beforeAll() = {
     CarbonProperties.getInstance().
       addProperty("carbon.number.of.cores.while.loading", "6").
@@ -266,51 +280,28 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
   }
 
   test("load hive queries") {
-    sql(s"drop database if exists $srcDatabase cascade").collect()
-    sql(s"create database if not exists $srcDatabase").collect()
-    sql(s"use $srcDatabase").collect()
-    createHiveQueries.foreach {q =>
-      sql(q).collect()
-    }
-    loadHiveQueries.foreach { q =>
-      sql(q._2).collect()
-      val size = FileFactory.getDirectorySize(warehouse+s"/$srcDatabase.db/${q._1.toLowerCase}")
-      rawDataSize.put(q._1, (size/(1024 * 1024)))
-    }
-  }
-
-  test("test carbon performance") {
-    createAndLoadTablesCarbon()
-    queries.foreach { q =>
-      var rows:Array[Row] = null
-      println("Executing Carbon : "+q._1)
-      var queryPass = true
-      var t= time {
-        try {
-          rows = sql(q._2).collect()
-        } catch {
-          case _ => queryPass = false
-        }
+    if (loadHive) {
+      sql(s"drop database if exists $srcDatabase cascade").collect()
+      sql(s"create database if not exists $srcDatabase").collect()
+      sql(s"use $srcDatabase").collect()
+      createHiveQueries.foreach { q =>
+        sql(q).collect()
       }
-      var d = carbonQueryTime.get(q._1)
-      if (queryPass) {
-        if (d != null) {
-          d = Result(d.rowCount + rows.length, d.time + t)
-        } else {
-          d = Result(rows.length, t)
-        }
-      } else {
-        d = Result(0, -1)
+      loadHiveQueries.foreach { q =>
+        sql(q._2).collect()
+        val size = FileFactory
+          .getDirectorySize(warehouse + s"/$srcDatabase.db/${ q._1.toLowerCase }")
+        rawDataSize.put(q._1, (size / (1024 * 1024)))
       }
-      println(d)
-      carbonQueryTime.put(q._1, d)
     }
-    println(carbonLoadTime)
-    println(carbonQueryTime)
   }
 
   test("test parquet performance") {
-    createAndLoadTablesParquet()
+    if (loadTables) {
+      createAndLoadTablesParquet()
+    }
+    database = "tpchparquet"
+    sql(s"use $database").collect()
     queries.foreach { q =>
       var rows:Array[Row] = null
       println("Executing Parquet : "+q._1)
@@ -337,6 +328,40 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
     }
     println(parquetLoadTime)
     println(parquetQueryTime)
+  }
+
+  test("test carbon performance") {
+    if (loadTables) {
+      createAndLoadTablesCarbon()
+    }
+    database = "tpchcarbon"
+    sql(s"use $database").collect()
+    queries.foreach { q =>
+      var rows:Array[Row] = null
+      println("Executing Carbon : "+q._1)
+      var queryPass = true
+      var t= time {
+        try {
+          rows = sql(q._2).collect()
+        } catch {
+          case _ => queryPass = false
+        }
+      }
+      var d = carbonQueryTime.get(q._1)
+      if (queryPass) {
+        if (d != null) {
+          d = Result(d.rowCount + rows.length, d.time + t)
+        } else {
+          d = Result(rows.length, t)
+        }
+      } else {
+        d = Result(0, -1)
+      }
+      println(d)
+      carbonQueryTime.put(q._1, d)
+    }
+    println(carbonLoadTime)
+    println(carbonQueryTime)
   }
 
   test("generate result") {
@@ -410,8 +435,9 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
 
   def generateResult(): Unit = {
     val builder = new StringBuilder
-    builder.append(
-      s"""
+    if (loadTables) {
+      builder.append(
+        s"""
          |<body>
          |      <h1>TPCH Load Performance</h1>
          |      <h2>$testMessage</h2>
@@ -425,27 +451,28 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
          |	          <td>Raw Data Size(MB)</td>
          |         </tr>
        """)
-    carbonLoadTime.asScala.foreach {f =>
-      builder.append(s"""<tr style = "color:black; font-size:15px;" bgcolor = "yellow">""")
-      builder.append(s"""<td>${f._1}</td>""")
-      if (f._2.time < 0) {
-        builder.append(s"""<td>FAIL</td>""")
-        builder.append(s"""<td>FAIL</td>""")
-      } else {
-        builder.append(s"""<td>${ f._2.time }</td>""")
-        builder.append(s"""<td>${ f._2.size }</td>""")
+      carbonLoadTime.asScala.foreach { f =>
+        builder.append(s"""<tr style = "color:black; font-size:15px;" bgcolor = "yellow">""")
+        builder.append(s"""<td>${ f._1 }</td>""")
+        if (f._2.time < 0) {
+          builder.append(s"""<td>FAIL</td>""")
+          builder.append(s"""<td>FAIL</td>""")
+        } else {
+          builder.append(s"""<td>${ f._2.time }</td>""")
+          builder.append(s"""<td>${ f._2.size }</td>""")
+        }
+        if (parquetLoadTime.get(f._1).time < 0) {
+          builder.append(s"""<td>FAIL</td>""")
+          builder.append(s"""<td>FAIL</td>""")
+        } else {
+          builder.append(s"""<td>${ parquetLoadTime.get(f._1).time }</td>""")
+          builder.append(s"""<td>${ parquetLoadTime.get(f._1).size }</td>""")
+        }
+        builder.append(s"""<td>${ rawDataSize.get(f._1) }</td>""")
+        builder.append(s"""</tr>""")
       }
-      if (parquetLoadTime.get(f._1).time < 0) {
-        builder.append(s"""<td>FAIL</td>""")
-        builder.append(s"""<td>FAIL</td>""")
-      } else {
-        builder.append(s"""<td>${parquetLoadTime.get(f._1).time}</td>""")
-        builder.append(s"""<td>${parquetLoadTime.get(f._1).size}</td>""")
-      }
-      builder.append(s"""<td>${ rawDataSize.get(f._1) }</td>""")
-      builder.append(s"""</tr>""")
+      builder.append(s"""</table>""")
     }
-    builder.append(s"""</table>""")
     builder.append(
       s"""
          |<h1>TPCH Query Performance</h1>
@@ -496,8 +523,8 @@ class TpchPerformanceTestCase1 extends QueryTest with BeforeAndAfterAll  {
   }
 
   override def afterAll(): Unit = {
-    sql(s"drop database if exists tpchcarbon cascade").collect()
-    sql(s"drop database if exists tpchparquet cascade").collect()
+//    sql(s"drop database if exists tpchcarbon cascade").collect()
+//    sql(s"drop database if exists tpchparquet cascade").collect()
 //    sql(s"drop database if exists $srcDatabase cascade").collect()
   }
 }

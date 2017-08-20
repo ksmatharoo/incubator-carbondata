@@ -50,7 +50,14 @@ object TestQueryExecutor {
     .getCanonicalPath
   LOGGER.info(s"project path: $projectPath")
   val integrationPath = s"$projectPath/integration"
-  val metastoredb = s"$integrationPath/spark-common/target"
+  val metastoredb = {
+    val property = System.getProperty("carbon.metastore.path")
+    if (property == null || property.equals("default")) {
+      s"$integrationPath/spark-common/target"
+    } else {
+      property
+    }
+  }
   val masterUrl = {
     val property = System.getProperty("spark.master.url")
     if (property == null) {

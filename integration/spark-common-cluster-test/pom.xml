@@ -165,6 +165,9 @@
             <hdfs.url>${hdfs.url}</hdfs.url>
             <tpch.local.datapath>${tpch.local.datapath}</tpch.local.datapath>
             <tpch.test.type>${tpch.test.type}</tpch.test.type>
+            <tpch.load.hive>${tpch.load.hive}</tpch.load.hive>
+            <tpch.create.load.tables>${tpch.create.load.tables}</tpch.create.load.tables>
+            <carbon.metastore.path>${carbon.metastore.path}</carbon.metastore.path>
           </systemProperties>
         </configuration>
         <executions>

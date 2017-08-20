@@ -37,12 +37,14 @@ import org.apache.carbondata.core.metadata.schema.table.TableInfo
 import org.apache.carbondata.core.scan.expression.Expression
 import org.apache.carbondata.core.scan.model.QueryModel
 import org.apache.carbondata.core.stats.{QueryStatistic, QueryStatisticsConstants, QueryStatisticsRecorder}
-import org.apache.carbondata.core.util.{CarbonProperties, CarbonTimeStatisticsFactory, TaskMetricsMap}
+import org.apache.carbondata.core.util.{CarbonProperties, CarbonTimeStatisticsFactory}
 import org.apache.carbondata.hadoop._
 import org.apache.carbondata.hadoop.api.CarbonTableInputFormat
 import org.apache.carbondata.spark.InitInputMetrics
 import org.apache.carbondata.spark.load.CarbonLoaderUtil
 import org.apache.carbondata.spark.util.SparkDataTypeConverterImpl
+import org.apache.carbondata.core.util.{CarbonProperties, CarbonTimeStatisticsFactory, TaskMetricsMap}
+import org.apache.carbondata.spark.InitInputMetrics
 
 /**
  * This RDD is used to perform query on CarbonData file. Before sending tasks to scan
@@ -54,7 +56,7 @@ class CarbonScanRDD(
     columnProjection: CarbonProjection,
     filterExpression: Expression,
     identifier: AbsoluteTableIdentifier,
-    serializedTableInfo: Array[Byte],
+    @transient serializedTableInfo: Array[Byte],
     @transient tableInfo: TableInfo, inputMetricsStats: InitInputMetrics)
   extends CarbonRDDWithTableInfo[InternalRow](sc, Nil, serializedTableInfo) {
 
@@ -176,7 +178,7 @@ class CarbonScanRDD(
   }
 
   override def internalCompute(split: Partition, context: TaskContext): Iterator[InternalRow] = {
-
+    val queryStartTime = System.currentTimeMillis
     val carbonPropertiesFilePath = System.getProperty("carbon.properties.filepath", null)
     if (null == carbonPropertiesFilePath) {
       System.setProperty("carbon.properties.filepath",
@@ -207,18 +209,18 @@ class CarbonScanRDD(
             inputMetricsStats)
         }
       }
-
+      val queryStartTime1 = System.currentTimeMillis
       reader.initialize(inputSplit, attemptContext)
-      val queryStartTime = System.currentTimeMillis
+      println("init&&&&&&&&&&&&&&&&&& "+model.getQueryId+"  "+(System.currentTimeMillis-queryStartTime1) +" ******* " + (System.currentTimeMillis-queryStartTime))
 
       new Iterator[Any] {
         private var havePair = false
         private var finished = false
 
         context.addTaskCompletionListener { context =>
-          logStatistics(queryStartTime, model.getStatisticsRecorder)
           reader.close()
         close()
+          logStatistics(queryStartTime, model.getStatisticsRecorder)
         }
 
         override def hasNext: Boolean = {
@@ -258,22 +260,27 @@ class CarbonScanRDD(
   }
 
   private def prepareInputFormatForDriver(conf: Configuration): CarbonTableInputFormat[Object] = {
-    CarbonTableInputFormat.setTableInfo(conf, tableInfo)
-    createInputFormat(conf)
+    val format = createInputFormat(conf)
+//    CarbonTableInputFormat.setTableInfo(conf, tableInfo)
+    format.setTableInfo(tableInfo)
+    format
   }
 
   private def prepareInputFormatForExecutor(conf: Configuration): CarbonTableInputFormat[Object] = {
+    val format = createInputFormat(conf)
+    format.setTableInfo(tableInfo)
+    format.setFilterPredicates(filterExpression)
     CarbonTableInputFormat.setCarbonReadSupport(conf, readSupport)
-    CarbonTableInputFormat.setTableInfo(conf, getTableInfo)
+//    CarbonTableInputFormat.setTableInfo(conf, getTableInfo)
     CarbonTableInputFormat.setDataTypeConverter(conf, new SparkDataTypeConverterImpl)
-    createInputFormat(conf)
+    format
   }
 
   private def createInputFormat(conf: Configuration): CarbonTableInputFormat[Object] = {
     val format = new CarbonTableInputFormat[Object]
     CarbonTableInputFormat.setTablePath(conf,
       identifier.appendWithLocalPrefix(identifier.getTablePath))
-    CarbonTableInputFormat.setFilterPredicates(conf, filterExpression)
+//    CarbonTableInputFormat.setFilterPredicates(conf, filterExpression)
     CarbonTableInputFormat.setColumnProjection(conf, columnProjection)
     format
   }
@@ -283,6 +290,8 @@ class CarbonScanRDD(
     queryStatistic.addFixedTimeStatistic(QueryStatisticsConstants.EXECUTOR_PART,
       System.currentTimeMillis - queryStartTime)
     recorder.recordStatistics(queryStatistic)
+    // print executor query statistics for each task_id
+    recorder.logStatisticsAsTableExecutor()
   }
 
   /**

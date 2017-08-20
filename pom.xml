@@ -117,6 +117,9 @@
     <hdfs.url>local</hdfs.url>
     <tpch.local.datapath>none</tpch.local.datapath>
     <tpch.test.type>default</tpch.test.type>
+    <tpch.load.hive>true</tpch.load.hive>
+    <tpch.create.load.tables>true</tpch.create.load.tables>
+    <carbon.metastore.path>default</carbon.metastore.path>
     <suite.name>org.apache.carbondata.cluster.sdv.suite.SDVSuites</suite.name>
   </properties>
 
