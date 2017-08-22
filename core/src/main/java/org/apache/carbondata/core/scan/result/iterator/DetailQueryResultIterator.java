@@ -31,10 +31,11 @@ import org.apache.carbondata.core.scan.result.BatchResult;
 public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator<BatchResult> {
 
   private final Object lock = new Object();
-
+  QueryModel queryModel;
   public DetailQueryResultIterator(List<BlockExecutionInfo> infos, QueryModel queryModel,
       ExecutorService execService) {
     super(infos, queryModel, execService);
+    this.queryModel = queryModel;
   }
 
   @Override public BatchResult next() {
@@ -42,6 +43,7 @@ public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator
   }
 
   private BatchResult getBatchResult() {
+    long l = System.nanoTime();
     BatchResult batchResult = new BatchResult();
     synchronized (lock) {
       updateDataBlockIterator();
@@ -49,6 +51,7 @@ public class DetailQueryResultIterator extends AbstractDetailQueryResultIterator
         batchResult.setRows(dataBlockIterator.next());
       }
     }
+    queryModel.fetchTime += (System.nanoTime() - l);
     return batchResult;
   }
 }

@@ -82,7 +82,9 @@ public class CarbonRecordReader<T> extends AbstractRecordReader<T> {
     readSupport.initialize(queryModel.getProjectionColumns(),
         queryModel.getAbsoluteTableIdentifier());
     try {
+      long l = System.nanoTime();
       carbonIterator = new ChunkRowIterator(queryExecutor.execute(queryModel));
+      System.out.println("Reader initialize : "+ queryModel.getQueryId() +" : " + ((System.nanoTime() - l)/(1000 * 1000)));
     } catch (QueryExecutionException e) {
       throw new InterruptedException(e.getMessage());
     }

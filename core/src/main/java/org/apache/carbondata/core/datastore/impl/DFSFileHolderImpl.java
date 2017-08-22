@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.carbondata.common.logging.LogService;
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.FileHolder;
 
@@ -32,12 +34,17 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
 public class DFSFileHolderImpl implements FileHolder {
+
+  private static final LogService LOGGER =
+      LogServiceFactory.getLogService(DFSFileHolderImpl.class.getName());
   /**
    * cache to hold filename and its stream
    */
   private Map<String, FSDataInputStream> fileNameAndStreamCache;
 
   private String queryId;
+
+  private long timeRead;
 
 
   public DFSFileHolderImpl() {
@@ -111,6 +118,8 @@ public class DFSFileHolderImpl implements FileHolder {
   }
 
   @Override public void finish() throws IOException {
+    LOGGER.info("Time to read data from DFS with Query ID : " + queryId + " : " + (timeRead / (1000
+        * 1000)));
     for (Entry<String, FSDataInputStream> entry : fileNameAndStreamCache.entrySet()) {
       FSDataInputStream channel = entry.getValue();
       if (null != channel) {
@@ -137,9 +146,11 @@ public class DFSFileHolderImpl implements FileHolder {
 
   @Override public ByteBuffer readByteBuffer(String filePath, long offset, int length)
       throws IOException {
+    long l = System.nanoTime();
     byte[] readByteArray = readByteArray(filePath, offset, length);
     ByteBuffer byteBuffer = ByteBuffer.wrap(readByteArray);
     byteBuffer.rewind();
+    timeRead += (System.nanoTime() - l);
     return byteBuffer;
   }
 

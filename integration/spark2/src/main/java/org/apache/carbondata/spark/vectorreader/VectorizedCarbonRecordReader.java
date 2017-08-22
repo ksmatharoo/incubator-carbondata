@@ -112,8 +112,10 @@ class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
     queryModel.setTableBlockInfos(tableBlockInfoList);
     queryModel.setVectorReader(true);
     try {
+      long l = System.nanoTime();
       queryExecutor = QueryExecutorFactory.getQueryExecutor(queryModel);
       iterator = (AbstractDetailQueryResultIterator) queryExecutor.execute(queryModel);
+      System.out.println("Reader initialize : "+ queryModel.getQueryId() +" : " + ((System.nanoTime() - l)/(1000 * 1000)));
     } catch (QueryExecutionException e) {
       throw new InterruptedException(e.getMessage());
     }

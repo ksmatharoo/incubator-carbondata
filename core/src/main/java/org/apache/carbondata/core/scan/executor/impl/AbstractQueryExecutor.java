@@ -141,23 +141,26 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
         indexList.add(new IndexWrapper(tableBlockInfos));
       }
       queryProperties.dataBlocks = indexList;
-    } else {
-      // get the table blocks
-      CacheProvider cacheProvider = CacheProvider.getInstance();
-      BlockIndexStore<TableBlockUniqueIdentifier, AbstractIndex> cache =
-          (BlockIndexStore) cacheProvider
-              .createCache(CacheType.EXECUTOR_BTREE, queryModel.getTable().getStorePath());
-      // remove the invalid table blocks, block which is deleted or compacted
-      cache.removeTableBlocks(queryModel.getInvalidSegmentIds(),
-          queryModel.getAbsoluteTableIdentifier());
-      List<TableBlockUniqueIdentifier> tableBlockUniqueIdentifiers =
-          prepareTableBlockUniqueIdentifier(queryModel.getTableBlockInfos(),
-              queryModel.getAbsoluteTableIdentifier());
-      cache.removeTableBlocksIfHorizontalCompactionDone(queryModel);
-      queryProperties.dataBlocks = cache.getAll(tableBlockUniqueIdentifiers);
       queryStatistic
           .addStatistics(QueryStatisticsConstants.LOAD_BLOCKS_EXECUTOR, System.currentTimeMillis());
       queryProperties.queryStatisticsRecorder.recordStatistics(queryStatistic);
+    } else {
+//      // get the table blocks
+//      CacheProvider cacheProvider = CacheProvider.getInstance();
+//      BlockIndexStore<TableBlockUniqueIdentifier, AbstractIndex> cache =
+//          (BlockIndexStore) cacheProvider
+//              .createCache(CacheType.EXECUTOR_BTREE, queryModel.getTable().getStorePath());
+//      // remove the invalid table blocks, block which is deleted or compacted
+//      cache.removeTableBlocks(queryModel.getInvalidSegmentIds(),
+//          queryModel.getAbsoluteTableIdentifier());
+//      List<TableBlockUniqueIdentifier> tableBlockUniqueIdentifiers =
+//          prepareTableBlockUniqueIdentifier(queryModel.getTableBlockInfos(),
+//              queryModel.getAbsoluteTableIdentifier());
+//      cache.removeTableBlocksIfHorizontalCompactionDone(queryModel);
+//      queryProperties.dataBlocks = cache.getAll(tableBlockUniqueIdentifiers);
+//      queryStatistic
+//          .addStatistics(QueryStatisticsConstants.LOAD_BLOCKS_EXECUTOR, System.currentTimeMillis());
+//      queryProperties.queryStatisticsRecorder.recordStatistics(queryStatistic);
     }
     // calculating the total number of aggeragted columns
     int aggTypeCount = queryModel.getQueryMeasures().size();
@@ -211,8 +214,10 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
     return tableBlockUniqueIdentifiers;
   }
   QueryModel queryModel;
+  private long intializeTime;
   protected List<BlockExecutionInfo> getBlockExecutionInfos(QueryModel queryModel)
       throws IOException, QueryExecutionException {
+    long l = System.nanoTime();
     this.queryModel = queryModel;
     initQuery(queryModel);
     List<BlockExecutionInfo> blockExecutionInfoList = new ArrayList<BlockExecutionInfo>();
@@ -233,6 +238,7 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
           blockExecutionInfoList.size());
       queryModel.getStatisticsRecorder().recordStatistics(queryStatistic);
     }
+    intializeTime += (System.nanoTime() - l);
     return blockExecutionInfoList;
   }
 
@@ -547,7 +553,8 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
    * @throws QueryExecutionException
    */
   @Override public void finish() throws QueryExecutionException {
-    LOGGER.info("&&&&&&&&&&&& "+queryModel.getQueryId()+" "+ (queryModel.fetchTime/(1000*1000)));
+    LOGGER.info("&&&&&&&&&&&& Total fetch time "+queryModel.getQueryId()+" "+ (queryModel.fetchTime/(1000*1000)));
+    LOGGER.info("&&&&&&&&&&&& Intialize time "+queryModel.getQueryId()+" "+ (intializeTime/(1000*1000)));
     CarbonUtil.clearBlockCache(queryProperties.dataBlocks);
     if (null != queryIterator) {
       queryIterator.close();

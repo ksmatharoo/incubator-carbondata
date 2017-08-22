@@ -188,12 +188,14 @@ class CarbonScanRDD(
 
     val attemptId = new TaskAttemptID(jobTrackerId, id, TaskType.MAP, split.index, 0)
     val attemptContext = new TaskAttemptContextImpl(new Configuration(), attemptId)
+    val l = System.currentTimeMillis()
     val format = prepareInputFormatForExecutor(attemptContext.getConfiguration)
     val inputSplit = split.asInstanceOf[CarbonSparkPartition].split.value
     TaskMetricsMap.getInstance().registerThreadCallback()
     inputMetricsStats.initBytesReadCallback(context, inputSplit)
     val iterator = if (inputSplit.getAllSplits.size() > 0) {
       val model = format.getQueryModel(inputSplit, attemptContext)
+      println("create model "+ model.getQueryId + " : "+ (System.currentTimeMillis() - l))
       val reader = {
         if (vectorReader) {
           val carbonRecordReader = createVectorizedCarbonRecordReader(model, inputMetricsStats)

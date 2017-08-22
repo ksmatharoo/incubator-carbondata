@@ -731,7 +731,7 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
         Class<?> myClass = Class.forName(converterStr);
         Constructor<?> constructor = myClass.getConstructors()[0];
         Object object = constructor.newInstance();
-        if (object instanceof CarbonReadSupport) {
+        if (object instanceof DataTypeConverter) {
           converter = (DataTypeConverter) object;
         }
       } catch (ClassNotFoundException ex) {
