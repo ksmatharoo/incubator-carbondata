@@ -28,7 +28,6 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.spark._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.hive.DistributionUtil
-import org.apache.spark.util.SerializableConfiguration
 
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
@@ -54,28 +53,29 @@ import org.apache.carbondata.spark.InitInputMetrics
  */
 class CarbonScanRDD(
     @transient sc: SparkContext,
-    @transient columnProjection: CarbonProjection,
-    @transient filterExpression: Expression,
-    @transient identifier: AbsoluteTableIdentifier,
+    columnProjection: CarbonProjection,
+    filterExpression: Expression,
+    identifier: AbsoluteTableIdentifier,
     @transient serializedTableInfo: Array[Byte],
     @transient tableInfo: TableInfo, inputMetricsStats: InitInputMetrics)
   extends CarbonRDDWithTableInfo[InternalRow](sc, Nil, serializedTableInfo) {
 
-  @transient val queryId = sparkContext.getConf.get("queryId", System.nanoTime() + "")
-
+  private val queryId = sparkContext.getConf.get("queryId", System.nanoTime() + "")
+  private val jobTrackerId: String = {
+    val formatter = new SimpleDateFormat("yyyyMMddHHmm")
+    formatter.format(new Date())
+  }
   private var vectorReader = false
 
-  @transient private val readSupport = SparkReadSupport.readSupportClass
+  private val readSupport = SparkReadSupport.readSupportClass
 
-  @transient val bucketedTable = tableInfo.getFactTable.getBucketingInfo
+  private val bucketedTable = tableInfo.getFactTable.getBucketingInfo
 
-  val broadcastedHadoopConf = sparkContext.
-    broadcast(new SerializableConfiguration(prepareInputFormatForExecutor(sc.hadoopConfiguration)))
-
+  @transient private val jobId = new JobID(jobTrackerId, id)
   @transient val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
 
   override def getPartitions: Array[Partition] = {
-    val job = Job.getInstance(broadcastedHadoopConf.value.value)
+    val job = Job.getInstance(new Configuration())
     val format = prepareInputFormatForDriver(job.getConfiguration)
 
     // initialise query_id for job
@@ -186,10 +186,10 @@ class CarbonScanRDD(
       )
     }
 
-    val attemptId = new TaskAttemptID(new TaskID(new JobID(), TaskType.MAP, 0), 0)
-    val attemptContext = new TaskAttemptContextImpl(broadcastedHadoopConf.value.value, attemptId)
+    val attemptId = new TaskAttemptID(jobTrackerId, id, TaskType.MAP, split.index, 0)
+    val attemptContext = new TaskAttemptContextImpl(new Configuration(), attemptId)
     val l = System.currentTimeMillis()
-    val format = new CarbonTableInputFormat[Object]
+    val format = prepareInputFormatForExecutor(attemptContext.getConfiguration)
     val inputSplit = split.asInstanceOf[CarbonSparkPartition].split.value
     TaskMetricsMap.getInstance().registerThreadCallback()
     inputMetricsStats.initBytesReadCallback(context, inputSplit)
@@ -263,26 +263,26 @@ class CarbonScanRDD(
 
   private def prepareInputFormatForDriver(conf: Configuration): CarbonTableInputFormat[Object] = {
     val format = createInputFormat(conf)
-    CarbonTableInputFormat.setTableInfo(conf, tableInfo)
+//    CarbonTableInputFormat.setTableInfo(conf, tableInfo)
     format.setTableInfo(tableInfo)
     format
   }
 
-  private def prepareInputFormatForExecutor(conf: Configuration): Configuration = {
+  private def prepareInputFormatForExecutor(conf: Configuration): CarbonTableInputFormat[Object] = {
     val format = createInputFormat(conf)
     format.setTableInfo(tableInfo)
     format.setFilterPredicates(filterExpression)
     CarbonTableInputFormat.setCarbonReadSupport(conf, readSupport)
-    CarbonTableInputFormat.setTableInfo(conf, getTableInfo)
+//    CarbonTableInputFormat.setTableInfo(conf, getTableInfo)
     CarbonTableInputFormat.setDataTypeConverter(conf, new SparkDataTypeConverterImpl)
-    conf
+    format
   }
 
   private def createInputFormat(conf: Configuration): CarbonTableInputFormat[Object] = {
     val format = new CarbonTableInputFormat[Object]
     CarbonTableInputFormat.setTablePath(conf,
       identifier.appendWithLocalPrefix(identifier.getTablePath))
-    CarbonTableInputFormat.setFilterPredicates(conf, filterExpression)
+//    CarbonTableInputFormat.setFilterPredicates(conf, filterExpression)
     CarbonTableInputFormat.setColumnProjection(conf, columnProjection)
     format
   }
