@@ -17,17 +17,24 @@
 
 package org.apache.spark.sql.hive
 
+import scala.collection.JavaConverters._
+
 import org.apache.spark.sql._
-import org.apache.spark.sql.CarbonExpressions.CarbonUnresolvedRelation
-import org.apache.spark.sql.catalyst.CarbonTableIdentifierImplicit
+import org.apache.spark.sql.CarbonExpressions.{CarbonUnresolvedRelation, MatchCast}
+import org.apache.spark.sql.catalyst.{CarbonTableIdentifierImplicit, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAlias, UnresolvedAttribute, UnresolvedFunction, UnresolvedRelation, UnresolvedStar}
-import org.apache.spark.sql.catalyst.expressions.Alias
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Average, Count, Sum}
 import org.apache.spark.sql.catalyst.plans.Inner
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules._
 import org.apache.spark.sql.execution.command.mutation.CarbonProjectForDeleteCommand
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CarbonException
 import org.apache.spark.util.CarbonReflectionUtils
+
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 
 case class CarbonIUDAnalysisRule(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
@@ -173,6 +180,152 @@ case class CarbonIUDAnalysisRule(sparkSession: SparkSession) extends Rule[Logica
           statement,
           alias,
           table)
+    }
+  }
+}
+
+/**
+ * Insert into carbon table from other source
+ */
+case class CarbonPreInsertionCasts(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = {
+    plan.transform {
+      // Wait until children are resolved.
+      case p: LogicalPlan if !p.childrenResolved => p
+
+      case p@InsertIntoTable(relation: LogicalRelation, _, child, _, _)
+        if relation.relation.isInstanceOf[CarbonDatasourceHadoopRelation] =>
+        castChildOutput(p, relation, child)
+    }
+  }
+
+  def castChildOutput(p: InsertIntoTable,
+      relation: LogicalRelation,
+      child: LogicalPlan)
+  : LogicalPlan = {
+    val carbonDSRelation = relation.relation.asInstanceOf[CarbonDatasourceHadoopRelation]
+    if (carbonDSRelation.carbonRelation.output.size > CarbonCommonConstants
+      .DEFAULT_MAX_NUMBER_OF_COLUMNS) {
+      CarbonException.analysisException("Maximum number of columns supported:" +
+                                        s"${CarbonCommonConstants.DEFAULT_MAX_NUMBER_OF_COLUMNS}")
+    }
+    val isAggregateTable = !carbonDSRelation.carbonRelation.carbonTable.getTableInfo
+      .getParentRelationIdentifiers.isEmpty
+    // transform logical plan if the load is for aggregate table.
+    val childPlan = if (isAggregateTable) {
+      transformAggregatePlan(child)
+    } else {
+      child
+    }
+    if (childPlan.output.size >= carbonDSRelation.carbonRelation.output.size) {
+      val newChildOutput = childPlan.output.zipWithIndex.map { columnWithIndex =>
+        columnWithIndex._1 match {
+          case attr: Alias =>
+            Alias(attr.child, s"col${ columnWithIndex._2 }")(attr.exprId)
+          case attr: Attribute =>
+            Alias(attr, s"col${ columnWithIndex._2 }")(NamedExpression.newExprId)
+          case attr => attr
+        }
+      }
+      val version = sparkSession.version
+      val newChild: LogicalPlan = if (newChildOutput == childPlan.output) {
+        if (version.startsWith("2.1")) {
+          CarbonReflectionUtils.getField("child", p).asInstanceOf[LogicalPlan]
+        } else if (version.startsWith("2.2")) {
+          CarbonReflectionUtils.getField("query", p).asInstanceOf[LogicalPlan]
+        } else {
+          throw new UnsupportedOperationException(s"Spark version $version is not supported")
+        }
+      } else {
+        Project(newChildOutput, childPlan)
+      }
+
+      val overwrite = CarbonReflectionUtils.getOverWriteOption("overwrite", p)
+
+      p.copy(table = convertToLogicalRelation(relation, new CarbonFileFormat, sparkSession))
+    } else {
+      CarbonException.analysisException(
+        "Cannot insert into target table because number of columns mismatch")
+    }
+  }
+
+  private def convertToLogicalRelation(
+      relation: LogicalRelation,
+      defaultSource: FileFormat,
+      sparkSession: SparkSession): LogicalRelation = {
+    if (relation.catalogTable.isDefined) {
+      val catalogTable = relation.catalogTable.get
+      val table = relation.relation.asInstanceOf[CarbonDatasourceHadoopRelation].carbonTable
+      if (table.isPartitionTable) {
+        val metastoreSchema = StructType.fromAttributes(relation.output)
+        val lazyPruningEnabled = sparkSession.sqlContext.conf.manageFilesourcePartitions
+        val catalog = new CatalogFileIndex(
+          sparkSession, catalogTable, relation.relation.sizeInBytes)
+        if (lazyPruningEnabled) {
+          catalog
+        } else {
+          catalog.filterPartitions(Nil) // materialize all the partitions in memory
+        }
+        val partitionSchema = StructType.fromAttributes(table.getPartitionInfo(table.getTableName)
+          .getColumnSchemaList.asScala.map(f=>
+          relation.output.find(_.name.equalsIgnoreCase(f.getColumnName))).map(_.get))
+
+
+        val dataSchema =
+          StructType(metastoreSchema
+            .filterNot(field => partitionSchema.contains(field.name)))
+
+        val hdfsRelation = HadoopFsRelation(
+          location = catalog,
+          partitionSchema = partitionSchema,
+          dataSchema = dataSchema,
+          bucketSpec = catalogTable.bucketSpec,
+          fileFormat = defaultSource,
+          options = catalogTable.storage.properties)(sparkSession = sparkSession)
+
+        val created = LogicalRelation(hdfsRelation, catalogTable = Some(catalogTable))
+        created
+      } else {
+        relation
+      }
+    } else {
+      relation
+    }
+  }
+
+  /**
+   * Transform the logical plan with average(col1) aggregation type to sum(col1) and count(col1).
+   *
+   * @param logicalPlan
+   * @return
+   */
+  private def transformAggregatePlan(logicalPlan: LogicalPlan): LogicalPlan = {
+    logicalPlan transform {
+      case aggregate@Aggregate(_, aExp, _) =>
+        val newExpressions = aExp.flatMap {
+          case alias@Alias(attrExpression: AggregateExpression, _) =>
+            attrExpression.aggregateFunction match {
+              case Average(attr: AttributeReference) =>
+                Seq(Alias(attrExpression
+                  .copy(aggregateFunction = Sum(attr),
+                    resultId = NamedExpression.newExprId), attr.name + "_sum")(),
+                  Alias(attrExpression
+                    .copy(aggregateFunction = Count(attr),
+                      resultId = NamedExpression.newExprId), attr.name + "_count")())
+              case Average(cast@MatchCast(attr: AttributeReference, _)) =>
+                Seq(Alias(attrExpression
+                  .copy(aggregateFunction = Sum(cast),
+                    resultId = NamedExpression.newExprId),
+                  attr.name + "_sum")(),
+                  Alias(attrExpression
+                    .copy(aggregateFunction = Count(cast),
+                      resultId = NamedExpression.newExprId), attr.name + "_count")())
+              case _ => Seq(alias)
+            }
+          case namedExpr: NamedExpression => Seq(namedExpr)
+        }
+        aggregate.copy(aggregateExpressions = newExpressions.asInstanceOf[Seq[NamedExpression]])
+      case plan: LogicalPlan => plan
     }
   }
 }

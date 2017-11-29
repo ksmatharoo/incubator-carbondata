@@ -19,21 +19,88 @@ package org.apache.carbondata.hadoop.api;
 
 import java.io.IOException;
 
-import org.apache.hadoop.fs.FileSystem;
-import org.apache.hadoop.mapred.FileOutputFormat;
-import org.apache.hadoop.mapred.JobConf;
-import org.apache.hadoop.mapred.RecordWriter;
-import org.apache.hadoop.util.Progressable;
+import org.apache.carbondata.common.CarbonIterator;
+import org.apache.carbondata.hadoop.util.ObjectSerializationUtil;
+import org.apache.carbondata.processing.loading.DataLoadExecutor;
+import org.apache.carbondata.processing.loading.iterator.CarbonOutputIteratorWrapper;
+import org.apache.carbondata.processing.loading.model.CarbonLoadModel;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.RecordWriter;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 /**
  * Base class for all output format for CarbonData file.
- * @param <T>
  */
-public abstract class CarbonTableOutputFormat<T> extends FileOutputFormat<Void, T> {
+public abstract class CarbonTableOutputFormat extends FileOutputFormat<Void, String[]> {
+
+  private static String LOAD_MODEL = "carbon.load.model";
+  private static String TEMP_STORE_LOCATIONS = "carbon.load.tempstore.locations";
+
+  public static void setLoadModel(Configuration configuration, CarbonLoadModel loadModel)
+      throws IOException {
+    if (loadModel != null) {
+      configuration.set(LOAD_MODEL, ObjectSerializationUtil.convertObjectToString(loadModel));
+    }
+  }
+
+  private static CarbonLoadModel getLoadModel(Configuration configuration) throws IOException {
+    String encodedString = configuration.get(LOAD_MODEL);
+    if (encodedString != null) {
+      return (CarbonLoadModel) ObjectSerializationUtil.convertStringToObject(encodedString);
+    }
+    return null;
+  }
+
+  public static void setTempStoreLocations(Configuration configuration, String[] tempLocations)
+      throws IOException {
+    if (tempLocations != null && tempLocations.length > 0) {
+      configuration
+          .set(TEMP_STORE_LOCATIONS, ObjectSerializationUtil.convertObjectToString(tempLocations));
+    }
+  }
+
+  private static String[] getTempStoreLocations(Configuration configuration) throws IOException {
+    String encodedString = configuration.get(TEMP_STORE_LOCATIONS);
+    if (encodedString != null) {
+      return (String[]) ObjectSerializationUtil.convertStringToObject(encodedString);
+    }
+    return null;
+  }
 
   @Override
-  public RecordWriter<Void, T> getRecordWriter(FileSystem ignored, JobConf job, String name,
-      Progressable progress) throws IOException {
-    return null;
+  public RecordWriter<Void, String[]> getRecordWriter(TaskAttemptContext taskAttemptContext)
+      throws IOException, InterruptedException {
+    CarbonLoadModel loadModel = getLoadModel(taskAttemptContext.getConfiguration());
+    String[] tempStoreLocations = getTempStoreLocations(taskAttemptContext.getConfiguration());
+    CarbonOutputIteratorWrapper iteratorWrapper = new CarbonOutputIteratorWrapper();
+    CarbonRecordWriter recordWriter = new CarbonRecordWriter(iteratorWrapper);
+    try {
+      new DataLoadExecutor()
+          .execute(loadModel, tempStoreLocations, new CarbonIterator[] { iteratorWrapper });
+    } catch (Exception e) {
+      throw new IOException(e);
+    }
+    return recordWriter;
+  }
+
+  private static class CarbonRecordWriter extends RecordWriter<Void, String[]> {
+
+    private CarbonOutputIteratorWrapper iteratorWrapper;
+
+    public CarbonRecordWriter(CarbonOutputIteratorWrapper iteratorWrapper) {
+      this.iteratorWrapper = iteratorWrapper;
+    }
+
+    @Override public void write(Void aVoid, String[] strings)
+        throws IOException, InterruptedException {
+      iteratorWrapper.write(strings);
+    }
+
+    @Override public void close(TaskAttemptContext taskAttemptContext)
+        throws IOException, InterruptedException {
+      iteratorWrapper.close();
+    }
   }
 }

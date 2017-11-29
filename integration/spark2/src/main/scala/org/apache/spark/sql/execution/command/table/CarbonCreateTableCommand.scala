@@ -89,14 +89,20 @@ case class CarbonCreateTableCommand(
           val fields = new Array[Field](cm.dimCols.size + cm.msrCols.size)
           cm.dimCols.foreach(f => fields(f.schemaOrdinal) = f)
           cm.msrCols.foreach(f => fields(f.schemaOrdinal) = f)
-
+          val partitionString = cm.partitionInfo match {
+            case Some(partitionInfo) =>
+              s" PARTITIONED BY (${partitionInfo.getColumnSchemaList.asScala.map(
+                _.getColumnName).mkString(",")})"
+            case _ => ""
+          }
           sparkSession.sparkContext.setLocalProperty(EXECUTION_ID_KEY, null)
           sparkSession.sql(
             s"""CREATE TABLE $dbName.$tbName
                |(${ fields.map(f => f.rawSchema).mkString(",") })
                |USING org.apache.spark.sql.CarbonSource""".stripMargin +
             s""" OPTIONS (tableName "$tbName", dbName "$dbName", tablePath """.stripMargin +
-            s""""$tablePath", path "$tablePath" $carbonSchemaString) """.stripMargin)
+            s""""$tablePath", path "$tablePath" $carbonSchemaString) """.stripMargin) +
+            partitionString
         } catch {
           case e: AnalysisException => throw e
           case e: Exception =>
