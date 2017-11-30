@@ -18,6 +18,7 @@
 package org.apache.carbondata.hadoop.api;
 
 import java.io.IOException;
+import java.util.Random;
 
 import org.apache.carbondata.common.CarbonIterator;
 import org.apache.carbondata.hadoop.util.ObjectSerializationUtil;
@@ -26,17 +27,23 @@ import org.apache.carbondata.processing.loading.iterator.CarbonOutputIteratorWra
 import org.apache.carbondata.processing.loading.model.CarbonLoadModel;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.mapreduce.OutputCommitter;
 import org.apache.hadoop.mapreduce.RecordWriter;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 /**
  * Base class for all output format for CarbonData file.
  */
-public abstract class CarbonTableOutputFormat extends FileOutputFormat<Void, String[]> {
+public class CarbonTableOutputFormat extends FileOutputFormat<Void, String[]> {
 
   private static String LOAD_MODEL = "carbon.load.model";
   private static String TEMP_STORE_LOCATIONS = "carbon.load.tempstore.locations";
+  private static String OVERWRITE_SET = "carbon.load.set.overwrite";
+
+  private CarbonOutputCommitter committer;
 
   public static void setLoadModel(Configuration configuration, CarbonLoadModel loadModel)
       throws IOException {
@@ -45,7 +52,7 @@ public abstract class CarbonTableOutputFormat extends FileOutputFormat<Void, Str
     }
   }
 
-  private static CarbonLoadModel getLoadModel(Configuration configuration) throws IOException {
+  public static CarbonLoadModel getLoadModel(Configuration configuration) throws IOException {
     String encodedString = configuration.get(LOAD_MODEL);
     if (encodedString != null) {
       return (CarbonLoadModel) ObjectSerializationUtil.convertStringToObject(encodedString);
@@ -61,6 +68,18 @@ public abstract class CarbonTableOutputFormat extends FileOutputFormat<Void, Str
     }
   }
 
+  public static boolean isOverwriteSet(Configuration configuration) {
+    String overwrite = configuration.get(OVERWRITE_SET);
+    if (overwrite != null) {
+      return Boolean.parseBoolean(overwrite);
+    }
+    return false;
+  }
+
+  public static void setOverwrite(Configuration configuration, boolean overwrite) {
+    configuration.set(OVERWRITE_SET, String.valueOf(overwrite));
+  }
+
   private static String[] getTempStoreLocations(Configuration configuration) throws IOException {
     String encodedString = configuration.get(TEMP_STORE_LOCATIONS);
     if (encodedString != null) {
@@ -69,19 +88,35 @@ public abstract class CarbonTableOutputFormat extends FileOutputFormat<Void, Str
     return null;
   }
 
+  @Override public synchronized OutputCommitter getOutputCommitter(TaskAttemptContext context)
+      throws IOException {
+    if (this.committer == null) {
+      Path output = getOutputPath(context);
+      this.committer = new CarbonOutputCommitter(output, context);
+    }
+
+    return this.committer;
+  }
+
   @Override
   public RecordWriter<Void, String[]> getRecordWriter(TaskAttemptContext taskAttemptContext)
       throws IOException, InterruptedException {
-    CarbonLoadModel loadModel = getLoadModel(taskAttemptContext.getConfiguration());
-    String[] tempStoreLocations = getTempStoreLocations(taskAttemptContext.getConfiguration());
-    CarbonOutputIteratorWrapper iteratorWrapper = new CarbonOutputIteratorWrapper();
+    final CarbonLoadModel loadModel = getLoadModel(taskAttemptContext.getConfiguration());
+    loadModel.setTaskNo(new Random().nextInt(Integer.MAX_VALUE) + "");
+    final String[] tempStoreLocations = getTempStoreLocations(taskAttemptContext.getConfiguration());
+    final CarbonOutputIteratorWrapper iteratorWrapper = new CarbonOutputIteratorWrapper();
     CarbonRecordWriter recordWriter = new CarbonRecordWriter(iteratorWrapper);
-    try {
-      new DataLoadExecutor()
-          .execute(loadModel, tempStoreLocations, new CarbonIterator[] { iteratorWrapper });
-    } catch (Exception e) {
-      throw new IOException(e);
-    }
+    new Thread() {
+      @Override public void run() {
+        try {
+          new DataLoadExecutor()
+              .execute(loadModel, tempStoreLocations, new CarbonIterator[] { iteratorWrapper });
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+    }.start();
+
     return recordWriter;
   }
 

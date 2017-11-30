@@ -140,10 +140,14 @@ public class CarbonTable implements Serializable {
     this.tablePrimitiveDimensionsMap = new HashMap<String, List<CarbonDimension>>();
   }
 
+  public static CarbonTable buildFromTableInfo(TableInfo tableInfo) {
+    return buildFromTableInfo(tableInfo, false);
+  }
+
   /**
    * @param tableInfo
    */
-  public static CarbonTable buildFromTableInfo(TableInfo tableInfo) {
+  public static CarbonTable buildFromTableInfo(TableInfo tableInfo, boolean ignorePartitionCols) {
     CarbonTable table = new CarbonTable();
     table.tableInfo = tableInfo;
     table.blockSize = tableInfo.getTableBlockSizeInMB();
@@ -152,7 +156,7 @@ public class CarbonTable implements Serializable {
     table.metaDataFilepath = tableInfo.getMetaDataFilepath();
     table.absoluteTableIdentifier = tableInfo.getOrCreateAbsoluteTableIdentifier();
 
-    table.fillDimensionsAndMeasuresForTables(tableInfo.getFactTable());
+    table.fillDimensionsAndMeasuresForTables(tableInfo.getFactTable(), ignorePartitionCols);
     table.fillCreateOrderColumn(tableInfo.getFactTable().getTableName());
     if (tableInfo.getFactTable().getBucketingInfo() != null) {
       table.tableBucketMap.put(tableInfo.getFactTable().getTableName(),
@@ -200,7 +204,8 @@ public class CarbonTable implements Serializable {
    *
    * @param tableSchema
    */
-  private void fillDimensionsAndMeasuresForTables(TableSchema tableSchema) {
+  private void fillDimensionsAndMeasuresForTables(TableSchema tableSchema,
+      boolean ignorePartitionCols) {
     List<CarbonDimension> primitiveDimensions = new ArrayList<CarbonDimension>();
     List<CarbonDimension> implicitDimensions = new ArrayList<CarbonDimension>();
     allDimensions = new ArrayList<CarbonDimension>();
@@ -212,7 +217,7 @@ public class CarbonTable implements Serializable {
     int keyOrdinal = 0;
     int columnGroupOrdinal = -1;
     int previousColumnGroupId = -1;
-    List<ColumnSchema> listOfColumns = tableSchema.getListOfColumns();
+    List<ColumnSchema> listOfColumns = getColumns(tableSchema, ignorePartitionCols);
     int complexTypeOrdinal = -1;
     for (int i = 0; i < listOfColumns.size(); i++) {
       ColumnSchema columnSchema = listOfColumns.get(i);
@@ -269,6 +274,19 @@ public class CarbonTable implements Serializable {
     addImplicitDimension(dimensionOrdinal, implicitDimensions);
 
     dimensionOrdinalMax = dimensionOrdinal;
+  }
+
+  private List<ColumnSchema> getColumns(TableSchema schema, boolean ignorePartitionCols) {
+    List<ColumnSchema> listOfColumns = new ArrayList<>(schema.getListOfColumns());
+    if (ignorePartitionCols) {
+      if (schema.getPartitionInfo() != null
+          && schema.getPartitionInfo().getColumnSchemaList() != null) {
+        for (ColumnSchema columnSchema : schema.getPartitionInfo().getColumnSchemaList()) {
+          listOfColumns.remove(columnSchema);
+        }
+      }
+    }
+    return listOfColumns;
   }
 
   /**

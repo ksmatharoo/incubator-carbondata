@@ -24,7 +24,7 @@ object CarbonSessionExample {
   def main(args: Array[String]) {
     val spark = ExampleUtils.createCarbonSession("CarbonSessionExample")
     spark.sparkContext.setLogLevel("WARN")
-
+//
 //    spark.sql("DROP TABLE IF EXISTS carbon_table")
 //
 //    // Create table
@@ -52,23 +52,25 @@ object CarbonSessionExample {
 //         | OPTIONS('HEADER'='true')
 //       """.stripMargin)
 //    // scalastyle:on
-        spark.sql("DROP TABLE IF EXISTS carbon_table1")
-    // Create table
-    spark.sql(
-      s"""
-         | CREATE TABLE carbon_table1(
-         | shortField SHORT,
-         | intField INT,
-         | bigintField LONG,
-         | doubleField DOUBLE
-         | )
-         | PARTITIONED BY (stringField STRING)
-         | STORED BY 'carbondata'
-         | TBLPROPERTIES('PARTITION_TYPE'='LIST',
-         | 'LIST_INFO'='spark')
-       """.stripMargin)
+//        spark.sql("DROP TABLE IF EXISTS carbon_table1")
+//    // Create table
+//    spark.sql(
+//      s"""
+//         | CREATE TABLE carbon_table1(
+//         | shortField SHORT,
+//         | intField INT,
+//         | bigintField LONG,
+//         | doubleField DOUBLE
+//         | )
+//         | PARTITIONED BY (stringField STRING)
+//         | STORED BY 'carbondata'
+//         | TBLPROPERTIES('PARTITION_TYPE'='LIST',
+//         | 'LIST_INFO'='spark')
+//       """.stripMargin)
 
-    spark.sql("insert into carbon_table1 PARTITION(stringField) select * from carbon_table")
+//    spark.sql("insert into carbon_table1 PARTITION(stringField) select * from carbon_table")
+
+    spark.sql("select * from carbon_table1").show()
 
 
     spark.stop()

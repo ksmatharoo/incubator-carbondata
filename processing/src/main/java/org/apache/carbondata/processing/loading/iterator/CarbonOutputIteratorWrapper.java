@@ -15,7 +15,7 @@ public class CarbonOutputIteratorWrapper extends CarbonIterator<String[]> {
   }
 
   @Override public boolean hasNext() {
-    return !queue.isEmpty() && !close;
+    return !queue.isEmpty() || !close;
   }
 
   @Override public String[] next() {

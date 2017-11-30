@@ -78,6 +78,8 @@ import org.apache.carbondata.processing.merger.NodeMultiBlockRelation;
 import com.google.gson.Gson;
 import org.apache.commons.lang3.StringUtils;
 
+import static org.apache.carbondata.core.statusmanager.SegmentStatus.INSERT_IN_PROGRESS;
+
 public final class CarbonLoaderUtil {
 
   private static final LogService LOGGER =
@@ -298,7 +300,7 @@ public final class CarbonLoaderUtil {
             if (entry.getSegmentStatus() == SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS) {
               throw new RuntimeException("Already insert overwrite is in progress");
             } else if (newMetaEntry.getSegmentStatus() == SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS
-                && entry.getSegmentStatus() == SegmentStatus.INSERT_IN_PROGRESS) {
+                && entry.getSegmentStatus() == INSERT_IN_PROGRESS) {
               throw new RuntimeException("Already insert into or load is in progress");
             }
           }
@@ -428,6 +430,47 @@ public final class CarbonLoaderUtil {
     date = sdf.format(new Date());
 
     return date;
+  }
+
+  public static void readAndUpdateLoadProgressInTableMeta(CarbonLoadModel model,
+      boolean insertOverwrite) throws IOException, InterruptedException {
+    LoadMetadataDetails newLoadMetaEntry = new LoadMetadataDetails();
+    SegmentStatus status = SegmentStatus.INSERT_IN_PROGRESS;
+    if (insertOverwrite) {
+      status = SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS;
+    }
+
+    // reading the start time of data load.
+    long loadStartTime = CarbonUpdateUtil.readCurrentTime();
+    model.setFactTimeStamp(loadStartTime);
+    CarbonLoaderUtil
+        .populateNewLoadMetaEntry(newLoadMetaEntry, status, model.getFactTimeStamp(), false);
+    boolean entryAdded =
+        CarbonLoaderUtil.recordLoadMetadata(newLoadMetaEntry, model, true, insertOverwrite);
+    if (!entryAdded) {
+      throw new IOException("Failed to add entry in table status for " + model.getTableName());
+    }
+  }
+
+  /**
+   * This method will update the load failure entry in the table status file
+   */
+  public static void updateTableStatusForFailure(CarbonLoadModel model)
+      throws IOException, InterruptedException {
+    // in case if failure the load status should be "Marked for delete" so that it will be taken
+    // care during clean up
+    SegmentStatus loadStatus = SegmentStatus.MARKED_FOR_DELETE;
+    // always the last entry in the load metadata details will be the current load entry
+    LoadMetadataDetails loadMetaEntry =
+        model.getLoadMetadataDetails().get(model.getLoadMetadataDetails().size() - 1);
+    CarbonLoaderUtil
+        .populateNewLoadMetaEntry(loadMetaEntry, loadStatus, model.getFactTimeStamp(), true);
+    boolean updationStatus =
+        CarbonLoaderUtil.recordLoadMetadata(loadMetaEntry, model, false, false);
+    if (!updationStatus) {
+      throw new IOException(
+          "Failed to update failure entry in table status for " + model.getTableName());
+    }
   }
 
   public static Dictionary getDictionary(DictionaryColumnUniqueIdentifier columnIdentifier)

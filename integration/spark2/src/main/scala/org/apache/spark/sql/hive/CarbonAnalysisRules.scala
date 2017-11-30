@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.CarbonExpressions.{CarbonUnresolvedRelation, MatchCast}
@@ -242,7 +243,8 @@ case class CarbonPreInsertionCasts(sparkSession: SparkSession) extends Rule[Logi
 
       val overwrite = CarbonReflectionUtils.getOverWriteOption("overwrite", p)
 
-      p.copy(table = convertToLogicalRelation(relation, new CarbonFileFormat, sparkSession))
+      p.copy(table =
+        convertToLogicalRelation(relation, new CarbonFileFormat, overwrite, sparkSession))
     } else {
       CarbonException.analysisException(
         "Cannot insert into target table because number of columns mismatch")
@@ -252,6 +254,7 @@ case class CarbonPreInsertionCasts(sparkSession: SparkSession) extends Rule[Logi
   private def convertToLogicalRelation(
       relation: LogicalRelation,
       defaultSource: FileFormat,
+      overWrite: Boolean,
       sparkSession: SparkSession): LogicalRelation = {
     if (relation.catalogTable.isDefined) {
       val catalogTable = relation.catalogTable.get
@@ -274,14 +277,16 @@ case class CarbonPreInsertionCasts(sparkSession: SparkSession) extends Rule[Logi
         val dataSchema =
           StructType(metastoreSchema
             .filterNot(field => partitionSchema.contains(field.name)))
-
+        val options = new mutable.HashMap[String, String]()
+        options ++= catalogTable.storage.properties
+        options += (("overwrite", overWrite.toString))
         val hdfsRelation = HadoopFsRelation(
           location = catalog,
           partitionSchema = partitionSchema,
           dataSchema = dataSchema,
           bucketSpec = catalogTable.bucketSpec,
           fileFormat = defaultSource,
-          options = catalogTable.storage.properties)(sparkSession = sparkSession)
+          options = options.toMap)(sparkSession = sparkSession)
 
         val created = LogicalRelation(hdfsRelation, catalogTable = Some(catalogTable))
         created
