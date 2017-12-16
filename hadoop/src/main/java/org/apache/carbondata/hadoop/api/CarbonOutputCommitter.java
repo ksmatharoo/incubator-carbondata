@@ -25,6 +25,7 @@ import org.apache.carbondata.core.metadata.PartitionMapFileStore;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
+import org.apache.carbondata.core.writer.CarbonIndexFileMergeWriter;
 import org.apache.carbondata.processing.loading.model.CarbonLoadModel;
 import org.apache.carbondata.processing.util.CarbonLoaderUtil;
 
@@ -85,6 +86,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
         CarbonTablePath.getSegmentPath(loadModel.getTablePath(), loadModel.getSegmentId());
     // Merge all partition files into a single file.
     new PartitionMapFileStore().mergePartitionMapFiles(segmentPath);
+    new CarbonIndexFileMergeWriter().mergeCarbonIndexFilesOfSegment(segmentPath);
   }
 
   /**

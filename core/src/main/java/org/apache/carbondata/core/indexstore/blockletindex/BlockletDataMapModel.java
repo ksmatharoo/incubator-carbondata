@@ -26,10 +26,14 @@ public class BlockletDataMapModel extends DataMapModel {
 
   private List<String> partitions;
 
-  public BlockletDataMapModel(String filePath, byte[] fileData, List<String> partitions) {
+  private boolean partitionedSegment;
+
+  public BlockletDataMapModel(String filePath, byte[] fileData, List<String> partitions,
+      boolean partitionedSegment) {
     super(filePath);
     this.fileData = fileData;
     this.partitions = partitions;
+    this.partitionedSegment = partitionedSegment;
   }
 
   public byte[] getFileData() {
@@ -38,5 +42,9 @@ public class BlockletDataMapModel extends DataMapModel {
 
   public List<String> getPartitions() {
     return partitions;
+  }
+
+  public boolean isPartitionedSegment() {
+    return partitionedSegment;
   }
 }

@@ -185,7 +185,8 @@ public class BlockletDataMapIndexStore
       dataMap = new BlockletDataMap();
       dataMap.init(new BlockletDataMapModel(identifier.getFilePath(),
           indexFileStore.getFileData(identifier.getCarbonIndexFileName()),
-          partitionFileStore.getPartitions(identifier.getCarbonIndexFileName())));
+          partitionFileStore.getPartitions(identifier.getCarbonIndexFileName()),
+          partitionFileStore.isPartionedSegment()));
       lruCache.put(identifier.getUniqueTableSegmentIdentifier(), dataMap,
           dataMap.getMemorySize());
     }
