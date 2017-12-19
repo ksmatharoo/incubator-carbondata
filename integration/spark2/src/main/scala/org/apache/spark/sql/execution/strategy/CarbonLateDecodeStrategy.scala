@@ -130,13 +130,22 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       table.carbonTable.getTableInfo.serialize())
   }
 
-  protected def pruneFilterProject(
+  /**
+   * Converts to physical RDD of carbon after pushing down applicable filters.
+   * @param relation
+   * @param projects
+   * @param filterPredicates
+   * @param scanBuilder
+   * @return
+   */
+  private def pruneFilterProject(
       relation: LogicalRelation,
       projects: Seq[NamedExpression],
       filterPredicates: Seq[Expression],
       scanBuilder: (Seq[Attribute], Array[Filter],
         ArrayBuffer[AttributeReference], Seq[String]) => RDD[InternalRow]) = {
     val names = relation.catalogTable.get.partitionColumnNames
+    // Get the current partitions from table.
     var partitions: Seq[String] = null
     if (names.nonEmpty) {
       val partitionSet = AttributeSet(names
@@ -328,7 +337,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     }
   }
 
-  def getDataSourceScan(relation: LogicalRelation,
+  private def getDataSourceScan(relation: LogicalRelation,
       output: Seq[Attribute],
       partitions: Seq[String],
       scanBuilder: (Seq[Attribute], Seq[Expression], Seq[Filter],
