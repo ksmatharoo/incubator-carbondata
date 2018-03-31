@@ -30,6 +30,7 @@ import org.apache.carbondata.core.scan.executor.infos.MeasureInfo;
 import org.apache.carbondata.core.scan.model.ProjectionMeasure;
 import org.apache.carbondata.core.scan.result.BlockletScannedResult;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnarBatch;
+import org.apache.carbondata.core.stats.QueryStatisticsModel;
 import org.apache.carbondata.core.util.DataTypeUtil;
 
 /**
@@ -52,10 +53,14 @@ public abstract class AbstractScannedResultCollector implements ScannedResultCol
    */
   DimensionInfo dimensionInfo;
 
-  AbstractScannedResultCollector(BlockExecutionInfo blockExecutionInfos) {
+  protected QueryStatisticsModel queryStatisticsModel;
+
+  AbstractScannedResultCollector(BlockExecutionInfo blockExecutionInfos,
+      QueryStatisticsModel queryStatisticsModel) {
     this.executionInfo = blockExecutionInfos;
     measureInfo = blockExecutionInfos.getMeasureInfo();
     dimensionInfo = blockExecutionInfos.getDimensionInfo();
+    this.queryStatisticsModel = queryStatisticsModel;
   }
 
   protected void fillMeasureData(Object[] msrValues, int offset,

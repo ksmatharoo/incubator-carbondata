@@ -94,7 +94,7 @@ public class DataBlockIterator extends CarbonIterator<List<Object[]>> {
       blockletScanner = new BlockletFullScanner(blockExecutionInfo, queryStatisticsModel);
     }
     this.scannerResultAggregator =
-        ResultCollectorFactory.getScannedResultCollector(blockExecutionInfo);
+        ResultCollectorFactory.getScannedResultCollector(blockExecutionInfo, queryStatisticsModel);
     this.batchSize = batchSize;
     this.executorService = executorService;
     this.nextBlock = new AtomicBoolean(false);

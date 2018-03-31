@@ -31,6 +31,7 @@ import org.apache.carbondata.core.scan.result.BlockletScannedResult;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnarBatch;
 import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
+import org.apache.carbondata.core.stats.QueryStatisticsModel;
 
 /**
  * It is not a collector it is just a scanned result holder.
@@ -39,8 +40,9 @@ public class RestructureBasedVectorResultCollector extends DictionaryBasedVector
 
   private Object[] measureDefaultValues = null;
 
-  public RestructureBasedVectorResultCollector(BlockExecutionInfo blockExecutionInfos) {
-    super(blockExecutionInfos);
+  public RestructureBasedVectorResultCollector(BlockExecutionInfo blockExecutionInfos,
+      QueryStatisticsModel queryStatisticsModel) {
+    super(blockExecutionInfos, queryStatisticsModel);
     queryDimensions = executionInfo.getActualQueryDimensions();
     queryMeasures = executionInfo.getActualQueryMeasures();
     measureDefaultValues = new Object[queryMeasures.length];

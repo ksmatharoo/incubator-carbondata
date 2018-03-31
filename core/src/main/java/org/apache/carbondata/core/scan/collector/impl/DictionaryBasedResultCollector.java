@@ -32,6 +32,9 @@ import org.apache.carbondata.core.scan.filter.GenericQueryType;
 import org.apache.carbondata.core.scan.model.ProjectionDimension;
 import org.apache.carbondata.core.scan.model.ProjectionMeasure;
 import org.apache.carbondata.core.scan.result.BlockletScannedResult;
+import org.apache.carbondata.core.stats.QueryStatistic;
+import org.apache.carbondata.core.stats.QueryStatisticsConstants;
+import org.apache.carbondata.core.stats.QueryStatisticsModel;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.DataTypeUtil;
 
@@ -71,8 +74,9 @@ public class DictionaryBasedResultCollector extends AbstractScannedResultCollect
 
   private Map<Integer, GenericQueryType> comlexDimensionInfoMap;
 
-  public DictionaryBasedResultCollector(BlockExecutionInfo blockExecutionInfos) {
-    super(blockExecutionInfos);
+  public DictionaryBasedResultCollector(BlockExecutionInfo blockExecutionInfos,
+      QueryStatisticsModel queryStatisticsModel) {
+    super(blockExecutionInfos, queryStatisticsModel);
     queryDimensions = executionInfo.getProjectionDimensions();
     queryMeasures = executionInfo.getProjectionMeasures();
     initDimensionAndMeasureIndexesForFillingData();
@@ -86,7 +90,9 @@ public class DictionaryBasedResultCollector extends AbstractScannedResultCollect
    */
   @Override
   public List<Object[]> collectResultInRow(BlockletScannedResult scannedResult, int batchSize) {
-
+    long startTime = System.currentTimeMillis();
+    QueryStatistic readTime = queryStatisticsModel.getStatisticsTypeAndObjMap()
+        .get(QueryStatisticsConstants.PREPARE_RESULT);
     // scan the record and add to list
     List<Object[]> listBasedResult = new ArrayList<>(batchSize);
     int rowCounter = 0;
@@ -116,6 +122,8 @@ public class DictionaryBasedResultCollector extends AbstractScannedResultCollect
       listBasedResult.add(row);
       rowCounter++;
     }
+    readTime.addCountStatistic(QueryStatisticsConstants.PREPARE_RESULT,
+        readTime.getCount() + (System.currentTimeMillis() - startTime));
     return listBasedResult;
   }
 

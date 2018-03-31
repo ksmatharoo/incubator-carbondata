@@ -93,7 +93,9 @@ public class MeasureRawColumnChunk extends AbstractRawColumnChunk {
    */
   public ColumnPage convertToColumnPageWithOutCache(int index) {
     assert index < pagesCount;
-
+    if (null != columnPages && columnPages[index] != null) {
+      return columnPages[index];
+    }
     try {
       return chunkReader.decodeColumnPage(this, index);
     } catch (IOException | MemoryException e) {
@@ -109,6 +111,7 @@ public class MeasureRawColumnChunk extends AbstractRawColumnChunk {
         }
       }
     }
+    rawData = null;
   }
 
   public void setFileReader(FileReader fileReader) {

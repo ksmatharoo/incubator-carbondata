@@ -23,6 +23,7 @@ import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
 import org.apache.carbondata.core.scan.model.ProjectionMeasure;
 import org.apache.carbondata.core.scan.result.BlockletScannedResult;
 import org.apache.carbondata.core.scan.wrappers.ByteArrayWrapper;
+import org.apache.carbondata.core.stats.QueryStatisticsModel;
 
 /**
  * It is not a collector it is just a scanned result holder.
@@ -35,8 +36,9 @@ public class RawBasedResultCollector extends AbstractScannedResultCollector {
 
   private byte[][] complexTypeKeyArray;
 
-  public RawBasedResultCollector(BlockExecutionInfo blockExecutionInfos) {
-    super(blockExecutionInfos);
+  public RawBasedResultCollector(BlockExecutionInfo blockExecutionInfos,
+      QueryStatisticsModel queryStatisticsModel) {
+    super(blockExecutionInfos, queryStatisticsModel);
   }
 
   /**

@@ -184,7 +184,6 @@ public class BlockletFilterScanner extends BlockletFullScanner {
           scannedPages.getCount() + bitSetGroup.getScannedPages());
       return createEmptyResult();
     }
-
     BlockletScannedResult scannedResult = new FilterQueryScannedResult(blockExecutionInfo);
     scannedResult.setBlockletId(
         blockExecutionInfo.getBlockIdString() + CarbonCommonConstants.FILE_SEPARATOR +
@@ -200,10 +199,17 @@ public class BlockletFilterScanner extends BlockletFullScanner {
         .get(QueryStatisticsConstants.VALID_PAGE_SCANNED);
     validPages.addCountStatistic(QueryStatisticsConstants.VALID_PAGE_SCANNED,
         validPages.getCount() + bitSetGroup.getValidPages());
+
     QueryStatistic scannedPages = queryStatisticsModel.getStatisticsTypeAndObjMap()
         .get(QueryStatisticsConstants.PAGE_SCANNED);
     scannedPages.addCountStatistic(QueryStatisticsConstants.PAGE_SCANNED,
         scannedPages.getCount() + bitSetGroup.getScannedPages());
+
+    QueryStatistic totalPages = queryStatisticsModel.getStatisticsTypeAndObjMap()
+        .get(QueryStatisticsConstants.TOTAL_PAGE_SCANNED);
+    totalPages.addCountStatistic(QueryStatisticsConstants.TOTAL_PAGE_SCANNED,
+        totalPages.getCount() + rawBlockletColumnChunks.getDataBlock().numberOfPages());
+
     int[] pageFilteredRowCount = new int[bitSetGroup.getNumberOfPages()];
     // get the row indexes from bit set for each page
     int[][] pageFilteredRowId = new int[bitSetGroup.getNumberOfPages()][];
@@ -220,13 +226,8 @@ public class BlockletFilterScanner extends BlockletFullScanner {
         pageFilteredRowId[pageId] = matchedRowId;
       }
     }
-
-    long dimensionReadTime = System.currentTimeMillis();
-    dimensionReadTime = System.currentTimeMillis() - dimensionReadTime;
-
+    long currentScanTime = System.currentTimeMillis() - startTime;
     FileReader fileReader = rawBlockletColumnChunks.getFileReader();
-
-
     DimensionRawColumnChunk[] dimensionRawColumnChunks =
         new DimensionRawColumnChunk[blockExecutionInfo.getTotalNumberDimensionToRead()];
     int numDimensionChunks = dimensionRawColumnChunks.length;
@@ -235,20 +236,26 @@ public class BlockletFilterScanner extends BlockletFullScanner {
       dimensionRawColumnChunks[chunkIndex] =
           rawBlockletColumnChunks.getDimensionRawColumnChunks()[chunkIndex];
     }
+
     int[][] allSelectedDimensionColumnIndexRange =
         blockExecutionInfo.getAllSelectedDimensionColumnIndexRange();
+    startTime = System.currentTimeMillis();
     DimensionRawColumnChunk[] projectionListDimensionChunk = rawBlockletColumnChunks.getDataBlock()
         .readDimensionChunks(fileReader, allSelectedDimensionColumnIndexRange);
+    long currentReadTime = System.currentTimeMillis() - startTime;
+
+    startTime = System.currentTimeMillis();
     for (int[] columnIndexRange : allSelectedDimensionColumnIndexRange) {
       System.arraycopy(projectionListDimensionChunk, columnIndexRange[0],
           dimensionRawColumnChunks, columnIndexRange[0],
           columnIndexRange[1] + 1 - columnIndexRange[0]);
     }
-
+    currentScanTime += System.currentTimeMillis() - startTime;
     /*
      * in case projection if the projected dimension are not loaded in the dimensionColumnDataChunk
      * then loading them
      */
+    startTime = System.currentTimeMillis();
     int[] projectionListDimensionIndexes = blockExecutionInfo.getProjectionListDimensionIndexes();
     for (int projectionListDimensionIndex : projectionListDimensionIndexes) {
       if (null == dimensionRawColumnChunks[projectionListDimensionIndex]) {
@@ -257,23 +264,14 @@ public class BlockletFilterScanner extends BlockletFullScanner {
                 fileReader, projectionListDimensionIndex);
       }
     }
-
+    currentReadTime += System.currentTimeMillis() - startTime;
+    startTime = System.currentTimeMillis();
     DimensionColumnPage[][] dimensionColumnPages =
         new DimensionColumnPage[numDimensionChunks][numPages];
-    for (int chunkIndex = 0; chunkIndex < numDimensionChunks; chunkIndex++) {
-      if (dimensionRawColumnChunks[chunkIndex] != null) {
-        for (int pageId = 0; pageId < numPages; pageId++) {
-          dimensionColumnPages[chunkIndex][pageId] =
-              dimensionRawColumnChunks[chunkIndex].decodeColumnPage(pageId);
-        }
-      }
-    }
-
-
+    currentScanTime += System.currentTimeMillis() - startTime;
     MeasureRawColumnChunk[] measureRawColumnChunks =
         new MeasureRawColumnChunk[blockExecutionInfo.getTotalNumberOfMeasureToRead()];
     int numMeasureChunks = measureRawColumnChunks.length;
-
     // read the measure chunk blocks which is not present
     for (int chunkIndex = 0; chunkIndex < numMeasureChunks; chunkIndex++) {
       if (null != rawBlockletColumnChunks.getMeasureRawColumnChunks()[chunkIndex]) {
@@ -281,19 +279,23 @@ public class BlockletFilterScanner extends BlockletFullScanner {
             rawBlockletColumnChunks.getMeasureRawColumnChunks()[chunkIndex];
       }
     }
-
+    startTime = System.currentTimeMillis();
     int[][] allSelectedMeasureColumnIndexRange =
         blockExecutionInfo.getAllSelectedMeasureIndexRange();
     MeasureRawColumnChunk[] projectionListMeasureChunk = rawBlockletColumnChunks.getDataBlock()
         .readMeasureChunks(fileReader, allSelectedMeasureColumnIndexRange);
+    currentReadTime += System.currentTimeMillis() - startTime;
+    startTime = System.currentTimeMillis();
     for (int[] columnIndexRange : allSelectedMeasureColumnIndexRange) {
       System.arraycopy(projectionListMeasureChunk, columnIndexRange[0], measureRawColumnChunks,
           columnIndexRange[0], columnIndexRange[1] + 1 - columnIndexRange[0]);
     }
+    currentScanTime += System.currentTimeMillis() - startTime;
     /*
      * in case projection if the projected measure are not loaded in the ColumnPage
      * then loading them
      */
+    startTime = System.currentTimeMillis();
     int[] projectionListMeasureIndexes = blockExecutionInfo.getProjectionListMeasureIndexes();
     for (int projectionListMeasureIndex : projectionListMeasureIndexes) {
       if (null == measureRawColumnChunks[projectionListMeasureIndex]) {
@@ -301,31 +303,27 @@ public class BlockletFilterScanner extends BlockletFullScanner {
             .readMeasureChunk(fileReader, projectionListMeasureIndex);
       }
     }
+    currentReadTime += System.currentTimeMillis() - startTime;
+    startTime = System.currentTimeMillis();
     ColumnPage[][] measureColumnPages = new ColumnPage[numMeasureChunks][numPages];
-    for (int chunkIndex = 0; chunkIndex < numMeasureChunks; chunkIndex++) {
-      if (measureRawColumnChunks[chunkIndex] != null) {
-        for (int pageId = 0; pageId < numPages; pageId++) {
-          measureColumnPages[chunkIndex][pageId] =
-              measureRawColumnChunks[chunkIndex].decodeColumnPage(pageId);
-        }
-      }
-    }
-
     scannedResult.setDimensionColumnPages(dimensionColumnPages);
     scannedResult.setPageFilteredRowId(pageFilteredRowId);
     scannedResult.setMeasureColumnPages(measureColumnPages);
     scannedResult.setDimRawColumnChunks(dimensionRawColumnChunks);
     scannedResult.setMsrRawColumnChunks(measureRawColumnChunks);
     scannedResult.setPageFilteredRowCount(pageFilteredRowCount);
+    scannedResult.fillDataChunks();
+    currentScanTime += System.currentTimeMillis() - startTime;
     // adding statistics for carbon scan time
     QueryStatistic scanTime = queryStatisticsModel.getStatisticsTypeAndObjMap()
         .get(QueryStatisticsConstants.SCAN_BLOCKlET_TIME);
     scanTime.addCountStatistic(QueryStatisticsConstants.SCAN_BLOCKlET_TIME,
-        scanTime.getCount() + (System.currentTimeMillis() - startTime - dimensionReadTime));
-    QueryStatistic readTime = queryStatisticsModel.getStatisticsTypeAndObjMap()
+        scanTime.getCount() + currentScanTime);
+
+    QueryStatistic readDataTime = queryStatisticsModel.getStatisticsTypeAndObjMap()
         .get(QueryStatisticsConstants.READ_BLOCKlET_TIME);
-    readTime.addCountStatistic(QueryStatisticsConstants.READ_BLOCKlET_TIME,
-        readTime.getCount() + dimensionReadTime);
+    readDataTime.addCountStatistic(QueryStatisticsConstants.READ_BLOCKlET_TIME,
+        readDataTime.getCount() + currentReadTime);
     return scannedResult;
   }
 }

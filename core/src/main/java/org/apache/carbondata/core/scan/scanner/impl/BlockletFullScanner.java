@@ -81,6 +81,11 @@ public class BlockletFullScanner implements BlockletScanner {
         .get(QueryStatisticsConstants.TOTAL_PAGE_SCANNED);
     totalPagesScanned.addCountStatistic(QueryStatisticsConstants.TOTAL_PAGE_SCANNED,
         totalPagesScanned.getCount() + rawBlockletColumnChunks.getDataBlock().numberOfPages());
+
+    QueryStatistic scannedPagges = queryStatisticsModel.getStatisticsTypeAndObjMap()
+        .get(QueryStatisticsConstants.PAGE_SCANNED);
+    scannedPagges.addCountStatistic(QueryStatisticsConstants.PAGE_SCANNED,
+        scannedPagges.getCount() + rawBlockletColumnChunks.getDataBlock().numberOfPages());
     scannedResult.setBlockletId(
         blockExecutionInfo.getBlockIdString() + CarbonCommonConstants.FILE_SEPARATOR +
             rawBlockletColumnChunks.getDataBlock().blockletIndex());
@@ -101,18 +106,6 @@ public class BlockletFullScanner implements BlockletScanner {
     scannedResult.setMeasureColumnPages(measureColumnPages);
     scannedResult.setDimRawColumnChunks(dimensionRawColumnChunks);
     scannedResult.setMsrRawColumnChunks(measureRawColumnChunks);
-    if (blockExecutionInfo.isPrefetchBlocklet()) {
-      for (int i = 0; i < dimensionRawColumnChunks.length; i++) {
-        if (dimensionRawColumnChunks[i] != null) {
-          dimensionColumnDataChunks[i] = dimensionRawColumnChunks[i].decodeAllColumnPages();
-        }
-      }
-      for (int i = 0; i < measureRawColumnChunks.length; i++) {
-        if (measureRawColumnChunks[i] != null) {
-          measureColumnPages[i] = measureRawColumnChunks[i].decodeAllColumnPages();
-        }
-      }
-    }
     int[] numberOfRows = null;
     if (blockExecutionInfo.getAllSelectedDimensionColumnIndexRange().length > 0) {
       for (int i = 0; i < dimensionRawColumnChunks.length; i++) {
@@ -129,7 +122,6 @@ public class BlockletFullScanner implements BlockletScanner {
         }
       }
     }
-
     // count(*)  case there would not be any dimensions are measures selected.
     if (numberOfRows == null) {
       numberOfRows = new int[rawBlockletColumnChunks.getDataBlock().numberOfPages()];
@@ -145,9 +137,7 @@ public class BlockletFullScanner implements BlockletScanner {
       }
     }
     scannedResult.setPageFilteredRowCount(numberOfRows);
-    if (!blockExecutionInfo.isPrefetchBlocklet()) {
-      scannedResult.fillDataChunks();
-    }
+    scannedResult.fillDataChunks();
     // adding statistics for carbon scan time
     QueryStatistic scanTime = queryStatisticsModel.getStatisticsTypeAndObjMap()
         .get(QueryStatisticsConstants.SCAN_BLOCKlET_TIME);

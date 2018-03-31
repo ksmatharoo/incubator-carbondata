@@ -29,6 +29,9 @@ import org.apache.carbondata.core.scan.result.BlockletScannedResult;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnarBatch;
 import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
 import org.apache.carbondata.core.scan.result.vector.MeasureDataVectorProcessor;
+import org.apache.carbondata.core.stats.QueryStatistic;
+import org.apache.carbondata.core.stats.QueryStatisticsConstants;
+import org.apache.carbondata.core.stats.QueryStatisticsModel;
 
 /**
  * It is not a collector it is just a scanned result holder.
@@ -51,8 +54,9 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
 
   private ColumnVectorInfo[] implictColumnInfo;
 
-  public DictionaryBasedVectorResultCollector(BlockExecutionInfo blockExecutionInfos) {
-    super(blockExecutionInfos);
+  public DictionaryBasedVectorResultCollector(BlockExecutionInfo blockExecutionInfos,
+      QueryStatisticsModel queryStatisticsModel) {
+    super(blockExecutionInfos, queryStatisticsModel);
     // initialize only if the current block is not a restructured block else the initialization
     // will be taken care by RestructureBasedVectorResultCollector
     if (!blockExecutionInfos.isRestructuredBlock()) {
@@ -134,6 +138,9 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
   @Override
   public void collectResultInColumnarBatch(BlockletScannedResult scannedResult,
       CarbonColumnarBatch columnarBatch) {
+    long startTime = System.currentTimeMillis();
+    QueryStatistic readTime = queryStatisticsModel.getStatisticsTypeAndObjMap()
+        .get(QueryStatisticsConstants.PREPARE_RESULT);
     int numberOfPages = scannedResult.numberOfpages();
     int filteredRows = 0;
     while (scannedResult.getCurrentPageCounter() < numberOfPages) {
@@ -149,6 +156,8 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
       int requiredRows = columnarBatch.getBatchSize() - columnarBatch.getRowCounter();
       requiredRows = Math.min(requiredRows, availableRows);
       if (requiredRows < 1) {
+        readTime.addCountStatistic(QueryStatisticsConstants.PREPARE_RESULT,
+            readTime.getCount() + (System.currentTimeMillis() - startTime));
         return;
       }
       fillColumnVectorDetails(columnarBatch, rowCounter, requiredRows);
@@ -158,6 +167,8 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
           scannedResult, columnarBatch, rowCounter, availableRows, requiredRows);
       columnarBatch.setActualSize(columnarBatch.getActualSize() + requiredRows - filteredRows);
     }
+    readTime.addCountStatistic(QueryStatisticsConstants.PREPARE_RESULT,
+        readTime.getCount() + (System.currentTimeMillis() - startTime));
   }
 
   void fillResultToColumnarBatch(BlockletScannedResult scannedResult,

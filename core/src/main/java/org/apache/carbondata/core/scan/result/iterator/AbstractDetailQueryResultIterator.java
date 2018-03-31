@@ -260,37 +260,45 @@ public abstract class AbstractDetailQueryResultIterator<E> extends CarbonIterato
   private void initQueryStatiticsModel() {
     this.queryStatisticsModel = new QueryStatisticsModel();
     this.queryStatisticsModel.setRecorder(recorder);
-    QueryStatistic queryStatisticTotalBlocklet = new QueryStatistic();
+    QueryStatistic queryStatisticTotalBlocklet =
+        new QueryStatistic(QueryStatisticsConstants.TOTAL_BLOCKLET_NUM);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.TOTAL_BLOCKLET_NUM, queryStatisticTotalBlocklet);
     queryStatisticsModel.getRecorder().recordStatistics(queryStatisticTotalBlocklet);
 
-    QueryStatistic queryStatisticValidScanBlocklet = new QueryStatistic();
+    QueryStatistic queryStatisticValidScanBlocklet =
+        new QueryStatistic(QueryStatisticsConstants.VALID_SCAN_BLOCKLET_NUM);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.VALID_SCAN_BLOCKLET_NUM, queryStatisticValidScanBlocklet);
     queryStatisticsModel.getRecorder().recordStatistics(queryStatisticValidScanBlocklet);
 
-    QueryStatistic totalNumberOfPages = new QueryStatistic();
+    QueryStatistic totalNumberOfPages =
+        new QueryStatistic(QueryStatisticsConstants.TOTAL_PAGE_SCANNED);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.TOTAL_PAGE_SCANNED, totalNumberOfPages);
     queryStatisticsModel.getRecorder().recordStatistics(totalNumberOfPages);
 
-    QueryStatistic validPages = new QueryStatistic();
+    QueryStatistic validPages = new QueryStatistic(QueryStatisticsConstants.VALID_PAGE_SCANNED);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.VALID_PAGE_SCANNED, validPages);
     queryStatisticsModel.getRecorder().recordStatistics(validPages);
 
-    QueryStatistic scannedPages = new QueryStatistic();
+    QueryStatistic scannedPages = new QueryStatistic(QueryStatisticsConstants.PAGE_SCANNED);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.PAGE_SCANNED, scannedPages);
     queryStatisticsModel.getRecorder().recordStatistics(scannedPages);
 
-    QueryStatistic scanTime = new QueryStatistic();
+    QueryStatistic scanTime = new QueryStatistic(QueryStatisticsConstants.SCAN_BLOCKlET_TIME);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.SCAN_BLOCKlET_TIME, scanTime);
     queryStatisticsModel.getRecorder().recordStatistics(scanTime);
 
-    QueryStatistic readTime = new QueryStatistic();
+    QueryStatistic resultPrep = new QueryStatistic(QueryStatisticsConstants.PREPARE_RESULT);
+    queryStatisticsModel.getStatisticsTypeAndObjMap()
+        .put(QueryStatisticsConstants.PREPARE_RESULT, resultPrep);
+    queryStatisticsModel.getRecorder().recordStatistics(resultPrep);
+
+    QueryStatistic readTime = new QueryStatistic(QueryStatisticsConstants.READ_BLOCKlET_TIME);
     queryStatisticsModel.getStatisticsTypeAndObjMap()
         .put(QueryStatisticsConstants.READ_BLOCKlET_TIME, readTime);
     queryStatisticsModel.getRecorder().recordStatistics(readTime);

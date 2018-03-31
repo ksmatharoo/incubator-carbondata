@@ -120,7 +120,6 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
     queryProperties.queryStatisticsRecorder =
         CarbonTimeStatisticsFactory.createExecutorRecorder(queryModel.getQueryId());
     queryModel.setStatisticsRecorder(queryProperties.queryStatisticsRecorder);
-    QueryStatistic queryStatistic = new QueryStatistic();
     // sort the block info
     // so block will be loaded in sorted order this will be required for
     // query execution
@@ -162,9 +161,6 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
       cache.removeTableBlocksIfHorizontalCompactionDone(queryModel);
       queryProperties.dataBlocks = cache.getAll(tableBlockUniqueIdentifiers);
     }
-    queryStatistic
-        .addStatistics(QueryStatisticsConstants.LOAD_BLOCKS_EXECUTOR, System.currentTimeMillis());
-    queryProperties.queryStatisticsRecorder.recordStatistics(queryStatistic);
     // calculating the total number of aggeragted columns
     int measureCount = queryModel.getProjectionMeasures().size();
 
@@ -193,7 +189,7 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
     CarbonTable carbonTable = queryModel.getTable();
     TableProvider tableProvider = new SingleTableProvider(carbonTable);
 
-    queryStatistic = new QueryStatistic();
+    QueryStatistic queryStatistic = new QueryStatistic(QueryStatisticsConstants.LOAD_DICTIONARY);
     // dictionary column unique column id to dictionary mapping
     // which will be used to get column actual data
     queryProperties.columnToDictionaryMapping =
@@ -276,7 +272,7 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
               dataRefNode.getBlockInfos().get(0).getSegmentId()));
     }
     if (null != queryModel.getStatisticsRecorder()) {
-      QueryStatistic queryStatistic = new QueryStatistic();
+      QueryStatistic queryStatistic = new QueryStatistic(QueryStatisticsConstants.SCAN_BLOCKS_NUM);
       queryStatistic.addCountStatistic(QueryStatisticsConstants.SCAN_BLOCKS_NUM,
           blockExecutionInfoList.size());
       queryModel.getStatisticsRecorder().recordStatistics(queryStatistic);

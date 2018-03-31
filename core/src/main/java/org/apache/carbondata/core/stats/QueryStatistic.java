@@ -53,6 +53,10 @@ public class QueryStatistic implements Serializable {
   public QueryStatistic() {
     this.startTime = System.currentTimeMillis();
   }
+  public QueryStatistic(String message) {
+    this.startTime = System.currentTimeMillis();
+    this.message = message;
+  }
 
   /**
    * below method will be used to add the statistic
