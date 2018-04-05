@@ -50,7 +50,8 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
   private var relations: Seq[CarbonDecoderRelation] = _
 
   def apply(plan: LogicalPlan): LogicalPlan = {
-    if (checkIfRuleNeedToBeApplied(plan, true)) {
+//    if (checkIfRuleNeedToBeApplied(plan, true)) {
+    if (false) {
       val recorder = CarbonTimeStatisticsFactory.createExecutorRecorder("")
       val queryStatistic = new QueryStatistic()
       val result = transformCarbonPlan(plan, relations)

@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.carbondata.core.datastore.impl.FileReaderImpl;
 import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionaryKeyGeneratorFactory;
 import org.apache.carbondata.core.metadata.encoder.Encoding;
 import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
@@ -152,7 +153,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
       int rowCounter = scannedResult.getRowCounter();
       int availableRows = currentPageRowCount - rowCounter;
       // getRowCounter holds total number or rows being placed in Vector. Calculate the
-      // Left over space through getRowCounter only.
+      // Left over space through 11341134getRowCounter only.
       int requiredRows = columnarBatch.getBatchSize() - columnarBatch.getRowCounter();
       requiredRows = Math.min(requiredRows, availableRows);
       if (requiredRows < 1) {
@@ -173,11 +174,13 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
 
   void fillResultToColumnarBatch(BlockletScannedResult scannedResult,
       CarbonColumnarBatch columnarBatch, int rowCounter, int availableRows, int requiredRows) {
+    long l = System.currentTimeMillis();
     scannedResult.fillColumnarDictionaryBatch(dictionaryInfo);
     scannedResult.fillColumnarNoDictionaryBatch(noDictionaryInfo);
     scannedResult.fillColumnarMeasureBatch(measureColumnInfo, measureInfo.getMeasureOrdinals());
     scannedResult.fillColumnarComplexBatch(complexInfo);
     scannedResult.fillColumnarImplicitBatch(implictColumnInfo);
+    ((FileReaderImpl)scannedResult.fileReader).fillVectorStat += (System.currentTimeMillis() - l);
     // it means fetched all data out of page so increment the page counter
     if (availableRows == requiredRows) {
       scannedResult.incrementPageCounter();

@@ -52,7 +52,7 @@ public final class UnBlockIndexer {
   }
 
   public static byte[] uncompressData(byte[] data, int[] index, int keyLen) {
-    if (index.length < 1) {
+    if (index.length < 1 || keyLen < 1) {
       return data;
     }
     int numberOfCopy = 0;
@@ -72,6 +72,25 @@ public final class UnBlockIndexer {
         destPos += keyLen;
       }
       srcPos += keyLen;
+    }
+    return uncompressedData;
+  }
+
+  public static int[] inflateRLEIndex(int[] index) {
+    int actualSize = 0;
+    int destPos = 0;
+    int compressedRowsSize = index.length/2;
+    for (int i = 1; i < index.length; i += 2) {
+      actualSize += index[i];
+    }
+    int[] uncompressedData = new int[actualSize];
+    int picIndex = 0;
+    for (int i = 0; i < compressedRowsSize; i++) {
+      int numberOfCopy = index[picIndex * 2 + 1];
+      picIndex++;
+      for (int j = 0; j < numberOfCopy; j++) {
+        uncompressedData[destPos++] = i;
+      }
     }
     return uncompressedData;
   }

@@ -24,6 +24,7 @@ import org.apache.carbondata.core.datastore.DataRefNode;
 import org.apache.carbondata.core.datastore.chunk.DimensionColumnPage;
 import org.apache.carbondata.core.datastore.chunk.impl.DimensionRawColumnChunk;
 import org.apache.carbondata.core.datastore.chunk.impl.MeasureRawColumnChunk;
+import org.apache.carbondata.core.datastore.impl.FileReaderImpl;
 import org.apache.carbondata.core.datastore.page.ColumnPage;
 import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
 import org.apache.carbondata.core.scan.expression.exception.FilterUnsupportedException;
@@ -61,7 +62,7 @@ public class BlockletFullScanner implements BlockletScanner {
       RawBlockletColumnChunks rawBlockletColumnChunks)
       throws IOException, FilterUnsupportedException {
     long startTime = System.currentTimeMillis();
-    BlockletScannedResult scannedResult = new NonFilterQueryScannedResult(blockExecutionInfo);
+    BlockletScannedResult scannedResult = new NonFilterQueryScannedResult(blockExecutionInfo, rawBlockletColumnChunks.getFileReader());
     QueryStatistic totalBlockletStatistic = queryStatisticsModel.getStatisticsTypeAndObjMap()
         .get(QueryStatisticsConstants.TOTAL_BLOCKLET_NUM);
     totalBlockletStatistic.addCountStatistic(QueryStatisticsConstants.TOTAL_BLOCKLET_NUM,
@@ -167,7 +168,7 @@ public class BlockletFullScanner implements BlockletScanner {
 
   BlockletScannedResult createEmptyResult() {
     if (emptyResult == null) {
-      emptyResult = new NonFilterQueryScannedResult(blockExecutionInfo);
+      emptyResult = new NonFilterQueryScannedResult(blockExecutionInfo, new FileReaderImpl());
       emptyResult.setPageFilteredRowCount(new int[0]);
       emptyResult.setPageFilteredRowId(new int[0][]);
     }

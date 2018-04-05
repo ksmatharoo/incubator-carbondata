@@ -83,4 +83,10 @@ public interface CarbonColumnVector {
 
   void setFilteredRowsExist(boolean filteredRowsExist);
 
+  void setDictionary(CarbonDictionary dictionary);
+
+  CarbonDictionary getDictionary();
+
+  CarbonColumnVector getDictionaryVector();
+
 }

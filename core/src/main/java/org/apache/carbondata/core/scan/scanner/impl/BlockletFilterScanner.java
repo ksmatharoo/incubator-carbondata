@@ -184,7 +184,7 @@ public class BlockletFilterScanner extends BlockletFullScanner {
           scannedPages.getCount() + bitSetGroup.getScannedPages());
       return createEmptyResult();
     }
-    BlockletScannedResult scannedResult = new FilterQueryScannedResult(blockExecutionInfo);
+    BlockletScannedResult scannedResult = new FilterQueryScannedResult(blockExecutionInfo, rawBlockletColumnChunks.getFileReader());
     scannedResult.setBlockletId(
         blockExecutionInfo.getBlockIdString() + CarbonCommonConstants.FILE_SEPARATOR +
             rawBlockletColumnChunks.getDataBlock().blockletIndex());

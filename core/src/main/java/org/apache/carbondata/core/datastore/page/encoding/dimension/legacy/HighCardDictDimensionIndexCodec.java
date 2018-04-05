@@ -51,7 +51,7 @@ public class HighCardDictDimensionIndexCodec  extends IndexStorageCodec {
         IndexStorage indexStorage;
         byte[][] data = input.getByteArrayPage();
         if (isInvertedIndex) {
-          indexStorage = new BlockIndexerStorageForShort(data, false, true, isSort);
+          indexStorage = new BlockIndexerStorageForShort(data, true, true, isSort);
         } else {
           indexStorage = new BlockIndexerStorageForNoInvertedIndexForShort(data, true);
         }
@@ -65,6 +65,9 @@ public class HighCardDictDimensionIndexCodec  extends IndexStorageCodec {
         List<Encoding> encodings = new ArrayList<>();
         if (indexStorage.getRowIdPageLengthInBytes() > 0) {
           encodings.add(Encoding.INVERTED_INDEX);
+        }
+        if (indexStorage.getDataRlePageLengthInBytes() >  0) {
+          encodings.add(Encoding.RLE);
         }
         return encodings;
       }

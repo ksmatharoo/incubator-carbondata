@@ -26,6 +26,7 @@ import java.util.Map;
 import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
+import org.apache.carbondata.core.datastore.FileReader;
 import org.apache.carbondata.core.datastore.chunk.DimensionColumnPage;
 import org.apache.carbondata.core.datastore.chunk.impl.DimensionRawColumnChunk;
 import org.apache.carbondata.core.datastore.chunk.impl.MeasureRawColumnChunk;
@@ -142,7 +143,9 @@ public abstract class BlockletScannedResult {
    */
   private String blockletNumber;
 
-  public BlockletScannedResult(BlockExecutionInfo blockExecutionInfo) {
+  public FileReader fileReader;
+
+  public BlockletScannedResult(BlockExecutionInfo blockExecutionInfo, FileReader fileReader) {
     this.fixedLengthKeySize = blockExecutionInfo.getFixedLengthKeySize();
     this.noDictionaryColumnChunkIndexes = blockExecutionInfo.getNoDictionaryColumnChunkIndexes();
     this.dictionaryColumnChunkIndexes = blockExecutionInfo.getDictionaryColumnChunkIndex();
@@ -151,6 +154,7 @@ public abstract class BlockletScannedResult {
     this.complexParentBlockIndexes = blockExecutionInfo.getComplexColumnParentBlockIndexes();
     this.totalDimensionsSize = blockExecutionInfo.getProjectionDimensions().length;
     this.deletedRecordMap = blockExecutionInfo.getDeletedRecordsMap();
+    this.fileReader = fileReader;
   }
 
   /**

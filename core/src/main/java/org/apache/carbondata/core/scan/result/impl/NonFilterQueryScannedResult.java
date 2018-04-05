@@ -16,6 +16,7 @@
  */
 package org.apache.carbondata.core.scan.result.impl;
 
+import org.apache.carbondata.core.datastore.FileReader;
 import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
 import org.apache.carbondata.core.scan.result.BlockletScannedResult;
 
@@ -26,8 +27,8 @@ import org.apache.carbondata.core.scan.result.BlockletScannedResult;
  */
 public class NonFilterQueryScannedResult extends BlockletScannedResult {
 
-  public NonFilterQueryScannedResult(BlockExecutionInfo blockExecutionInfo) {
-    super(blockExecutionInfo);
+  public NonFilterQueryScannedResult(BlockExecutionInfo blockExecutionInfo, FileReader fileReader) {
+    super(blockExecutionInfo, fileReader);
   }
 
   /**

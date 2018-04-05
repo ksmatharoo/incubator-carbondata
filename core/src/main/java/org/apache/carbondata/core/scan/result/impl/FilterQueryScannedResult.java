@@ -16,6 +16,7 @@
  */
 package org.apache.carbondata.core.scan.result.impl;
 
+import org.apache.carbondata.core.datastore.FileReader;
 import org.apache.carbondata.core.scan.executor.infos.BlockExecutionInfo;
 import org.apache.carbondata.core.scan.result.BlockletScannedResult;
 import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
@@ -27,8 +28,8 @@ import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
  */
 public class FilterQueryScannedResult extends BlockletScannedResult {
 
-  public FilterQueryScannedResult(BlockExecutionInfo tableBlockExecutionInfos) {
-    super(tableBlockExecutionInfos);
+  public FilterQueryScannedResult(BlockExecutionInfo tableBlockExecutionInfos, FileReader fileReader) {
+    super(tableBlockExecutionInfos, fileReader);
   }
 
   /**

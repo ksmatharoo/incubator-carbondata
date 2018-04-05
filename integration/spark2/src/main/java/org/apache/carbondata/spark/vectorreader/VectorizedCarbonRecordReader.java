@@ -51,8 +51,10 @@ import org.apache.carbondata.spark.util.CarbonScalaUtil;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.spark.memory.MemoryMode;
+import org.apache.spark.sql.execution.vectorized.ColumnVector;
 import org.apache.spark.sql.execution.vectorized.ColumnarBatch;
 import org.apache.spark.sql.types.DecimalType;
+import org.apache.spark.sql.types.StringType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
@@ -245,7 +247,7 @@ class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
             null);
       } else {
         fields[dim.getOrdinal()] = new StructField(dim.getColumnName(),
-            CarbonScalaUtil.convertCarbonToSparkDataType(DataTypes.INT), true, null);
+            CarbonScalaUtil.convertCarbonToSparkDataType(dim.getDimension().getDataType()), true, null);
       }
     }
 
@@ -271,6 +273,9 @@ class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
     CarbonColumnVector[] vectors = new CarbonColumnVector[fields.length];
     boolean[] filteredRows = new boolean[columnarBatch.capacity()];
     for (int i = 0; i < fields.length; i++) {
+      if (CarbonScalaUtil.isStringDataType(columnarBatch.column(i).dataType())) {
+        columnarBatch.column(i).reserveDictionaryIds(columnarBatch.capacity());
+      }
       vectors[i] = new ColumnarVectorWrapper(columnarBatch.column(i), filteredRows);
     }
     carbonColumnarBatch = new CarbonColumnarBatch(vectors, columnarBatch.capacity(), filteredRows);

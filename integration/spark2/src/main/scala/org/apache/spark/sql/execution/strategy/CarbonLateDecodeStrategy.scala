@@ -191,7 +191,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       rdd: RDD[InternalRow],
       needDecode: ArrayBuffer[AttributeReference]):
   RDD[InternalRow] = {
-    if (needDecode.nonEmpty) {
+    if (false) {
       rdd.asInstanceOf[CarbonScanRDD].setVectorReaderSupport(false)
       getDecoderRDD(relation, needDecode, rdd, output)
     } else {
@@ -289,17 +289,17 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         .map(relation.attributeMap)
         // Don't request columns that are only referenced by pushed filters.
         .filterNot(handledSet.contains)
-      val updateRequestedColumns = updateRequestedColumnsFunc(requestedColumns, table, needDecoder)
+      val updateRequestedColumns = requestedColumns//updateRequestedColumnsFunc(requestedColumns, table, needDecoder)
 
       val updateProject = projects.map { expr =>
         var attr = expr.toAttribute.asInstanceOf[AttributeReference]
-        if (!needDecoder.exists(_.name.equalsIgnoreCase(attr.name))) {
-          val dict = map.get(attr.name)
-          if (dict.isDefined && dict.get) {
-            attr = AttributeReference(attr.name, IntegerType, attr.nullable, attr.metadata)(attr
-              .exprId, attr.qualifier)
-          }
-        }
+//        if (!needDecoder.exists(_.name.equalsIgnoreCase(attr.name))) {
+//          val dict = map.get(attr.name)
+//          if (dict.isDefined && dict.get) {
+//            attr = AttributeReference(attr.name, IntegerType, attr.nullable, attr.metadata)(attr
+//              .exprId, attr.qualifier)
+//          }
+//        }
         attr
       }
       val scan = getDataSourceScan(relation,

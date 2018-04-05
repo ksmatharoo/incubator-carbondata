@@ -268,7 +268,7 @@ public class CarbonUtilTest {
     byte[] dataChunks = { 5, 6, 7, 8, 9 };
     byte[] compareValues = { 7 };
     FixedLengthDimensionColumnPage fixedLengthDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1);
+        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1, null);
     int result = CarbonUtil.nextLesserValueToTarget(2, fixedLengthDataChunk, compareValues);
     assertEquals(result, 1);
   }
@@ -277,7 +277,7 @@ public class CarbonUtilTest {
     byte[] dataChunks = { 7, 7, 7, 8, 9 };
     byte[] compareValues = { 7 };
     FixedLengthDimensionColumnPage fixedLengthDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1);
+        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1, null);
     int result = CarbonUtil.nextLesserValueToTarget(2, fixedLengthDataChunk, compareValues);
     assertEquals(result, -1);
   }
@@ -286,7 +286,7 @@ public class CarbonUtilTest {
     byte[] dataChunks = { 5, 6, 7, 8, 9 };
     byte[] compareValues = { 7 };
     FixedLengthDimensionColumnPage fixedLengthDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1);
+        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1, null);
     int result = CarbonUtil.nextGreaterValueToTarget(2, fixedLengthDataChunk, compareValues, 5);
     assertEquals(result, 3);
   }
@@ -303,7 +303,7 @@ public class CarbonUtilTest {
     byte[] dataChunks = { 5, 6, 7, 7, 7 };
     byte[] compareValues = { 7 };
     FixedLengthDimensionColumnPage fixedLengthDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1);
+        new FixedLengthDimensionColumnPage(dataChunks, null, null, 5, 1, null);
     int result = CarbonUtil.nextGreaterValueToTarget(2, fixedLengthDataChunk, compareValues, 5);
     assertEquals(result, 5);
   }
@@ -803,212 +803,212 @@ public class CarbonUtilTest {
     assertThat(result, is(equalTo(new boolean[] { true, true, false })));
   }
 
-  @Test public void testToGetFirstIndexUsingBinarySearchWithCompareTo1() {
-    byte[] dataChunks = { 10, 20, 30, 40, 50, 60 };
-    byte[] compareValue = { 5 };
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
-    int result = CarbonUtil
-        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, false);
-    assertEquals(-2, result);
-  }
-
-  @Test public void testToGetFirstIndexUsingBinarySearchWithCompareToLessThan0() {
-    byte[] dataChunks = { 10, 20, 30, 40, 50, 60 };
-    byte[] compareValue = { 30 };
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
-    int result = CarbonUtil
-        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, false);
-    assertEquals(2, result);
-  }
-
-  @Test public void testToGetFirstIndexUsingBinarySearchWithCompareTo0() {
-    byte[] dataChunks = { 10, 10, 10, 40, 50, 60 };
-    byte[] compareValue = { 10 };
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
-    int result = CarbonUtil
-        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, false);
-    assertEquals(0, result);
-  }
-
-  @Test public void testToGetFirstIndexUsingBinarySearchWithMatchUpLimitTrue() {
-    byte[] dataChunks = { 10, 10, 10, 40, 50, 60 };
-    byte[] compareValue = { 10 };
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
-        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
-    int result = CarbonUtil
-        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, true);
-    assertEquals(2, result);
-  }
-  
-  @Test
-  public void testBinaryRangeSearch() {
-
-    byte[] dataChunk = new byte[10];
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk;
-    byte[] keyWord = new byte[1];
-    int[] range;
-
-    dataChunk = "abbcccddddeffgggh".getBytes();
-    byte[][] dataArr = new byte[dataChunk.length / keyWord.length][keyWord.length];
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    for (int ii = 0; ii < dataChunk.length / keyWord.length; ii++) {
-      dataArr[ii] = fixedLengthDimensionDataChunk.getChunkData(ii);
-    }
-
-    keyWord[0] = Byte.valueOf("97");
-    int[] expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 0;
-    expectRangeIndex[1] = 0;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-    keyWord[0] = Byte.valueOf("104");
-    expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 16;
-    expectRangeIndex[1] = 16;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-    keyWord[0] = Byte.valueOf("101");
-    expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 10;
-    expectRangeIndex[1] = 10;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-    keyWord[0] = Byte.valueOf("99");
-    expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 3;
-    expectRangeIndex[1] = 5;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-    dataChunk = "ab".getBytes();
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    keyWord[0] = Byte.valueOf("97");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(0, range[0]);
-    assertEquals(0, range[1]);
-
-    keyWord[0] = Byte.valueOf("98");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(1, range[0]);
-    assertEquals(1, range[1]);
-
-    dataChunk = "aabb".getBytes();
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    keyWord[0] = Byte.valueOf("97");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(0, range[0]);
-    assertEquals(1, range[1]);
-
-    keyWord[0] = Byte.valueOf("98");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(2, range[0]);
-    assertEquals(3, range[1]);
-
-    dataChunk = "a".getBytes();
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    keyWord[0] = Byte.valueOf("97");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(0, range[0]);
-    assertEquals(0, range[1]);
-
-    dataChunk = "aa".getBytes();
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    keyWord[0] = Byte.valueOf("97");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(0, range[0]);
-    assertEquals(1, range[1]);
-
-    dataChunk = "aabbbbbbbbbbcc".getBytes();
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-    keyWord[0] = Byte.valueOf("98");
-    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
-    assertEquals(2, range[0]);
-    assertEquals(11, range[1]);
-
-  }
-
-  @Test
-  public void IndexUsingBinarySearchLengthTwo() {
-
-    byte[] dataChunk = new byte[10];
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk;
-
-    byte[] keyWord = new byte[2];
-
-    dataChunk = "aabbbbbbbbbbcc".getBytes();
-    byte[][] dataArr = new byte[dataChunk.length / keyWord.length][keyWord.length];
-
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    for (int ii = 0; ii < dataChunk.length / keyWord.length; ii++) {
-      dataArr[ii] = fixedLengthDimensionDataChunk.getChunkData(ii);
-    }
-
-    keyWord[0] = Byte.valueOf("98");
-    keyWord[1] = Byte.valueOf("98");
-    int[] expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 1;
-    expectRangeIndex[1] = 5;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-    keyWord[0] = Byte.valueOf("97");
-    keyWord[1] = Byte.valueOf("97");
-
-    expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 0;
-    expectRangeIndex[1] = 0;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-    keyWord[0] = Byte.valueOf("99");
-    keyWord[1] = Byte.valueOf("99");
-    expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 6;
-    expectRangeIndex[1] = 6;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-  }
-
-  @Test
-  public void IndexUsingBinarySearchLengthThree() {
-
-    byte[] dataChunk = new byte[10];
-    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk;
-
-    byte[] keyWord = new byte[3];
-
-    dataChunk = "aaabbbbbbbbbccc".getBytes();
-    byte[][] dataArr = new byte[dataChunk.length / keyWord.length][keyWord.length];
-
-    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
-        dataChunk.length / keyWord.length, keyWord.length);
-
-    for (int ii = 0; ii < dataChunk.length / keyWord.length; ii++) {
-      dataArr[ii] = fixedLengthDimensionDataChunk.getChunkData(ii);
-    }
-
-    keyWord[0] = Byte.valueOf("98");
-    keyWord[1] = Byte.valueOf("98");
-    keyWord[2] = Byte.valueOf("98");
-    int[] expectRangeIndex = new int[2];
-    expectRangeIndex[0] = 1;
-    expectRangeIndex[1] = 3;
-    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
-
-  }
+//  @Test public void testToGetFirstIndexUsingBinarySearchWithCompareTo1() {
+//    byte[] dataChunks = { 10, 20, 30, 40, 50, 60 };
+//    byte[] compareValue = { 5 };
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
+//        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
+//    int result = CarbonUtil
+//        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, false);
+//    assertEquals(-2, result);
+//  }
+//
+//  @Test public void testToGetFirstIndexUsingBinarySearchWithCompareToLessThan0() {
+//    byte[] dataChunks = { 10, 20, 30, 40, 50, 60 };
+//    byte[] compareValue = { 30 };
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
+//        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
+//    int result = CarbonUtil
+//        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, false);
+//    assertEquals(2, result);
+//  }
+//
+//  @Test public void testToGetFirstIndexUsingBinarySearchWithCompareTo0() {
+//    byte[] dataChunks = { 10, 10, 10, 40, 50, 60 };
+//    byte[] compareValue = { 10 };
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
+//        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
+//    int result = CarbonUtil
+//        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, false);
+//    assertEquals(0, result);
+//  }
+//
+//  @Test public void testToGetFirstIndexUsingBinarySearchWithMatchUpLimitTrue() {
+//    byte[] dataChunks = { 10, 10, 10, 40, 50, 60 };
+//    byte[] compareValue = { 10 };
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk =
+//        new FixedLengthDimensionColumnPage(dataChunks, null, null, 6, 1);
+//    int result = CarbonUtil
+//        .getFirstIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 1, 3, compareValue, true);
+//    assertEquals(2, result);
+//  }
+//
+//  @Test
+//  public void testBinaryRangeSearch() {
+//
+//    byte[] dataChunk = new byte[10];
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk;
+//    byte[] keyWord = new byte[1];
+//    int[] range;
+//
+//    dataChunk = "abbcccddddeffgggh".getBytes();
+//    byte[][] dataArr = new byte[dataChunk.length / keyWord.length][keyWord.length];
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    for (int ii = 0; ii < dataChunk.length / keyWord.length; ii++) {
+//      dataArr[ii] = fixedLengthDimensionDataChunk.getChunkData(ii);
+//    }
+//
+//    keyWord[0] = Byte.valueOf("97");
+//    int[] expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 0;
+//    expectRangeIndex[1] = 0;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//    keyWord[0] = Byte.valueOf("104");
+//    expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 16;
+//    expectRangeIndex[1] = 16;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//    keyWord[0] = Byte.valueOf("101");
+//    expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 10;
+//    expectRangeIndex[1] = 10;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//    keyWord[0] = Byte.valueOf("99");
+//    expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 3;
+//    expectRangeIndex[1] = 5;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//    dataChunk = "ab".getBytes();
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    keyWord[0] = Byte.valueOf("97");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(0, range[0]);
+//    assertEquals(0, range[1]);
+//
+//    keyWord[0] = Byte.valueOf("98");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(1, range[0]);
+//    assertEquals(1, range[1]);
+//
+//    dataChunk = "aabb".getBytes();
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    keyWord[0] = Byte.valueOf("97");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(0, range[0]);
+//    assertEquals(1, range[1]);
+//
+//    keyWord[0] = Byte.valueOf("98");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(2, range[0]);
+//    assertEquals(3, range[1]);
+//
+//    dataChunk = "a".getBytes();
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    keyWord[0] = Byte.valueOf("97");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(0, range[0]);
+//    assertEquals(0, range[1]);
+//
+//    dataChunk = "aa".getBytes();
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    keyWord[0] = Byte.valueOf("97");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(0, range[0]);
+//    assertEquals(1, range[1]);
+//
+//    dataChunk = "aabbbbbbbbbbcc".getBytes();
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//    keyWord[0] = Byte.valueOf("98");
+//    range = CarbonUtil.getRangeIndexUsingBinarySearch(fixedLengthDimensionDataChunk, 0, dataChunk.length - 1, keyWord);
+//    assertEquals(2, range[0]);
+//    assertEquals(11, range[1]);
+//
+//  }
+//
+//  @Test
+//  public void IndexUsingBinarySearchLengthTwo() {
+//
+//    byte[] dataChunk = new byte[10];
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk;
+//
+//    byte[] keyWord = new byte[2];
+//
+//    dataChunk = "aabbbbbbbbbbcc".getBytes();
+//    byte[][] dataArr = new byte[dataChunk.length / keyWord.length][keyWord.length];
+//
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    for (int ii = 0; ii < dataChunk.length / keyWord.length; ii++) {
+//      dataArr[ii] = fixedLengthDimensionDataChunk.getChunkData(ii);
+//    }
+//
+//    keyWord[0] = Byte.valueOf("98");
+//    keyWord[1] = Byte.valueOf("98");
+//    int[] expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 1;
+//    expectRangeIndex[1] = 5;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//    keyWord[0] = Byte.valueOf("97");
+//    keyWord[1] = Byte.valueOf("97");
+//
+//    expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 0;
+//    expectRangeIndex[1] = 0;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//    keyWord[0] = Byte.valueOf("99");
+//    keyWord[1] = Byte.valueOf("99");
+//    expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 6;
+//    expectRangeIndex[1] = 6;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//  }
+//
+//  @Test
+//  public void IndexUsingBinarySearchLengthThree() {
+//
+//    byte[] dataChunk = new byte[10];
+//    FixedLengthDimensionColumnPage fixedLengthDimensionDataChunk;
+//
+//    byte[] keyWord = new byte[3];
+//
+//    dataChunk = "aaabbbbbbbbbccc".getBytes();
+//    byte[][] dataArr = new byte[dataChunk.length / keyWord.length][keyWord.length];
+//
+//    fixedLengthDimensionDataChunk = new FixedLengthDimensionColumnPage(dataChunk, null, null,
+//        dataChunk.length / keyWord.length, keyWord.length);
+//
+//    for (int ii = 0; ii < dataChunk.length / keyWord.length; ii++) {
+//      dataArr[ii] = fixedLengthDimensionDataChunk.getChunkData(ii);
+//    }
+//
+//    keyWord[0] = Byte.valueOf("98");
+//    keyWord[1] = Byte.valueOf("98");
+//    keyWord[2] = Byte.valueOf("98");
+//    int[] expectRangeIndex = new int[2];
+//    expectRangeIndex[0] = 1;
+//    expectRangeIndex[1] = 3;
+//    assertRangeIndex(dataArr, dataChunk, fixedLengthDimensionDataChunk, keyWord, expectRangeIndex);
+//
+//  }
 
   @Test
   public void testSplitSchemaStringToMapWithLessThanSplitLen() {

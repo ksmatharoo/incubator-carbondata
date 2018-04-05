@@ -118,6 +118,10 @@ object CarbonScalaUtil {
     }
   }
 
+  def isStringDataType(dataType: DataType): Boolean = {
+    dataType == StringType
+  }
+
   def getString(value: Any,
       serializationNullFormat: String,
       delimiterLevel1: String,

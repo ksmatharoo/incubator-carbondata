@@ -36,7 +36,7 @@ public class ColumnGroupDimensionColumnPage extends AbstractDimensionColumnPage 
   public ColumnGroupDimensionColumnPage(byte[] dataChunk, int columnValueSize, int numberOfRows) {
     this.dataChunkStore = DimensionChunkStoreFactory.INSTANCE
         .getDimensionChunkStore(columnValueSize, false, numberOfRows, dataChunk.length,
-        DimensionStoreType.FIXEDLENGTH);
+        DimensionStoreType.FIXEDLENGTH, null);
     this.dataChunkStore.putArray(null, null, dataChunk);
   }
 

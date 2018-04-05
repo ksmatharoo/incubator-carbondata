@@ -22,6 +22,7 @@ import org.apache.carbondata.core.datastore.chunk.store.DimensionChunkStoreFacto
 import org.apache.carbondata.core.scan.executor.infos.KeyStructureInfo;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
+import org.apache.carbondata.core.scan.result.vector.impl.CarbonDictionaryImpl;
 
 /**
  * This class is gives access to variable length dimension data chunk store
@@ -36,14 +37,14 @@ public class VariableLengthDimensionColumnPage extends AbstractDimensionColumnPa
    * @param numberOfRows
    */
   public VariableLengthDimensionColumnPage(byte[] dataChunks, int[] invertedIndex,
-      int[] invertedIndexReverse, int numberOfRows) {
+      int[] invertedIndexReverse, int numberOfRows, int[] rlePage) {
     long totalSize = null != invertedIndex ?
         (dataChunks.length + (2 * numberOfRows * CarbonCommonConstants.INT_SIZE_IN_BYTE) + (
             numberOfRows * CarbonCommonConstants.INT_SIZE_IN_BYTE)) :
         (dataChunks.length + (numberOfRows * CarbonCommonConstants.INT_SIZE_IN_BYTE));
     dataChunkStore = DimensionChunkStoreFactory.INSTANCE
         .getDimensionChunkStore(0, null != invertedIndex, numberOfRows, totalSize,
-            DimensionStoreType.VARIABLELENGTH);
+            DimensionStoreType.VARIABLELENGTH, rlePage);
     dataChunkStore.putArray(invertedIndex, invertedIndexReverse, dataChunks);
   }
 

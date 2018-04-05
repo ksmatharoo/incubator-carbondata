@@ -37,6 +37,13 @@ public class FileReaderImpl implements FileReader {
 
   private boolean readPageByPage;
 
+  public long putRowStat = 0;
+
+  public long fillVectorStat = 0;
+
+  public long decompress = 0;
+  public long decompressIndex = 0;
+
   /**
    * FileReaderImpl Constructor
    * It will create the cache
@@ -70,6 +77,10 @@ public class FileReaderImpl implements FileReader {
    * This method will be used to close all the streams currently present in the cache
    */
   @Override public void finish() throws IOException {
+    System.out.println("Time puRow  "+putRowStat);
+    System.out.println("Time decompress  "+decompress);
+    System.out.println("Time decompressIndex  "+decompressIndex);
+    System.out.println("Time fillVectorStat  "+fillVectorStat);
     for (Entry<String, FileChannel> entry : fileNameAndStreamCache.entrySet()) {
       FileChannel channel = entry.getValue();
       if (null != channel) {

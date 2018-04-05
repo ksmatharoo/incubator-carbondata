@@ -24,8 +24,7 @@ import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.datatype.DecimalType;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
-
-
+import org.apache.carbondata.core.scan.result.vector.CarbonDictionary;
 
 public class CarbonColumnVectorImpl implements CarbonColumnVector {
 
@@ -256,4 +255,16 @@ public class CarbonColumnVectorImpl implements CarbonColumnVector {
    * as an optimization to prevent setting nulls.
    */
   public final boolean anyNullsSet() { return anyNullsSet; }
+
+  @Override public void setDictionary(CarbonDictionary dictionary) {
+
+  }
+
+  @Override public CarbonDictionary getDictionary() {
+    return null;
+  }
+
+  @Override public CarbonColumnVector getDictionaryVector() {
+    return null;
+  }
 }

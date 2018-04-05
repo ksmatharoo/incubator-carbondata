@@ -157,12 +157,12 @@ public class CompressedDimensionChunkFileBasedReaderV1 extends AbstractChunkRead
         .hasEncoding(dataChunk.getEncodingList(), Encoding.DICTIONARY)) {
       columnDataChunk =
           new VariableLengthDimensionColumnPage(dataPage, invertedIndexes, invertedIndexesReverse,
-              numberOfRows);
+              numberOfRows, rlePage);
     } else {
       // to store fixed length column chunk values
       columnDataChunk =
           new FixedLengthDimensionColumnPage(dataPage, invertedIndexes, invertedIndexesReverse,
-              numberOfRows, eachColumnValueSize[blockIndex]);
+              numberOfRows, eachColumnValueSize[blockIndex], null);
     }
     return columnDataChunk;
   }

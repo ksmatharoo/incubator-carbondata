@@ -24,12 +24,14 @@ import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.scan.executor.infos.KeyStructureInfo;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
+import org.apache.carbondata.core.scan.result.vector.impl.CarbonDictionaryImpl;
 
 /**
  * This class is gives access to fixed length dimension data chunk store
  */
 public class FixedLengthDimensionColumnPage extends AbstractDimensionColumnPage {
 
+  private byte[][] dictData;
   /**
    * Constructor
    *
@@ -40,14 +42,15 @@ public class FixedLengthDimensionColumnPage extends AbstractDimensionColumnPage 
    * @param columnValueSize      size of each column value
    */
   public FixedLengthDimensionColumnPage(byte[] dataChunk, int[] invertedIndex,
-      int[] invertedIndexReverse, int numberOfRows, int columnValueSize) {
+      int[] invertedIndexReverse, int numberOfRows, int columnValueSize, byte[][] dictData) {
     long totalSize = null != invertedIndex ?
         dataChunk.length + (2 * numberOfRows * CarbonCommonConstants.INT_SIZE_IN_BYTE) :
         dataChunk.length;
     dataChunkStore = DimensionChunkStoreFactory.INSTANCE
         .getDimensionChunkStore(columnValueSize, null != invertedIndex, numberOfRows, totalSize,
-            DimensionStoreType.FIXEDLENGTH);
+            DimensionStoreType.FIXEDLENGTH, null);
     dataChunkStore.putArray(invertedIndex, invertedIndexReverse, dataChunk);
+    this.dictData = dictData;
   }
 
   /**
@@ -95,24 +98,36 @@ public class FixedLengthDimensionColumnPage extends AbstractDimensionColumnPage 
     int vectorOffset = columnVectorInfo.vectorOffset;
     int len = columnVectorInfo.size + offset;
     CarbonColumnVector vector = columnVectorInfo.vector;
-    for (int j = offset; j < len; j++) {
-      int dict = dataChunkStore.getSurrogate(j);
-      if (columnVectorInfo.directDictionaryGenerator == null) {
-        vector.putInt(vectorOffset++, dict);
+    if (dictData != null) {
+      if (vector.getDictionary() == null) {
+        vector.setDictionary(new CarbonDictionaryImpl(dictData));
       } else {
-        Object valueFromSurrogate =
-            columnVectorInfo.directDictionaryGenerator.getValueFromSurrogate(dict);
-        if (valueFromSurrogate == null) {
-          vector.putNull(vectorOffset++);
+        // TODO
+      }
+      CarbonColumnVector dictionaryVector = vector.getDictionaryVector();
+      for (int j = offset; j < len; j++) {
+        int dict = dataChunkStore.getSurrogate(j);
+        dictionaryVector.putInt(vectorOffset++, dict);
+      }
+    } else {
+      for (int j = offset; j < len; j++) {
+        int dict = dataChunkStore.getSurrogate(j);
+        if (columnVectorInfo.directDictionaryGenerator == null) {
+          vector.putInt(vectorOffset++, dict);
         } else {
-          DataType dataType = columnVectorInfo.directDictionaryGenerator.getReturnType();
-          if (dataType == DataTypes.INT) {
-            vector.putInt(vectorOffset++, (int) valueFromSurrogate);
-          } else if (dataType == DataTypes.LONG) {
-            vector.putLong(vectorOffset++, (long) valueFromSurrogate);
+          Object valueFromSurrogate = columnVectorInfo.directDictionaryGenerator.getValueFromSurrogate(dict);
+          if (valueFromSurrogate == null) {
+            vector.putNull(vectorOffset++);
           } else {
-            throw new IllegalArgumentException("unsupported data type: " +
-                columnVectorInfo.directDictionaryGenerator.getReturnType());
+            DataType dataType = columnVectorInfo.directDictionaryGenerator.getReturnType();
+            if (dataType == DataTypes.INT) {
+              vector.putInt(vectorOffset++, (int) valueFromSurrogate);
+            } else if (dataType == DataTypes.LONG) {
+              vector.putLong(vectorOffset++, (long) valueFromSurrogate);
+            } else {
+              throw new IllegalArgumentException(
+                  "unsupported data type: " + columnVectorInfo.directDictionaryGenerator.getReturnType());
+            }
           }
         }
       }

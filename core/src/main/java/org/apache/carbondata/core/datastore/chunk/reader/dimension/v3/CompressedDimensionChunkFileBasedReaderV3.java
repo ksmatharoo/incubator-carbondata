@@ -28,6 +28,7 @@ import org.apache.carbondata.core.datastore.chunk.impl.VariableLengthDimensionCo
 import org.apache.carbondata.core.datastore.chunk.reader.dimension.AbstractChunkReaderV2V3Format;
 import org.apache.carbondata.core.datastore.chunk.store.ColumnPageWrapper;
 import org.apache.carbondata.core.datastore.columnar.UnBlockIndexer;
+import org.apache.carbondata.core.datastore.impl.FileReaderImpl;
 import org.apache.carbondata.core.datastore.page.ColumnPage;
 import org.apache.carbondata.core.datastore.page.encoding.ColumnPageDecoder;
 import org.apache.carbondata.core.datastore.page.encoding.DefaultEncodingFactory;
@@ -243,18 +244,21 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
   private DimensionColumnPage decodeDimensionLegacy(DimensionRawColumnChunk rawColumnPage,
       ByteBuffer pageData, DataChunk2 pageMetadata, int offset) {
     byte[] dataPage;
-    int[] rlePage;
+    int[] rlePage = null;
     int[] invertedIndexes = null;
     int[] invertedIndexesReverse = null;
+    long l1 = System.currentTimeMillis();
     dataPage = COMPRESSOR.unCompressByte(pageData.array(), offset, pageMetadata.data_page_length);
     offset += pageMetadata.data_page_length;
     // if row id block is present then read the row id chunk and uncompress it
     if (hasEncoding(pageMetadata.encoders, Encoding.INVERTED_INDEX)) {
+      long l2 = System.currentTimeMillis();
       invertedIndexes = CarbonUtil
           .getUnCompressColumnIndex(pageMetadata.rowid_page_length, pageData, offset);
       offset += pageMetadata.rowid_page_length;
       // get the reverse index
       invertedIndexesReverse = getInvertedReverseIndex(invertedIndexes);
+      ((FileReaderImpl)rawColumnPage.getFileReader()).decompressIndex += (System.currentTimeMillis() - l2);
     }
     // if rle is applied then read the rle block chunk and then uncompress
     //then actual data based on rle block
@@ -267,19 +271,21 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
     }
 
     DimensionColumnPage columnDataChunk = null;
-
+    ((FileReaderImpl)rawColumnPage.getFileReader()).decompress += (System.currentTimeMillis() - l1);
     // if no dictionary column then first create a no dictionary column chunk
     // and set to data chunk instance
     if (!hasEncoding(pageMetadata.encoders, Encoding.DICTIONARY)) {
+      long l = System.currentTimeMillis();
       columnDataChunk =
           new VariableLengthDimensionColumnPage(dataPage, invertedIndexes, invertedIndexesReverse,
-              pageMetadata.getNumberOfRowsInpage());
+              pageMetadata.getNumberOfRowsInpage(), rlePage);
+      ((FileReaderImpl)rawColumnPage.getFileReader()).putRowStat += (System.currentTimeMillis() - l);
     } else {
       // to store fixed length column chunk values
       columnDataChunk =
           new FixedLengthDimensionColumnPage(dataPage, invertedIndexes, invertedIndexesReverse,
               pageMetadata.getNumberOfRowsInpage(),
-              eachColumnValueSize[rawColumnPage.getColumnIndex()]);
+              eachColumnValueSize[rawColumnPage.getColumnIndex()], new byte[][]{"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes()});
     }
     return columnDataChunk;
   }

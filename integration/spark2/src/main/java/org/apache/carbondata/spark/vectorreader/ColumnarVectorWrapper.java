@@ -21,8 +21,11 @@ import java.math.BigDecimal;
 
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
+import org.apache.carbondata.core.scan.result.vector.CarbonDictionary;
+import org.apache.carbondata.core.scan.result.vector.impl.CarbonDictionaryImpl;
 import org.apache.carbondata.spark.util.CarbonScalaUtil;
 
+import org.apache.parquet.column.Encoding;
 import org.apache.spark.sql.execution.vectorized.ColumnVector;
 import org.apache.spark.sql.types.Decimal;
 
@@ -38,9 +41,14 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
 
   private DataType blockDataType;
 
+  private CarbonColumnVector dictionaryVector;
+
   ColumnarVectorWrapper(ColumnVector columnVector, boolean[] filteredRows) {
     this.columnVector = columnVector;
     this.filteredRows = filteredRows;
+    if (columnVector.getDictionaryIds() != null) {
+      this.dictionaryVector = new ColumnarVectorWrapper(columnVector.getDictionaryIds(), filteredRows);
+    }
   }
 
   @Override public void putBoolean(int rowId, boolean value) {
@@ -222,5 +230,24 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
 
   @Override public void setFilteredRowsExist(boolean filteredRowsExist) {
     this.filteredRowsExist = filteredRowsExist;
+  }
+
+  @Override public void setDictionary(CarbonDictionary dictionary) {
+    if (dictionary == null) {
+      columnVector.setDictionary(null);
+    } else {
+      columnVector.setDictionary(new CarbonDictionaryWrapper(Encoding.PLAIN, dictionary));
+    }
+  }
+
+  @Override public CarbonDictionary getDictionary() {
+    if (columnVector.hasDictionary()) {
+      return new CarbonDictionaryImpl(null);
+    }
+    return null;
+  }
+
+  @Override public CarbonColumnVector getDictionaryVector() {
+    return dictionaryVector;
   }
 }

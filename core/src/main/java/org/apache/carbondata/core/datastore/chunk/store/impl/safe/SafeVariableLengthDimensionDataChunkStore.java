@@ -20,6 +20,7 @@ package org.apache.carbondata.core.datastore.chunk.store.impl.safe;
 import java.nio.ByteBuffer;
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
+import org.apache.carbondata.core.datastore.columnar.UnBlockIndexer;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
@@ -43,10 +44,15 @@ public class SafeVariableLengthDimensionDataChunkStore extends SafeAbsractDimens
    */
   private int[] dataOffsets;
 
-  public SafeVariableLengthDimensionDataChunkStore(boolean isInvertedIndex, int numberOfRows) {
+  private int[] rlePage;
+
+  private int rleSize;
+
+  public SafeVariableLengthDimensionDataChunkStore(boolean isInvertedIndex, int numberOfRows, int[] rlePage) {
     super(isInvertedIndex);
     this.numberOfRows = numberOfRows;
     this.dataOffsets = new int[numberOfRows];
+    this.rlePage = rlePage;
   }
 
   /**
@@ -60,6 +66,10 @@ public class SafeVariableLengthDimensionDataChunkStore extends SafeAbsractDimens
       byte[] data) {
     // first put the data, inverted index and reverse inverted index to memory
     super.putArray(invertedIndex, invertedIndexReverse, data);
+    if (rlePage != null) {
+      rleSize = rlePage.length / 2;
+      rlePage = UnBlockIndexer.inflateRLEIndex(rlePage);
+    }
     // As data is of variable length and data format is
     // <length in short><data><length in short><data>
     // we need to store offset of each data so data can be accessed directly
@@ -78,6 +88,7 @@ public class SafeVariableLengthDimensionDataChunkStore extends SafeAbsractDimens
     dataOffsets[0] = CarbonCommonConstants.SHORT_SIZE_IN_BYTE;
     // creating a byte buffer which will wrap the length of the row
     ByteBuffer buffer = ByteBuffer.wrap(data);
+    numberOfRows = rlePage != null ? rleSize : numberOfRows;
     for (int i = 1; i < numberOfRows; i++) {
       buffer.position(startOffset);
       // so current row position will be
@@ -87,6 +98,7 @@ public class SafeVariableLengthDimensionDataChunkStore extends SafeAbsractDimens
       // we need to clear the byte buffer
       dataOffsets[i] = startOffset + CarbonCommonConstants.SHORT_SIZE_IN_BYTE;
     }
+
   }
 
   @Override public byte[] getRow(int rowId) {
@@ -94,6 +106,25 @@ public class SafeVariableLengthDimensionDataChunkStore extends SafeAbsractDimens
     if (isExplictSorted) {
       rowId = invertedIndexReverse[rowId];
     }
+    if (rlePage != null) {
+      rowId = rlePage[rowId];
+    }
+    return getActualRow(rowId);
+
+  }
+
+  public byte[][] getRLEData() {
+    if (rlePage != null && numberOfRows < 100) {
+      byte[][] b = new byte[numberOfRows][];
+      for (int i = 0; i < numberOfRows; i++) {
+        b[i] = getActualRow(i);
+      }
+      return b;
+    }
+    return null;
+  }
+
+  private byte[] getActualRow(int rowId) {
     // now to get the row from memory block we need to do following thing
     // 1. first get the current offset
     // 2. if it's not a last row- get the next row offset
@@ -115,10 +146,52 @@ public class SafeVariableLengthDimensionDataChunkStore extends SafeAbsractDimens
     return currentRowData;
   }
 
+  public static class ColInfo {
+    public int currentDataOffset;
+    public short length;
+    public byte[] bytes;
+    public int rowId;
+  }
+
+  private ColInfo colInfo = new ColInfo();
+  public ColInfo getRowInternal(int rowId) {
+    // if column was explicitly sorted we need to get the rowid based inverted index reverse
+    if (isExplictSorted) {
+      rowId = invertedIndexReverse[rowId];
+    }
+    if (rlePage != null) {
+      rowId = rlePage[rowId];
+    }
+    // now to get the row from memory block we need to do following thing
+    // 1. first get the current offset
+    // 2. if it's not a last row- get the next row offset
+    // Subtract the current row offset + 2 bytes(to skip the data length) with next row offset
+    // else subtract the current row offset with complete data
+    // length get the offset of set of data
+    int currentDataOffset = dataOffsets[rowId];
+    short length = 0;
+    // calculating the length of data
+    if (rowId < numberOfRows - 1) {
+      length = (short) (dataOffsets[rowId + 1] - (currentDataOffset
+          + CarbonCommonConstants.SHORT_SIZE_IN_BYTE));
+    } else {
+      // for last record
+      length = (short) (this.data.length - currentDataOffset);
+    }
+    colInfo.currentDataOffset = currentDataOffset;
+    colInfo.length = length;
+    colInfo.bytes = data;
+    colInfo.rowId = rowId;
+    return colInfo;
+  }
+
   @Override public void fillRow(int rowId, CarbonColumnVector vector, int vectorRow) {
     // if column was explicitly sorted we need to get the rowid based inverted index reverse
     if (isExplictSorted) {
       rowId = invertedIndexReverse[rowId];
+    }
+    if (rlePage != null) {
+      rowId = rlePage[rowId];
     }
     // now to get the row from memory block we need to do following thing
     // 1. first get the current offset

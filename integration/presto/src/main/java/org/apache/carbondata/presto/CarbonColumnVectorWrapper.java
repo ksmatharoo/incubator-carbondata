@@ -25,6 +25,7 @@ import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.datatype.StructField;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
+import org.apache.carbondata.core.scan.result.vector.CarbonDictionary;
 import org.apache.carbondata.core.scan.result.vector.impl.CarbonColumnVectorImpl;
 
 import org.apache.spark.sql.types.ArrayType;
@@ -281,5 +282,13 @@ public class CarbonColumnVectorWrapper implements CarbonColumnVector {
     } else {
       throw new UnsupportedOperationException("getting " + dataType + " from presto");
     }
+  }
+
+  @Override public void setDictionary(CarbonDictionary dictionary) {
+
+  }
+
+  @Override public CarbonDictionary getDictionary() {
+    return null;
   }
 }
