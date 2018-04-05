@@ -39,6 +39,7 @@ import org.apache.carbondata.core.datastore.chunk.impl.DimensionRawColumnChunk;
 import org.apache.carbondata.core.datastore.chunk.impl.MeasureRawColumnChunk;
 import org.apache.carbondata.core.datastore.columnar.ColumnGroupModel;
 import org.apache.carbondata.core.datastore.columnar.UnBlockIndexer;
+import org.apache.carbondata.core.datastore.compression.SnappyCompressor;
 import org.apache.carbondata.core.datastore.exception.CarbonDataWriterException;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFileFilter;
@@ -1610,6 +1611,15 @@ public final class CarbonUtil {
     }, offset, length);
   }
 
+  public static DataChunk3 readDataChunk3(byte[] data, int offset, int length)
+      throws IOException {
+    return (DataChunk3) read(data, new ThriftReader.TBaseCreator() {
+      @Override public TBase create() {
+        return new DataChunk3();
+      }
+    }, offset, length);
+  }
+
   public static DataChunk3 readDataChunk3(InputStream stream) throws IOException {
     TBaseCreator creator = new ThriftReader.TBaseCreator() {
       @Override public TBase create() {
@@ -2963,5 +2973,20 @@ public final class CarbonUtil {
     return blockId;
   }
 
+  public static byte[][] convertDictionary(byte[] dictionary) {
+    SnappyCompressor compressor = new SnappyCompressor();
+    byte[] bytes = compressor.unCompressByte(dictionary);
+    ByteBuffer buffer = ByteBuffer.wrap(bytes);
+    List<byte[]> dictionaryData = new ArrayList<>();
+
+    while(buffer.hasRemaining()) {
+      short aShort = buffer.getShort();
+      byte[] data = new byte[aShort];
+      buffer.get(data);
+      dictionaryData.add(data);
+    }
+    byte[][] bytes1 = dictionaryData.toArray(new byte[dictionaryData.size()][]);
+    return bytes1;
+  }
 }
 

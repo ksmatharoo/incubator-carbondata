@@ -28,6 +28,7 @@ import org.apache.carbondata.core.datastore.page.encoding.ColumnPageDecoder;
 import org.apache.carbondata.core.memory.MemoryException;
 import org.apache.carbondata.core.metadata.blocklet.BlockletInfo;
 import org.apache.carbondata.core.util.CarbonUtil;
+import org.apache.carbondata.core.util.CompressedColumnPageVo;
 import org.apache.carbondata.format.DataChunk2;
 import org.apache.carbondata.format.DataChunk3;
 import org.apache.carbondata.format.Encoding;
@@ -176,6 +177,32 @@ public class CompressedMeasureChunkFileBasedReaderV3 extends AbstractMeasureChun
     return measureDataChunk;
   }
 
+  public CompressedColumnPageVo[] readRawMeasureChunksInGroup(FileReader fileReader) throws IOException {
+    // read the data from carbon data file
+    byte[] data = fileReader.readByteArray(filePath, measureColumnChunkOffsets.get(0),
+        (int) (measureOffsets - measureColumnChunkOffsets.get(0)));
+    // create raw chunk for each measure column
+    CompressedColumnPageVo[] measureDataChunk =
+        new CompressedColumnPageVo[measureColumnChunkOffsets.size()];
+    int runningLength = 0;
+    for (int i = 0; i < measureDataChunk.length; i++) {
+      int currentLength = 0;
+      if(i==measureDataChunk.length-1) {
+        currentLength = (int) (measureOffsets - measureColumnChunkOffsets.get(i));
+      } else {
+        currentLength =
+            (int) (measureColumnChunkOffsets.get(i + 1) - measureColumnChunkOffsets.get(i));
+      }
+      DataChunk3 dataChunk =
+          CarbonUtil.readDataChunk3(data, runningLength, measureColumnChunkLength.get(i));
+      byte[] columnData = new byte[currentLength - measureColumnChunkLength.get(i)];
+      System.arraycopy(data, runningLength + measureColumnChunkLength.get(i), columnData, 0,
+          columnData.length);
+      measureDataChunk[i] = new CompressedColumnPageVo(dataChunk, columnData);
+      runningLength += currentLength;
+    }
+    return measureDataChunk;
+  }
   /**
    * Below method will be used to convert the compressed measure chunk raw data to actual data
    *

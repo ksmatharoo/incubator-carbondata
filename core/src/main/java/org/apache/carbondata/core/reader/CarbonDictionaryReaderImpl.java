@@ -17,6 +17,7 @@
 
 package org.apache.carbondata.core.reader;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import java.util.List;
 
 import org.apache.carbondata.core.cache.dictionary.ColumnDictionaryChunkIterator;
 import org.apache.carbondata.core.cache.dictionary.DictionaryColumnUniqueIdentifier;
+import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.format.ColumnDictionaryChunk;
 
 import org.apache.thrift.TBase;
@@ -61,6 +63,15 @@ public class CarbonDictionaryReaderImpl implements CarbonDictionaryReader {
     initFileLocation();
   }
 
+  private String filePath;
+
+  private String columnName;
+
+  public CarbonDictionaryReaderImpl(String filePath, String columnName) {
+    this.filePath = filePath;
+    this.columnName = columnName;
+    initFileLocation();
+  }
   /**
    * This method should be used when complete dictionary data needs to be read.
    * Applicable scenarios :
@@ -74,9 +85,32 @@ public class CarbonDictionaryReaderImpl implements CarbonDictionaryReader {
    * @throws IOException if an I/O error occurs
    */
   @Override public List<byte[]> read() throws IOException {
-    return read(0L);
+    return read1(0L);
   }
 
+  /**
+   * This method should be used when data has to be read from a given offset.
+   * Applicable scenarios :
+   * 1. Incremental data load. If column dictionary is already loaded in memory
+   * and incremental load is done, then for the new query only new dictionary data
+   * has to be read form memory.
+   *
+   * @param startOffset start offset of dictionary file
+   * @return list of byte array. Each byte array is unique dictionary value
+   * @throws IOException if an I/O error occurs
+   */
+  public List<byte[]> read1(long startOffset) throws IOException {
+    List<CarbonDictionaryColumnMetaChunk> carbonDictionaryColumnMetaChunks =
+        readDictionaryMetadataFile1();
+    // get the last entry for carbon dictionary meta chunk
+    CarbonDictionaryColumnMetaChunk carbonDictionaryColumnMetaChunk =
+        carbonDictionaryColumnMetaChunks.get(carbonDictionaryColumnMetaChunks.size() - 1);
+    // end offset till where the dictionary file has to be read
+    long endOffset = carbonDictionaryColumnMetaChunk.getEnd_offset();
+    List<ColumnDictionaryChunk> columnDictionaryChunks =
+        read(carbonDictionaryColumnMetaChunks, startOffset, endOffset);
+    return getDictionaryList(columnDictionaryChunks);
+  }
   /**
    * This method should be used when data has to be read from a given offset.
    * Applicable scenarios :
@@ -197,7 +231,8 @@ public class CarbonDictionaryReaderImpl implements CarbonDictionaryReader {
    * This method will form the path for dictionary file for a given column
    */
   protected void initFileLocation() {
-    this.columnDictionaryFilePath = dictionaryColumnUniqueIdentifier.getDictionaryFilePath();
+    this.columnDictionaryFilePath = CarbonTablePath.getExternalDictionaryFilePath(
+        filePath, columnName);
   }
 
   /**
@@ -275,6 +310,27 @@ public class CarbonDictionaryReaderImpl implements CarbonDictionaryReader {
     }
     return dictionaryMetaChunkList;
   }
+
+  /**
+   * This method will read dictionary metadata file and return the dictionary meta chunks
+   *
+   * @return list of dictionary metadata chunks
+   * @throws IOException read and close method throws IO exception
+   */
+  private List<CarbonDictionaryColumnMetaChunk> readDictionaryMetadataFile1() throws IOException {
+    CarbonDictionaryMetadataReader columnMetadataReaderImpl =
+        new CarbonDictionaryMetadataReaderImpl(this.filePath, columnName);
+    List<CarbonDictionaryColumnMetaChunk> dictionaryMetaChunkList = null;
+    // read metadata file
+    try {
+      dictionaryMetaChunkList = columnMetadataReaderImpl.read();
+    } finally {
+      // close the metadata reader
+      columnMetadataReaderImpl.close();
+    }
+    return dictionaryMetaChunkList;
+  }
+
 
   /**
    * @return

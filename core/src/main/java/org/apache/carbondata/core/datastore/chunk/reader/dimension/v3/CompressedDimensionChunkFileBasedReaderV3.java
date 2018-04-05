@@ -36,6 +36,7 @@ import org.apache.carbondata.core.datastore.page.encoding.EncodingFactory;
 import org.apache.carbondata.core.memory.MemoryException;
 import org.apache.carbondata.core.metadata.blocklet.BlockletInfo;
 import org.apache.carbondata.core.util.CarbonUtil;
+import org.apache.carbondata.core.util.CompressedColumnPageVo;
 import org.apache.carbondata.format.DataChunk2;
 import org.apache.carbondata.format.DataChunk3;
 import org.apache.carbondata.format.Encoding;
@@ -184,6 +185,32 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
     return dimensionDataChunks;
   }
 
+  public CompressedColumnPageVo[] readRawDimensionChunksInGroup(FileReader fileReader)
+      throws IOException {
+    // read the data from carbon data file
+    byte[] data = fileReader.readByteArray(filePath, dimensionChunksOffset.get(0),
+        (int) (lastDimensionOffsets - dimensionChunksOffset.get(0)));
+    // create raw chunk for each dimension column
+    CompressedColumnPageVo[] dimensionDataChunks =
+        new CompressedColumnPageVo[dimensionChunksOffset.size()];
+    int runningLength = 0;
+    for (int i = 0; i < dimensionDataChunks.length; i++) {
+      int currentLength = 0;
+      if(i== dimensionDataChunks.length-1) {
+        currentLength = (int)(lastDimensionOffsets - dimensionChunksOffset.get(i));
+      } else {
+        currentLength = (int)(dimensionChunksOffset.get(i + 1) - dimensionChunksOffset.get(i));
+      }
+      DataChunk3 dataChunk =
+          CarbonUtil.readDataChunk3(data, runningLength, dimensionChunksLength.get(i));
+      byte[] columnData = new byte[currentLength - dimensionChunksLength.get(i)];
+      System.arraycopy(data, runningLength + dimensionChunksLength.get(i), columnData, 0,
+          columnData.length);
+      dimensionDataChunks[i] = new CompressedColumnPageVo(dataChunk, columnData);
+      runningLength += currentLength;
+    }
+    return dimensionDataChunks;
+  }
   /**
    * Below method will be used to convert the compressed dimension chunk raw data to actual data
    *
