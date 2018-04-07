@@ -39,10 +39,21 @@ public class DimensionRawColumnChunk extends AbstractRawColumnChunk {
 
   private FileReader fileReader;
 
+  private byte[][] dictionaryData;
+
+
   public DimensionRawColumnChunk(int columnIndex, ByteBuffer rawData, long offSet, int length,
       DimensionColumnChunkReader columnChunkReader) {
     super(columnIndex, rawData, offSet, length);
     this.chunkReader = columnChunkReader;
+  }
+
+  public byte[][] getDictionaryData() {
+    return dictionaryData;
+  }
+
+  public void setDictionaryData(byte[][] dictionaryData) {
+    this.dictionaryData = dictionaryData;
   }
 
   /**

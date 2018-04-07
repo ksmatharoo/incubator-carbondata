@@ -291,4 +291,8 @@ public class CarbonColumnVectorWrapper implements CarbonColumnVector {
   @Override public CarbonDictionary getDictionary() {
     return null;
   }
+
+  @Override public CarbonColumnVector getDictionaryVector() {
+    return null;
+  }
 }

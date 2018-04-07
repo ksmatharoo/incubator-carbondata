@@ -31,12 +31,12 @@ public class LocalDictionaryGenerator {
   private static String outDir;
 
   public static void main(String[] args) throws IOException {
-    File file = new File("D:/apachecarbondata/carbondata/examples/spark2/target/store/default/maintable");
+    File file = new File("/opt/carbonstore/default/lineitem_batch_dict");
     outDir = file.getAbsolutePath()+ File.separator + "Fact1";
     File out = new File(outDir);
     out.mkdirs();
 
-    File f = new File(file.getAbsolutePath() + "/Fact/Part0/Segment_0");
+    File f = new File(file.getAbsolutePath() + "/Fact/Part0/Segment_1");
     File[] carbonDataFiles= f.listFiles(new FileFilter() {
       @Override public boolean accept(File pathname) {
         return pathname.getName().endsWith(".carbondata");
@@ -58,6 +58,23 @@ public class LocalDictionaryGenerator {
       if (null == dictionary) {
         dictionary = getColDictionaryMap(columnInTable, actualPath + File.separator + "Metadata");
       }
+
+      List<ColumnSchema> dimColSchema1 = new ArrayList<>();
+      for (ColumnSchema cols : columnInTable) {
+        if (cols.isDimensionColumn()) {
+          dimColSchema1.add(cols);
+        }
+      }
+      List<Integer> dimColSchema = new ArrayList<>();
+      for (ColumnSchema cols : dimColSchema1) {
+        if (cols.isDimensionColumn() && CarbonUtil
+            .hasEncoding(cols.getEncodingList(), Encoding.DICTIONARY) && !CarbonUtil
+            .hasEncoding(cols.getEncodingList(), Encoding.DIRECT_DICTIONARY)) {
+          dimColSchema.add(1);
+        } else {
+          dimColSchema.add(-1);
+        }
+      }
       BlockletInfo blockletList = dataFileFooter.getBlockletList().get(0);
       FileReaderImpl fileReader = new FileReaderImpl();
       CompressedDimensionChunkFileBasedReaderV3 dimensionColumnChunkReader =
@@ -71,9 +88,12 @@ public class LocalDictionaryGenerator {
                   carbondataFiles[i].getAbsolutePath(), false);
       CompressedColumnPageVo[] dimensionColumnPages =
           dimensionColumnChunkReader.readRawDimensionChunksInGroup(fileReader);
+      int counter = 0;
       for (int k = 0; k < dimensionColumnPages.length; k++) {
-        dimensionColumnPages[k].dataChunk3.localDictionary = new ArrayList<>();
-        dimensionColumnPages[k].dataChunk3.localDictionary.add(ByteBuffer.wrap(dictionary.get(k)));
+        if(dimColSchema.get(k)==1) {
+          dimensionColumnPages[k].dataChunk3.localDictionary = new ArrayList<>();
+          dimensionColumnPages[k].dataChunk3.localDictionary.add(ByteBuffer.wrap(dictionary.get(counter++)));
+        }
       }
       CompressedColumnPageVo[] measureColumnPages =
           measureColumnChunkReader.readRawMeasureChunksInGroup(fileReader);
@@ -89,7 +109,8 @@ public class LocalDictionaryGenerator {
     List<ColumnSchema> dimColSchema = new ArrayList<>();
     for (ColumnSchema cols : columnSchemas) {
       if (cols.isDimensionColumn() && CarbonUtil
-          .hasEncoding(cols.getEncodingList(), Encoding.DICTIONARY)) {
+          .hasEncoding(cols.getEncodingList(), Encoding.DICTIONARY) && !CarbonUtil
+          .hasEncoding(cols.getEncodingList(), Encoding.DIRECT_DICTIONARY)) {
         dimColSchema.add(cols);
       }
     }

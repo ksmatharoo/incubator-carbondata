@@ -2972,13 +2972,12 @@ public final class CarbonUtil {
     }
     return blockId;
   }
-
   public static byte[][] convertDictionary(byte[] dictionary) {
     SnappyCompressor compressor = new SnappyCompressor();
     byte[] bytes = compressor.unCompressByte(dictionary);
     ByteBuffer buffer = ByteBuffer.wrap(bytes);
     List<byte[]> dictionaryData = new ArrayList<>();
-
+    dictionaryData.add(new byte[0]);
     while(buffer.hasRemaining()) {
       short aShort = buffer.getShort();
       byte[] data = new byte[aShort];

@@ -133,6 +133,10 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
     rawColumnChunk.setRowCount(eachPageLength);
     rawColumnChunk.setOffsets(ArrayUtils
         .toPrimitive(dataChunk.page_offset.toArray(new Integer[dataChunk.page_offset.size()])));
+    if(dataChunk.localDictionary !=null && dataChunk.localDictionary.size()>0) {
+      rawColumnChunk.setDictionaryData(
+          CarbonUtil.convertDictionary(dataChunk.localDictionary.get(0).array()));
+    }
     return rawColumnChunk;
   }
 
@@ -312,7 +316,7 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
       columnDataChunk =
           new FixedLengthDimensionColumnPage(dataPage, invertedIndexes, invertedIndexesReverse,
               pageMetadata.getNumberOfRowsInpage(),
-              eachColumnValueSize[rawColumnPage.getColumnIndex()], new byte[][]{"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes(),"rr".getBytes()});
+              eachColumnValueSize[rawColumnPage.getColumnIndex()], rawColumnPage.getDictionaryData());
     }
     return columnDataChunk;
   }

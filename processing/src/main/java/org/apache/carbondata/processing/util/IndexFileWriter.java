@@ -39,65 +39,65 @@ import org.apache.carbondata.format.IndexHeader;
 public class IndexFileWriter {
 
   public static void main(String[] args) throws IOException {
-    File folder = new File("D:/vishal");
-    File[] carbonDataFiles = folder.listFiles(new FileFilter() {
-      @Override public boolean accept(File pathname) {
-        return pathname.getName().endsWith(".carbondata");
-      }
-    });
-    for (int i = 0; i < carbonDataFiles.length; i++) {
-      FileReader reader = new FileReaderImpl();
-      long offset = carbonDataFiles[i].length() - 8;
-      long actualOffset = reader.readLong(carbonDataFiles[i].getAbsolutePath(), offset);
-      TableBlockInfo info =
-          new TableBlockInfo(carbonDataFiles[i].getAbsolutePath(), actualOffset, "0", new String[0],
-              carbonDataFiles[i].length(), ColumnarFormatVersion.V3, null);
-      AbstractDataFileFooterConverter converter = new DataFileFooterConverterV3();
-      DataFileFooter dataFileFooter = converter.readDataFileFooter(info);
-      IndexHeader indexHeader = CarbonMetadataUtil
-          .getIndexHeader(dataFileFooter.getSegmentInfo().getColumnCardinality(),
-              getColumnSchemaListAndCardinality(dataFileFooter.getColumnInTable()), 0,
-              dataFileFooter.getSchemaUpdatedTimeStamp());
-      List<BlockIndex> blockIndex = new ArrayList<>();
-      List<BlockletInfo> blockletList = dataFileFooter.getBlockletList();
-      for (int k = 0; k < blockletList.size(); k++) {
-        BlockIndex index = new BlockIndex();
-        index.offset = actualOffset;
-        index.file_name = carbonDataFiles[k].getName();
-        index.setNum_rows(dataFileFooter.getNumberOfRows());
-        BlockletInfo3 blocletInfo3 = getBlocletInfo3(blockletList.get(k));
-        index.setBlocklet_info(blocletInfo3);
-        index.setBlock_index(getBlockletIndex(blockletList.get(k).getBlockletIndex()));
-        blockIndex.add(index);
-      }
-      String taskNo = CarbonTablePath.DataFileUtil.getTaskNo(carbonDataFiles[i].getName());
-      long taskIdFromTaskNo = CarbonTablePath.DataFileUtil.getTaskIdFromTaskNo(taskNo);
-      String bucketNo = CarbonTablePath.DataFileUtil.getBucketNo(carbonDataFiles[i].getName());
-      int batchNoFromTaskNo = CarbonTablePath.DataFileUtil.getBatchNoFromTaskNo(taskNo);
-      String timeStampFromFileName =
-          CarbonTablePath.DataFileUtil.getTimeStampFromFileName(carbonDataFiles[i].getName());
-      String path = folder.getAbsolutePath() + File.separator + CarbonTablePath
-          .getCarbonIndexFileName(taskIdFromTaskNo, Integer.parseInt(bucketNo), batchNoFromTaskNo,
-              "" + timeStampFromFileName);
-      CarbonIndexFileWriter writer = new CarbonIndexFileWriter();
-      // open file
-      writer.openThriftWriter(path);
-      // write the header first
-      writer.writeThrift(indexHeader);
-      // write the indexes
-      for (BlockIndex block : blockIndex) {
-        writer.writeThrift(block);
-      }
-      writer.close();
-    }
-    //    File file1 = new File("D:/vishal/0_batchno0-0-1522157101849.carbonindex");
-    //    FileInputStream stream1 = new FileInputStream(file1);
-    //    byte[] data1 = new byte[(int) file1.length()];
-    //    stream1.read(data1);
-    //    AbstractDataFileFooterConverter converter1 = new DataFileFooterConverterV3();
-    //    List<DataFileFooter> indexInfo1 =
-    //        converter1.getIndexInfo(file1.getAbsolutePath().replace("\\", "/"), data1);
-    //    System.out.println();
+//    File folder = new File("D:/vishal");
+//    File[] carbonDataFiles = folder.listFiles(new FileFilter() {
+//      @Override public boolean accept(File pathname) {
+//        return pathname.getName().endsWith(".carbondata");
+//      }
+//    });
+//    for (int i = 0; i < carbonDataFiles.length; i++) {
+//      FileReader reader = new FileReaderImpl();
+//      long offset = carbonDataFiles[i].length() - 8;
+//      long actualOffset = reader.readLong(carbonDataFiles[i].getAbsolutePath(), offset);
+//      TableBlockInfo info =
+//          new TableBlockInfo(carbonDataFiles[i].getAbsolutePath(), actualOffset, "0", new String[0],
+//              carbonDataFiles[i].length(), ColumnarFormatVersion.V3, null);
+//      AbstractDataFileFooterConverter converter = new DataFileFooterConverterV3();
+//      DataFileFooter dataFileFooter = converter.readDataFileFooter(info);
+//      IndexHeader indexHeader = CarbonMetadataUtil
+//          .getIndexHeader(dataFileFooter.getSegmentInfo().getColumnCardinality(),
+//              getColumnSchemaListAndCardinality(dataFileFooter.getColumnInTable()), 0,
+//              dataFileFooter.getSchemaUpdatedTimeStamp());
+//      List<BlockIndex> blockIndex = new ArrayList<>();
+//      List<BlockletInfo> blockletList = dataFileFooter.getBlockletList();
+//      for (int k = 0; k < blockletList.size(); k++) {
+//        BlockIndex index = new BlockIndex();
+//        index.offset = actualOffset;
+//        index.file_name = carbonDataFiles[k].getName();
+//        index.setNum_rows(dataFileFooter.getNumberOfRows());
+//        BlockletInfo3 blocletInfo3 = getBlocletInfo3(blockletList.get(k));
+//        index.setBlocklet_info(blocletInfo3);
+//        index.setBlock_index(getBlockletIndex(blockletList.get(k).getBlockletIndex()));
+//        blockIndex.add(index);
+//      }
+//      String taskNo = CarbonTablePath.DataFileUtil.getTaskNo(carbonDataFiles[i].getName());
+//      long taskIdFromTaskNo = CarbonTablePath.DataFileUtil.getTaskIdFromTaskNo(taskNo);
+//      String bucketNo = CarbonTablePath.DataFileUtil.getBucketNo(carbonDataFiles[i].getName());
+//      int batchNoFromTaskNo = CarbonTablePath.DataFileUtil.getBatchNoFromTaskNo(taskNo);
+//      String timeStampFromFileName =
+//          CarbonTablePath.DataFileUtil.getTimeStampFromFileName(carbonDataFiles[i].getName());
+//      String path = folder.getAbsolutePath() + File.separator + CarbonTablePath
+//          .getCarbonIndexFileName(taskIdFromTaskNo, Integer.parseInt(bucketNo), batchNoFromTaskNo,
+//              "" + timeStampFromFileName);
+//      CarbonIndexFileWriter writer = new CarbonIndexFileWriter();
+//      // open file
+//      writer.openThriftWriter(path);
+//      // write the header first
+//      writer.writeThrift(indexHeader);
+//      // write the indexes
+//      for (BlockIndex block : blockIndex) {
+//        writer.writeThrift(block);
+//      }
+//      writer.close();
+//    }
+        File file1 = new File("/opt/carbonstore/default/lineitem_batch_dict/Fact/Part0/Segment_1/0_batchno0-0-1522728211026.carbonindex");
+        FileInputStream stream1 = new FileInputStream(file1);
+        byte[] data1 = new byte[(int) file1.length()];
+        stream1.read(data1);
+        AbstractDataFileFooterConverter converter1 = new DataFileFooterConverterV3();
+        List<DataFileFooter> indexInfo1 =
+            converter1.getIndexInfo(file1.getAbsolutePath().replace("\\", "/"), data1);
+        System.out.println();
   }
 
   public static BlockletInfo3 getBlocletInfo3(
