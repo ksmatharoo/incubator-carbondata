@@ -1629,6 +1629,10 @@ public final class CarbonCommonConstants {
    */
   public static final String CARBON_SYSTEM_FOLDER_LOCATION = "carbon.system.folder.location";
 
+  public static final String CARBON_ENABLE_LOCALDICT_DEFAULT = "true";
+
+  public static final String CARBON_ENABLE_INVERTEDINDEX_DEFAULT = "true";
+
   private CarbonCommonConstants() {
   }
 }

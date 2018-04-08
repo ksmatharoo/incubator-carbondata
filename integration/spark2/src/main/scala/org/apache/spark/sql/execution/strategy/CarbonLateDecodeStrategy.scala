@@ -53,6 +53,7 @@ import org.apache.carbondata.spark.util.CarbonScalaUtil
  */
 private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
   val PUSHED_FILTERS = "PushedFilters"
+  val enableLocalDict = CarbonProperties.getInstance().getProperty("carbon.localdict", CarbonCommonConstants.CARBON_ENABLE_LOCALDICT_DEFAULT).toBoolean
 
   def apply(plan: LogicalPlan): Seq[SparkPlan] = {
     plan match {
@@ -191,7 +192,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       rdd: RDD[InternalRow],
       needDecode: ArrayBuffer[AttributeReference]):
   RDD[InternalRow] = {
-    if (false) {
+    if (!enableLocalDict && needDecode.nonEmpty) {
       rdd.asInstanceOf[CarbonScanRDD].setVectorReaderSupport(false)
       getDecoderRDD(relation, needDecode, rdd, output)
     } else {
@@ -289,17 +290,21 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         .map(relation.attributeMap)
         // Don't request columns that are only referenced by pushed filters.
         .filterNot(handledSet.contains)
-      val updateRequestedColumns = requestedColumns//updateRequestedColumnsFunc(requestedColumns, table, needDecoder)
+      val updateRequestedColumns = if(!enableLocalDict) {
+        updateRequestedColumnsFunc(requestedColumns, table, needDecoder)
+      } else {
+        requestedColumns
+      }
 
       val updateProject = projects.map { expr =>
         var attr = expr.toAttribute.asInstanceOf[AttributeReference]
-//        if (!needDecoder.exists(_.name.equalsIgnoreCase(attr.name))) {
-//          val dict = map.get(attr.name)
-//          if (dict.isDefined && dict.get) {
-//            attr = AttributeReference(attr.name, IntegerType, attr.nullable, attr.metadata)(attr
-//              .exprId, attr.qualifier)
-//          }
-//        }
+        if (!enableLocalDict && !needDecoder.exists(_.name.equalsIgnoreCase(attr.name))) {
+          val dict = map.get(attr.name)
+          if (dict.isDefined && dict.get) {
+            attr = AttributeReference(attr.name, IntegerType, attr.nullable, attr.metadata)(attr
+              .exprId, attr.qualifier)
+          }
+        }
         attr
       }
       val scan = getDataSourceScan(relation,

@@ -20,6 +20,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.FileReader;
 import org.apache.carbondata.core.datastore.chunk.DimensionColumnPage;
 import org.apache.carbondata.core.datastore.chunk.impl.DimensionRawColumnChunk;
@@ -35,6 +36,7 @@ import org.apache.carbondata.core.datastore.page.encoding.DefaultEncodingFactory
 import org.apache.carbondata.core.datastore.page.encoding.EncodingFactory;
 import org.apache.carbondata.core.memory.MemoryException;
 import org.apache.carbondata.core.metadata.blocklet.BlockletInfo;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.CompressedColumnPageVo;
 import org.apache.carbondata.format.DataChunk2;
@@ -272,6 +274,9 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
     }
   }
 
+  private static Boolean enableInvertedIndex = Boolean.parseBoolean(CarbonProperties
+      .getInstance().getProperty("carbon.enable.invertedindex", CarbonCommonConstants.CARBON_ENABLE_INVERTEDINDEX_DEFAULT));
+
   private DimensionColumnPage decodeDimensionLegacy(DimensionRawColumnChunk rawColumnPage,
       ByteBuffer pageData, DataChunk2 pageMetadata, int offset) {
     byte[] dataPage;
@@ -283,13 +288,16 @@ public class CompressedDimensionChunkFileBasedReaderV3 extends AbstractChunkRead
     offset += pageMetadata.data_page_length;
     // if row id block is present then read the row id chunk and uncompress it
     if (hasEncoding(pageMetadata.encoders, Encoding.INVERTED_INDEX)) {
-      long l2 = System.currentTimeMillis();
-      invertedIndexes = CarbonUtil
-          .getUnCompressColumnIndex(pageMetadata.rowid_page_length, pageData, offset);
+      if (enableInvertedIndex) {
+        long l2 = System.currentTimeMillis();
+        invertedIndexes =
+            CarbonUtil.getUnCompressColumnIndex(pageMetadata.rowid_page_length, pageData, offset);
+        // get the reverse index
+        invertedIndexesReverse = getInvertedReverseIndex(invertedIndexes);
+        ((FileReaderImpl) rawColumnPage.getFileReader()).decompressIndex +=
+            (System.currentTimeMillis() - l2);
+      }
       offset += pageMetadata.rowid_page_length;
-      // get the reverse index
-      invertedIndexesReverse = getInvertedReverseIndex(invertedIndexes);
-      ((FileReaderImpl)rawColumnPage.getFileReader()).decompressIndex += (System.currentTimeMillis() - l2);
     }
     // if rle is applied then read the rle block chunk and then uncompress
     //then actual data based on rle block

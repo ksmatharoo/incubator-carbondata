@@ -85,6 +85,21 @@ public class CarbonDictionaryReaderImpl implements CarbonDictionaryReader {
    * @throws IOException if an I/O error occurs
    */
   @Override public List<byte[]> read() throws IOException {
+    return read(0L);
+  }
+  /**
+   * This method should be used when complete dictionary data needs to be read.
+   * Applicable scenarios :
+   * 1. Global dictionary generation in case of incremental load
+   * 2. Reading dictionary file on first time query
+   * 3. Loading a dictionary column in memory based on query requirement.
+   * This is a case where carbon column cache feature is enabled in which a
+   * column dictionary is read if it is present in the query.
+   *
+   * @return list of byte array. Each byte array is unique dictionary value
+   * @throws IOException if an I/O error occurs
+   */
+  public List<byte[]> read1() throws IOException {
     return read1(0L);
   }
 
@@ -230,9 +245,16 @@ public class CarbonDictionaryReaderImpl implements CarbonDictionaryReader {
   /**
    * This method will form the path for dictionary file for a given column
    */
-  protected void initFileLocation() {
+  protected void initFileLocation1() {
     this.columnDictionaryFilePath = CarbonTablePath.getExternalDictionaryFilePath(
         filePath, columnName);
+  }
+
+  /**
+   * This method will form the path for dictionary file for a given column
+   */
+  protected void initFileLocation() {
+    this.columnDictionaryFilePath = dictionaryColumnUniqueIdentifier.getDictionaryFilePath();
   }
 
   /**

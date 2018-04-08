@@ -26,6 +26,7 @@ import java.util.Map;
 import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.cache.dictionary.Dictionary;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.block.TableBlockInfo;
 import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionaryGenerator;
 import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionaryKeyGeneratorFactory;
@@ -41,6 +42,7 @@ import org.apache.carbondata.core.scan.model.QueryModel;
 import org.apache.carbondata.core.scan.result.iterator.AbstractDetailQueryResultIterator;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnarBatch;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.hadoop.AbstractRecordReader;
 import org.apache.carbondata.hadoop.CarbonInputSplit;
@@ -92,6 +94,9 @@ class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
   private QueryExecutor queryExecutor;
 
   private InputMetricsStats inputMetricsStats;
+
+  private static Boolean enableLocalDict = Boolean.parseBoolean(CarbonProperties
+      .getInstance().getProperty("carbon.localdict", CarbonCommonConstants.CARBON_ENABLE_LOCALDICT_DEFAULT));
 
   public VectorizedCarbonRecordReader(QueryModel queryModel, InputMetricsStats inputMetricsStats,
       String enableBatch) {
@@ -246,8 +251,15 @@ class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
             CarbonScalaUtil.convertCarbonToSparkDataType(dim.getDimension().getDataType()), true,
             null);
       } else {
-        fields[dim.getOrdinal()] = new StructField(dim.getColumnName(),
-            CarbonScalaUtil.convertCarbonToSparkDataType(dim.getDimension().getDataType()), true, null);
+        if (enableLocalDict) {
+          fields[dim.getOrdinal()] = new StructField(dim.getColumnName(),
+              CarbonScalaUtil.convertCarbonToSparkDataType(dim.getDimension().getDataType()), true,
+              null);
+        } else {
+          fields[dim.getOrdinal()] = new StructField(dim.getColumnName(),
+              CarbonScalaUtil.convertCarbonToSparkDataType(DataTypes.INT), true,
+              null);
+        }
       }
     }
 
@@ -273,7 +285,7 @@ class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
     CarbonColumnVector[] vectors = new CarbonColumnVector[fields.length];
     boolean[] filteredRows = new boolean[columnarBatch.capacity()];
     for (int i = 0; i < fields.length; i++) {
-      if (CarbonScalaUtil.isStringDataType(columnarBatch.column(i).dataType())) {
+      if (enableLocalDict && CarbonScalaUtil.isStringDataType(columnarBatch.column(i).dataType())) {
         columnarBatch.column(i).reserveDictionaryIds(columnarBatch.capacity());
       }
       vectors[i] = new ColumnarVectorWrapper(columnarBatch.column(i), filteredRows);

@@ -46,12 +46,11 @@ import org.apache.carbondata.spark.CarbonAliasDecoderRelation
  */
 class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
-
+  val enableLocalDict = CarbonProperties.getInstance().getProperty("carbon.localdict", CarbonCommonConstants.CARBON_ENABLE_LOCALDICT_DEFAULT).toBoolean
   private var relations: Seq[CarbonDecoderRelation] = _
 
   def apply(plan: LogicalPlan): LogicalPlan = {
-//    if (checkIfRuleNeedToBeApplied(plan, true)) {
-    if (false) {
+    if (!enableLocalDict && checkIfRuleNeedToBeApplied(plan, true)) {
       val recorder = CarbonTimeStatisticsFactory.createExecutorRecorder("")
       val queryStatistic = new QueryStatistic()
       val result = transformCarbonPlan(plan, relations)

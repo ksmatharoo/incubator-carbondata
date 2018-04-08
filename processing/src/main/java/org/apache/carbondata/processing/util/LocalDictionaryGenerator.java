@@ -118,7 +118,7 @@ public class LocalDictionaryGenerator {
     SnappyCompressor compressor = new SnappyCompressor();
     for (ColumnSchema dic : dimColSchema) {
       List<byte[]> read =
-          new CarbonDictionaryReaderImpl(dictionaryPath, dic.getColumnUniqueId()).read();
+          new CarbonDictionaryReaderImpl(dictionaryPath, dic.getColumnUniqueId()).read1();
       dicData.add(compressor.compressByte(convertToLV(read)));
     }
     return dicData;

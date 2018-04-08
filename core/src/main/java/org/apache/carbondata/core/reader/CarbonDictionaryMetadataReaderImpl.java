@@ -72,7 +72,7 @@ public class CarbonDictionaryMetadataReaderImpl implements CarbonDictionaryMetad
   public CarbonDictionaryMetadataReaderImpl(String filePath, String columnName) {
     this.filePath = filePath;
     this.columnName = columnName;
-    initFileLocation();
+    initFileLocation1();
   }
 
   /**
@@ -166,9 +166,17 @@ public class CarbonDictionaryMetadataReaderImpl implements CarbonDictionaryMetad
   /**
    * This method will form the path for dictionary metadata file for a given column
    */
-  protected void initFileLocation() {
+  protected void initFileLocation1() {
     this.columnDictionaryMetadataFilePath = CarbonTablePath.getExternalDictionaryMetaFilePath(
         filePath, columnName);;
+  }
+
+  /**
+   * This method will form the path for dictionary metadata file for a given column
+   */
+  protected void initFileLocation() {
+    this.columnDictionaryMetadataFilePath =
+        dictionaryColumnUniqueIdentifier.getDictionaryMetaFilePath();
   }
 
   /**
