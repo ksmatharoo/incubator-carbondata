@@ -9,13 +9,10 @@ import org.apache.parquet.io.api.Binary;
 
 public class CarbonDictionaryWrapper extends Dictionary {
 
-  private CarbonDictionary dictionary;
-
   private Binary[] binaries;
 
   public CarbonDictionaryWrapper(Encoding encoding, CarbonDictionary dictionary) {
     super(encoding);
-    this.dictionary = dictionary;
     byte[][] rleData = dictionary.getRleData();
     if (rleData != null) {
       binaries = new Binary[rleData.length];

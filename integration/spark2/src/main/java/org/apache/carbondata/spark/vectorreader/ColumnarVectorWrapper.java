@@ -212,6 +212,9 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
   @Override public void reset() {
     counter = 0;
     filteredRowsExist = false;
+    if (dictionaryVector != null) {
+      dictionaryVector.reset();
+    }
   }
 
   @Override public DataType getType() {
