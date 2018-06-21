@@ -715,7 +715,6 @@ public class SegmentStatusManager {
 
   public static class ValidAndInvalidSegmentsInfo {
     private final List<Segment> listOfValidSegments;
-    private final List<Segment> listOfValidUpdatedSegments;
     private final List<Segment> listOfInvalidSegments;
     private final List<Segment> listOfStreamSegments;
     private final List<Segment> listOfInProgressSegments;
@@ -724,7 +723,6 @@ public class SegmentStatusManager {
         List<Segment> listOfValidUpdatedSegments, List<Segment> listOfInvalidUpdatedSegments,
         List<Segment> listOfStreamSegments, List<Segment> listOfInProgressSegments) {
       this.listOfValidSegments = listOfValidSegments;
-      this.listOfValidUpdatedSegments = listOfValidUpdatedSegments;
       this.listOfInvalidSegments = listOfInvalidUpdatedSegments;
       this.listOfStreamSegments = listOfStreamSegments;
       this.listOfInProgressSegments = listOfInProgressSegments;
