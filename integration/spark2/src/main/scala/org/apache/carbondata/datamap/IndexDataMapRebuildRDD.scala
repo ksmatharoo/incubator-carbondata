@@ -78,7 +78,7 @@ object IndexDataMapRebuildRDD {
       schema: DataMapSchema
   ): Unit = {
     val tableIdentifier = carbonTable.getAbsoluteTableIdentifier
-    val segmentStatusManager = new SegmentManager()
+    val segmentStatusManager = SegmentManager.getInstance()
     val validAndInvalidSegments = segmentStatusManager.getAllSegments(tableIdentifier)
     val validSegments = validAndInvalidSegments.getValidSegments
     val indexedCarbonColumns = carbonTable.getIndexedColumns(schema)

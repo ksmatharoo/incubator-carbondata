@@ -48,10 +48,10 @@ object CarbonStore {
       identifier: AbsoluteTableIdentifier,
       showHistory: Boolean): Seq[Row] = {
     val loadMetadataDetailsArray = if (showHistory) {
-      new SegmentManager().getAllSegments(identifier).getAllSegments.asScala ++
-      new SegmentManager().getAllHistorySegments(identifier).getAllSegments.asScala
+      SegmentManager.getInstance().getAllSegments(identifier).getAllSegments.asScala ++
+      SegmentManager.getInstance().getAllHistorySegments(identifier).getAllSegments.asScala
     } else {
-      new SegmentManager().getAllSegments(identifier).getAllSegments.asScala
+      SegmentManager.getInstance().getAllSegments(identifier).getAllSegments.asScala
     }
 
     if (loadMetadataDetailsArray.nonEmpty) {
@@ -160,7 +160,7 @@ object CarbonStore {
         carbonCleanFilesLock =
           CarbonLockUtil
             .getLockObject(absoluteTableIdentifier, LockUsage.CLEAN_FILES_LOCK, errorMsg)
-        new SegmentManager().deleteLoadsAndUpdateMetadata(
+        SegmentManager.getInstance().deleteLoadsAndUpdateMetadata(
           carbonTable, true, currentTablePartitions.map(_.asJava).orNull)
         CarbonUpdateUtil.cleanUpDeltaFiles(carbonTable, true)
         currentTablePartitions match {
@@ -196,7 +196,7 @@ object CarbonStore {
       partitionSpecList: List[PartitionSpec]): Unit = {
     if (carbonTable != null) {
       val loadMetadataDetails =
-        new SegmentManager().getInvalidSegments(
+        SegmentManager.getInstance().getInvalidSegments(
           carbonTable.getAbsoluteTableIdentifier).getInValidSegmentDetailVOs.asScala
 
       val fileType = FileFactory.getFileType(carbonTable.getTablePath)
@@ -269,8 +269,8 @@ object CarbonStore {
     val path = carbonTable.getMetadataPath
 
     try {
-      val invalidLoadIds = SegmentStatusManager.updateDeletionStatus(
-        carbonTable.getAbsoluteTableIdentifier, loadids.asJava, path).asScala
+      val invalidLoadIds = SegmentManager.getInstance.deleteSegmentBySegmentIds(
+        carbonTable.getAbsoluteTableIdentifier, loadids.asJava).asScala
       if (invalidLoadIds.isEmpty) {
         LOGGER.audit(s"Delete segment by Id is successfull for $dbName.$tableName.")
       } else {
@@ -296,12 +296,10 @@ object CarbonStore {
 
     try {
       val invalidLoadTimestamps =
-        SegmentStatusManager.updateDeletionStatus(
+        SegmentManager.getInstance.deleteSegmentByLoadTime(
           carbonTable.getAbsoluteTableIdentifier,
-          timestamp,
-          path,
-          time).asScala
-      if (invalidLoadTimestamps.isEmpty) {
+          time)
+      if (invalidLoadTimestamps) {
         LOGGER.audit(s"Delete segment by date is successful for $dbName.$tableName.")
       } else {
         sys.error("Delete segment by date is failed. No matching segment found.")
@@ -319,8 +317,7 @@ object CarbonStore {
       storePath: String,
       segmentId: String): Boolean = {
     val identifier = AbsoluteTableIdentifier.from(storePath, dbName, tableName)
-    val validSegments = new
-        SegmentManager().getValidSegments(identifier).getValidSegments
+    val validSegments = SegmentManager.getInstance().getValidSegments(identifier).getValidSegments
     validSegments.contains(Segment.toSegment(segmentId))
   }
 

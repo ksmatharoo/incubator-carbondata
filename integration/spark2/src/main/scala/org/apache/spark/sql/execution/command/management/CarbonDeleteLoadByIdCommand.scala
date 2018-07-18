@@ -23,7 +23,7 @@ import org.apache.spark.sql.execution.command.{Checker, DataCommand}
 import org.apache.carbondata.api.CarbonStore
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.core.exception.ConcurrentOperationException
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.events.{DeleteSegmentByIdPostEvent, DeleteSegmentByIdPreEvent, OperationContext, OperationListenerBus}
 
 case class CarbonDeleteLoadByIdCommand(
@@ -41,7 +41,7 @@ case class CarbonDeleteLoadByIdCommand(
     }
 
     // if insert overwrite in progress, do not allow delete segment
-    if (SegmentStatusManager.isOverwriteInProgressInTable(carbonTable)) {
+    if (SegmentManager.getInstance().isOverwriteInProgressInTable(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "delete segment")
     }
 

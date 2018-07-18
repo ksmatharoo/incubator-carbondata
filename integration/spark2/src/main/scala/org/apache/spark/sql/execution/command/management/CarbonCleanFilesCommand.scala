@@ -33,7 +33,7 @@ import org.apache.carbondata.core.datamap.DataMapStoreManager
 import org.apache.carbondata.core.exception.ConcurrentOperationException
 import org.apache.carbondata.core.indexstore.PartitionSpec
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.events._
 import org.apache.carbondata.spark.util.CommonUtil
 
@@ -77,7 +77,7 @@ case class CarbonCleanFilesCommand(
 
   override def processData(sparkSession: SparkSession): Seq[Row] = {
     // if insert overwrite in progress, do not allow delete segment
-    if (SegmentStatusManager.isOverwriteInProgressInTable(carbonTable)) {
+    if (SegmentManager.getInstance().isOverwriteInProgressInTable(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "clean file")
     }
     val operationContext = new OperationContext

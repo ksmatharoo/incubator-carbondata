@@ -183,7 +183,7 @@ public class Segment implements Serializable {
    * @return
    */
   public static Segment getSegment(String segmentNo, AbsoluteTableIdentifier tableIdentifier) {
-    SegmentsHolder validSegments = new SegmentManager().getValidSegments(tableIdentifier);
+    SegmentsHolder validSegments = SegmentManager.getInstance().getValidSegments(tableIdentifier);
     return getSegment(segmentNo, validSegments.getValidSegments());
   }
 

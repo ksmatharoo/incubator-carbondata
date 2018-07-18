@@ -26,7 +26,9 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
@@ -53,6 +55,14 @@ public class FileBasedSegmentStore implements SegmentStore {
   private static final LogService LOGGER =
       LogServiceFactory.getLogService(SegmentStatusManager.class.getName());
 
+  private int retryCount = CarbonLockUtil
+      .getLockProperty(CarbonCommonConstants.NUMBER_OF_TRIES_FOR_CONCURRENT_LOCK,
+          CarbonCommonConstants.NUMBER_OF_TRIES_FOR_CONCURRENT_LOCK_DEFAULT);
+
+  private int maxTimeout = CarbonLockUtil
+      .getLockProperty(CarbonCommonConstants.MAX_TIMEOUT_FOR_CONCURRENT_LOCK,
+          CarbonCommonConstants.MAX_TIMEOUT_FOR_CONCURRENT_LOCK_DEFAULT);
+
   @Override public List<SegmentDetailVO> getSegments(AbsoluteTableIdentifier identifier,
       List<Expression> filters) {
     try {
@@ -70,12 +80,6 @@ public class FileBasedSegmentStore implements SegmentStore {
   @Override public String generateSegmentIdAndInsert(AbsoluteTableIdentifier identifier,
       SegmentDetailVO segment) throws IOException {
     ICarbonLock carbonLock = getTableStatusLock(identifier);
-    int retryCount = CarbonLockUtil
-        .getLockProperty(CarbonCommonConstants.NUMBER_OF_TRIES_FOR_CONCURRENT_LOCK,
-            CarbonCommonConstants.NUMBER_OF_TRIES_FOR_CONCURRENT_LOCK_DEFAULT);
-    int maxTimeout = CarbonLockUtil
-        .getLockProperty(CarbonCommonConstants.MAX_TIMEOUT_FOR_CONCURRENT_LOCK,
-            CarbonCommonConstants.MAX_TIMEOUT_FOR_CONCURRENT_LOCK_DEFAULT);
     try {
       if (carbonLock.lockWithRetries(retryCount, maxTimeout)) {
         LOGGER.info(
@@ -119,6 +123,75 @@ public class FileBasedSegmentStore implements SegmentStore {
       return true;
     } catch (IOException e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  @Override public boolean commitTransaction(List<AbsoluteTableIdentifier> identifiers, String uuid) {
+    List<ICarbonLock> locks = new ArrayList<>(identifiers.size());
+    for (AbsoluteTableIdentifier identifier : identifiers) {
+      locks.add(getTableStatusLock(identifier));
+    }
+
+    boolean locked = false;
+    try {
+      for (ICarbonLock lock : locks) {
+        locked = lock.lockWithRetries(retryCount, maxTimeout);
+        if (!locked) {
+          break;
+        }
+      }
+      if (locked) {
+        Map<AbsoluteTableIdentifier, LoadMetadataDetails[]> identifierMap = new HashMap<>();
+        Map<AbsoluteTableIdentifier, List<String>> identifierSegmentMap = new HashMap<>();
+        for (AbsoluteTableIdentifier identifier : identifiers) {
+          LoadMetadataDetails[] details = readTableStatusFile(identifier);
+          identifierMap.put(identifier, details);
+          List<String> segments = new ArrayList<>();
+          for (LoadMetadataDetails detail : details) {
+            if (detail.getTransactionId() != null && detail.getTransactionId().equals(uuid)) {
+              detail.setTransactionId(null);
+              segments.add(detail.getLoadName());
+            }
+          }
+          identifierSegmentMap.put(identifier, segments);
+        }
+        List<AbsoluteTableIdentifier> finished = new ArrayList<>();
+        for (Map.Entry<AbsoluteTableIdentifier, LoadMetadataDetails[]> entry : identifierMap
+            .entrySet()) {
+          try {
+            writeLoadDetailsIntoFile(entry.getKey(), entry.getValue());
+          } catch (Exception e) {
+            LOGGER.error(e);
+            break;
+          }
+          finished.add(entry.getKey());
+        }
+
+        if (finished.size() != identifiers.size()) {
+          // Roll back
+          for (AbsoluteTableIdentifier identifier : finished) {
+            List<String> list = identifierSegmentMap.get(identifier);
+            if (list != null && list.size() > 0) {
+              LoadMetadataDetails[] details = identifierMap.get(identifier);
+              for (LoadMetadataDetails detail : details) {
+                if (list.contains(detail.getLoadName())) {
+                  detail.setTransactionId(uuid);
+                }
+              }
+              writeLoadDetailsIntoFile(identifier, details);
+            }
+          }
+        }
+        return true;
+      }
+      return false;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    finally {
+      for (ICarbonLock lock : locks) {
+        lock.unlock();
+      }
     }
   }
 

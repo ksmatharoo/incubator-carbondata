@@ -91,7 +91,7 @@ public class SegmentUpdateStatusManager {
       // fileExist is costly operation, so check based on table Type
       segmentsHolder = new SegmentsHolder(new ArrayList<SegmentDetailVO>());
     } else {
-      segmentsHolder = new SegmentManager().getAllSegments(identifier);
+      segmentsHolder = SegmentManager.getInstance().getAllSegments(identifier);
     }
     if (segmentsHolder.getValidSegments().size() != 0) {
       updateDetails = readLoadMetadata();
@@ -453,7 +453,7 @@ public class SegmentUpdateStatusManager {
     long factTimeStamp = 0;
 
     List<SegmentDetailVO> segmentDetails =
-        new SegmentManager().getValidSegments(identifier).getValidSegmentDetailVOs();
+        SegmentManager.getInstance().getValidSegments(identifier).getValidSegmentDetailVOs();
 
     for (SegmentDetailVO eachSeg : segmentDetails) {
       if (eachSeg.getSegmentId().equalsIgnoreCase(segmentId)) {

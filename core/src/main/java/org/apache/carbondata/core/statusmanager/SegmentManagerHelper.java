@@ -92,6 +92,9 @@ public class SegmentManagerHelper {
     if (fields.get(SegmentDetailVO.VISIBILITY) != null) {
       details.setVisibility(String.valueOf(detailVO.getVisibility()));
     }
+    if (fields.get(SegmentDetailVO.TRANSACTION_ID) != null) {
+      details.setTransactionId(detailVO.getTransactionId());
+    }
     return details;
   }
 
@@ -110,12 +113,15 @@ public class SegmentManagerHelper {
     if (StringUtils.isNotEmpty(detail.getUpdateDeltaStartTimestamp())) {
       detailVO.setUpdateDeltaStartTimestamp(Long.parseLong(detail.getUpdateDeltaStartTimestamp()));
     }
-    detailVO.setUpdateStatusFilename(detail.getDataSize());
-    if (StringUtils.isNotEmpty(detail.getUpdateDeltaStartTimestamp())) {
+    detailVO.setUpdateStatusFilename(detail.getUpdateStatusFileName());
+    if (StringUtils.isNotEmpty(detail.getDataSize())) {
       detailVO.setDataSize(Long.valueOf(detail.getDataSize()));
     }
     if (StringUtils.isNotEmpty(detail.getIndexSize())) {
       detailVO.setIndexSize(Long.valueOf(detail.getIndexSize()));
+    }
+    if (StringUtils.isNotEmpty(detail.getTransactionId())) {
+      detailVO.setTransactionId(detail.getTransactionId());
     }
     detailVO.setFileFormat(detail.getFileFormat().toString());
     detailVO.setMajorCompacted(detail.isMajorCompacted());

@@ -136,7 +136,7 @@ with Serializable {
     if (currEntry != null) {
       val loadEntry =
         ObjectSerializationUtil.convertStringToObject(currEntry).asInstanceOf[LoadMetadataDetails]
-      model.setCurrentDetailVO(new SegmentManager()
+      model.setCurrentDetailVO(SegmentManager.getInstance()
         .getSegment(model.getCarbonDataLoadSchema.getCarbonTable.getAbsoluteTableIdentifier,
           model.getSegmentId))
     }

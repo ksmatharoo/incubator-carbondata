@@ -78,7 +78,7 @@ class DataCompactionCardinalityBoundryTest extends QueryTest with BeforeAndAfter
         CarbonProperties.getInstance.getProperty(CarbonCommonConstants.STORE_LOCATION),
         new CarbonTableIdentifier("default", "cardinalityTest", "1")
       )
-      val segments = new SegmentManager().getValidSegments(identifier).getValidSegments.asScala.toList
+      val segments = SegmentManager.getInstance().getValidSegments(identifier).getValidSegments.asScala.toList
 
       if (!segments.contains("0.1")) {
         // wait for 2 seconds for compaction to complete.

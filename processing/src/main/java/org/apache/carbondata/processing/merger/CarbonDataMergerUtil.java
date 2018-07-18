@@ -219,7 +219,7 @@ public final class CarbonDataMergerUtil {
           }
 
           List<SegmentDetailVO> loadDetails =
-              new SegmentManager().getAllSegments(identifier).getAllSegments();
+              SegmentManager.getInstance().getAllSegments(identifier).getAllSegments();
           List<SegmentDetailVO> updateSegmentsList = new ArrayList<>();
           for (SegmentDetailVO loadDetail : loadDetails) {
             if (loadsToMerge.contains(loadDetail)) {
@@ -240,7 +240,7 @@ public final class CarbonDataMergerUtil {
 
           segmentUpdateStatusManager.writeLoadDetailsIntoFile(
               Arrays.asList(updateLists), String.valueOf(timestamp));
-          status = new SegmentManager().updateSegments(identifier, updateSegmentsList);
+          status = SegmentManager.getInstance().updateSegments(identifier, updateSegmentsList);
         } else {
           LOGGER.error("Not able to acquire the lock.");
           status = false;
@@ -279,7 +279,7 @@ public final class CarbonDataMergerUtil {
     AbsoluteTableIdentifier identifier =
         carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable().getAbsoluteTableIdentifier();
     List<SegmentDetailVO> allSegments =
-        new SegmentManager().getAllSegments(identifier).getAllSegments();
+        SegmentManager.getInstance().getAllSegments(identifier).getAllSegments();
 
     long modificationOrDeletionTimeStamp = CarbonUpdateUtil.readCurrentTime();
     List<SegmentDetailVO> updatedDetailsList = new ArrayList<>();
@@ -302,7 +302,7 @@ public final class CarbonDataMergerUtil {
       }
     }
 
-    new SegmentManager().createNewSegment(identifier,
+    SegmentManager.getInstance().createNewSegment(identifier,
         new SegmentDetailVO().setSegmentId(mergedLoadNumber));
     // create entry for merged one.
     SegmentDetailVO detailVO = new SegmentDetailVO();
@@ -323,12 +323,7 @@ public final class CarbonDataMergerUtil {
     // put the merged folder entry
     updatedDetailsList.add(detailVO);
 
-    try {
-      tableStatusUpdationStatus = new SegmentManager().updateSegments(identifier, updatedDetailsList);
-    } catch (IOException e) {
-      LOGGER.error("Error while writing metadata");
-      tableStatusUpdationStatus = false;
-    }
+    tableStatusUpdationStatus = SegmentManager.getInstance().updateSegments(identifier, updatedDetailsList);
     return tableStatusUpdationStatus;
   }
 
@@ -873,7 +868,7 @@ public final class CarbonDataMergerUtil {
   public static List<Segment> getValidSegmentList(AbsoluteTableIdentifier absoluteTableIdentifier)
           throws IOException {
 
-    return new SegmentManager().getValidSegments(absoluteTableIdentifier).getValidSegments();
+    return SegmentManager.getInstance().getValidSegments(absoluteTableIdentifier).getValidSegments();
   }
 
 
@@ -1258,15 +1253,15 @@ public final class CarbonDataMergerUtil {
     AbsoluteTableIdentifier identifier = table.getAbsoluteTableIdentifier();
     try {
       List<SegmentDetailVO> allSegments =
-          new SegmentManager().getAllSegments(identifier).getAllSegments();
+          SegmentManager.getInstance().getAllSegments(identifier).getAllSegments();
 
       if (allSegments.size() > 0) {
         List<SegmentDetailVO> detailVOS = new ArrayList<>();
         detailVOS.add(new SegmentDetailVO().setSegmentId(allSegments.get(0).getSegmentId())
             .setUpdateStatusFilename(CarbonUpdateUtil.getUpdateStatusFileName(timestamp)));
-        new SegmentManager().updateSegments(identifier, detailVOS);
+        SegmentManager.getInstance().updateSegments(identifier, detailVOS);
       }
-    } catch (IOException e) {
+    } catch (Exception e) {
       return false;
     }
     return true;

@@ -198,7 +198,7 @@ case class CarbonAlterTableDropPartitionCommand(
     try {
       val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
       val absoluteTableIdentifier = carbonTable.getAbsoluteTableIdentifier
-      val segmentStatusManager = new SegmentManager()
+      val segmentStatusManager = SegmentManager.getInstance()
       val validSegments =
         segmentStatusManager.getValidSegments(absoluteTableIdentifier).getValidSegments.asScala
       val threadArray: Array[Thread] = new Array[Thread](validSegments.size)

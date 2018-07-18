@@ -35,7 +35,7 @@ import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.exception.ConcurrentOperationException
 import org.apache.carbondata.core.locks.{CarbonLockFactory, CarbonLockUtil, ICarbonLock, LockUsage}
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil}
 import org.apache.carbondata.events._
 
@@ -68,7 +68,7 @@ case class CarbonDropTableCommand(
                 CarbonLockUtil.getLockObject(identifier, lock)
       }
 
-      if (SegmentStatusManager.isLoadInProgressInTable(carbonTable)) {
+      if (SegmentManager.getInstance().isLoadInProgressInTable(carbonTable)) {
         throw new ConcurrentOperationException(carbonTable, "loading", "drop table")
       }
       LOGGER.audit(s"Deleting table [$tableName] under database [$dbName]")

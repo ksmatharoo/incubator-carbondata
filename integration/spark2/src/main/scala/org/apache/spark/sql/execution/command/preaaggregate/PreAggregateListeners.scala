@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution.command.preaaggregate
 
+import java.util
 import java.util.UUID
 
 import scala.collection.JavaConverters._
@@ -35,7 +36,7 @@ import org.apache.carbondata.core.datamap.{DataMapStoreManager, Segment}
 import org.apache.carbondata.core.datastore.filesystem.{CarbonFile, CarbonFileFilter}
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.schema.table.{AggregationDataMapSchema, CarbonTable}
-import org.apache.carbondata.core.statusmanager.{SegmentStatus, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{SegmentDetailVO, SegmentManager, SegmentStatus, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonUtil
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.events._
@@ -66,49 +67,16 @@ trait CommitHelper {
 
   val LOGGER: LogService = LogServiceFactory.getLogService(this.getClass.getName)
 
-  protected def markInProgressSegmentAsDeleted(tableStatusFile: String,
+  protected def markInProgressSegmentAsDeleted(uuid: String,
       operationContext: OperationContext,
       carbonTable: CarbonTable): Unit = {
-    val loadMetaDataDetails = SegmentStatusManager.readTableStatusFile(tableStatusFile)
     val segmentBeingLoaded =
       operationContext.getProperty(carbonTable.getTableUniqueName + "_Segment").toString
-    val newDetails = loadMetaDataDetails.collect {
-      case detail if detail.getLoadName.equalsIgnoreCase(segmentBeingLoaded) =>
-        detail.setSegmentStatus(SegmentStatus.MARKED_FOR_DELETE)
-        detail
-      case others => others
-    }
-    SegmentStatusManager.writeLoadDetailsIntoFile(tableStatusFile, newDetails)
-  }
-
-  /**
-   *  Used to rename table status files for commit operation.
-   */
-  protected def renameDataMapTableStatusFiles(sourceFileName: String,
-      destinationFileName: String, uuid: String): Boolean = {
-    val oldCarbonFile = FileFactory.getCarbonFile(sourceFileName)
-    val newCarbonFile = FileFactory.getCarbonFile(destinationFileName)
-    if (oldCarbonFile.exists() && newCarbonFile.exists()) {
-      val backUpPostFix = if (uuid.nonEmpty) {
-        "_backup_" + uuid
-      } else {
-        ""
-      }
-      LOGGER.info(s"Renaming $newCarbonFile to ${destinationFileName + backUpPostFix}")
-      if (newCarbonFile.renameForce(destinationFileName + backUpPostFix)) {
-        LOGGER.info(s"Renaming $oldCarbonFile to $destinationFileName")
-        oldCarbonFile.renameForce(destinationFileName)
-      } else {
-        LOGGER.info(s"Renaming $newCarbonFile to ${destinationFileName + backUpPostFix} failed")
-        false
-      }
-    } else {
-     /**
-      * Tablestatus_uuid will fail when Pre-Aggregate table is not valid for compaction.
-      * Hence this should return true
-      */
-      true
-    }
+    val detailVoes = new util.ArrayList[SegmentDetailVO]()
+    detailVoes.add(new SegmentDetailVO().setSegmentId(segmentBeingLoaded)
+      .setTransactionId(uuid)
+      .setStatus(SegmentStatus.MARKED_FOR_DELETE.toString))
+    SegmentManager.getInstance().updateSegments(carbonTable.getAbsoluteTableIdentifier, detailVoes)
   }
 
   /**
@@ -148,31 +116,8 @@ object AlterTableDropPartitionPostStatusListener extends OperationEventListener 
       val childCommands =
         childDropPartitionCommands.asInstanceOf[Seq[CarbonAlterTableDropHivePartitionCommand]]
       val updateFailed = try {
-        val renamedDataMaps = childCommands.takeWhile {
-          childCommand =>
-            val childCarbonTable = childCommand.table
-            val oldTableSchemaPath = CarbonTablePath.getTableStatusFilePathWithUUID(
-              childCarbonTable.getTablePath, uuid)
-            // Generate table status file name without UUID, forExample: tablestatus
-            val newTableSchemaPath = CarbonTablePath.getTableStatusFilePath(
-              childCarbonTable.getTablePath)
-            renameDataMapTableStatusFiles(oldTableSchemaPath, newTableSchemaPath, uuid)
-        }
-        // if true then the commit for one of the child tables has failed
-        val commitFailed = renamedDataMaps.lengthCompare(childCommands.length) != 0
-        if (commitFailed) {
-          LOGGER.info("Reverting table status file to original state")
-          renamedDataMaps.foreach {
-            command =>
-              val carbonTable = command.table
-              // rename the backup tablestatus i.e tablestatus_backup_UUID to tablestatus
-              val backupTableSchemaPath =
-                CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath) + "_backup_" + uuid
-              val tableSchemaPath = CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath)
-              renameDataMapTableStatusFiles(backupTableSchemaPath, tableSchemaPath, "")
-          }
-        }
-        commitFailed
+        val childTablesIdents = childCommands.map(_.table.getAbsoluteTableIdentifier)
+        SegmentManager.getInstance().commitTransaction(childTablesIdents.asJava, uuid)
       } finally {
         // after success/failure of commit delete all tablestatus files with UUID in their names.
         // if commit failed then remove the segment directory
@@ -546,33 +491,9 @@ object CommitPreAggregateListener extends OperationEventListener with CommitHelp
       if (dataMapSchemas.nonEmpty) {
         val uuid = operationContext.getProperty("uuid").toString
         // keep committing until one fails
-        val renamedDataMaps = childLoadCommands.takeWhile { childLoadCommand =>
-          val childCarbonTable = childLoadCommand.table
-          // Generate table status file name with UUID, forExample: tablestatus_1
-          val oldTableSchemaPath = CarbonTablePath.getTableStatusFilePathWithUUID(
-            childCarbonTable.getTablePath, uuid)
-          // Generate table status file name without UUID, forExample: tablestatus
-          val newTableSchemaPath = CarbonTablePath.getTableStatusFilePath(
-            childCarbonTable.getTablePath)
-          renameDataMapTableStatusFiles(oldTableSchemaPath, newTableSchemaPath, uuid)
-        }
+        val childTableIdents = childLoadCommands.map(_.table.getAbsoluteTableIdentifier)
         // if true then the commit for one of the child tables has failed
-        commitFailed = renamedDataMaps.lengthCompare(dataMapSchemas.length) != 0
-        if (commitFailed) {
-          LOGGER.warn("Reverting table status file to original state")
-          renamedDataMaps.foreach {
-            loadCommand =>
-              val carbonTable = loadCommand.table
-              // rename the backup tablestatus i.e tablestatus_backup_UUID to tablestatus
-              val backupTableSchemaPath =
-                CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath) + "_backup_" +
-                uuid
-              val tableSchemaPath = CarbonTablePath
-                .getTableStatusFilePath(carbonTable.getTablePath)
-              markInProgressSegmentAsDeleted(backupTableSchemaPath, operationContext, carbonTable)
-              renameDataMapTableStatusFiles(backupTableSchemaPath, tableSchemaPath, "")
-          }
-        }
+        SegmentManager.getInstance().commitTransaction(childTableIdents.asJava, uuid)
         // after success/failure of commit delete all tablestatus files with UUID in their names.
         // if commit failed then remove the segment directory
         cleanUpStaleTableStatusFiles(childLoadCommands.map(_.table),

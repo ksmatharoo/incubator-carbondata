@@ -125,7 +125,7 @@ class MajorCompactionIgnoreInMinorTest extends QueryTest with BeforeAndAfterAll 
     )
     val absoluteTableIdentifier = carbonTable
       .getAbsoluteTableIdentifier
-    val segmentStatusManager = new SegmentManager()
+    val segmentStatusManager = SegmentManager.getInstance()
 
     // merged segment should not be there
     val segments = segmentStatusManager.getValidSegments(absoluteTableIdentifier).getValidSegments.asScala.map(_.getSegmentNo).toList
@@ -167,7 +167,7 @@ class MajorCompactionIgnoreInMinorTest extends QueryTest with BeforeAndAfterAll 
       "testmajor"
     )
     val absoluteTableIdentifier = carbonTable.getAbsoluteTableIdentifier
-    val segmentStatusManager = new SegmentManager()
+    val segmentStatusManager = SegmentManager.getInstance()
 
     // merged segment should not be there
     val segments = segmentStatusManager.getValidSegments(absoluteTableIdentifier).getValidSegments.asScala.map(_.getSegmentNo).toList

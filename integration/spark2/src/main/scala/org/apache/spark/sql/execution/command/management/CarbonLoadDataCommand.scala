@@ -257,16 +257,16 @@ case class CarbonLoadDataCommand(
         LOGGER.info(s"Initiating Direct Load for the Table : ($dbName.$tableName)")
         concurrentLoadLock = acquireConcurrentLoadLock()
         // Clean up the old invalid segment data before creating a new entry for new load.
-        new SegmentManager().deleteLoadsAndUpdateMetadata(table, false, currPartitions)
+        SegmentManager.getInstance().deleteLoadsAndUpdateMetadata(table, false, currPartitions)
         // add the start entry for the new load in the table status file
         if (updateModel.isEmpty && !table.isHivePartitionTable) {
           if (isOverwriteTable) {
             carbonLoadModel.setCurrentDetailVO(
-              new SegmentManager().createNewOverwriteSegment(
+              SegmentManager.getInstance().createNewOverwriteSegment(
                 table.getAbsoluteTableIdentifier, new SegmentDetailVO))
           } else {
             carbonLoadModel.setCurrentDetailVO(
-              new SegmentManager().createNewSegment(
+              SegmentManager.getInstance().createNewSegment(
                 table.getAbsoluteTableIdentifier, new SegmentDetailVO))
           }
           isUpdateTableStatusRequired = true
@@ -342,7 +342,7 @@ case class CarbonLoadDataCommand(
               SegmentManagerHelper.updateFailStatusAndGetSegmentVO(
                 carbonLoadModel.getSegmentId,
                 uuid)
-            new SegmentManager().commitLoadSegment(table.getAbsoluteTableIdentifier, detailVO)
+            SegmentManager.getInstance().commitLoadSegment(table.getAbsoluteTableIdentifier, detailVO)
           }
           LOGGER.error(ex, s"Dataload failure for $dbName.$tableName")
           throw new RuntimeException(s"Dataload failure for $dbName.$tableName, ${ex.getMessage}")
@@ -357,7 +357,7 @@ case class CarbonLoadDataCommand(
               SegmentManagerHelper.updateFailStatusAndGetSegmentVO(
                 carbonLoadModel.getSegmentId,
                 uuid)
-            new SegmentManager().commitLoadSegment(table.getAbsoluteTableIdentifier, detailVO)
+            SegmentManager.getInstance().commitLoadSegment(table.getAbsoluteTableIdentifier, detailVO)
           }
           LOGGER.audit(s"Dataload failure for $dbName.$tableName. Please check the logs")
           throw ex
@@ -775,10 +775,10 @@ case class CarbonLoadDataCommand(
       }
       // Create and update the status of segment to the tablestatus.
       if (isOverwriteTable) {
-        new SegmentManager().createNewOverwriteSegment(
+        SegmentManager.getInstance().createNewOverwriteSegment(
           table.getAbsoluteTableIdentifier, new SegmentDetailVO)
       } else {
-        new SegmentManager().createNewSegment(table.getAbsoluteTableIdentifier, new SegmentDetailVO)
+        SegmentManager.getInstance().createNewSegment(table.getAbsoluteTableIdentifier, new SegmentDetailVO)
       }
       val convertRelation = convertToLogicalRelation(
         catalogTable,

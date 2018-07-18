@@ -170,7 +170,7 @@ public class SearchRequestHandler {
     List<Segment> segments = new LinkedList<>();
     HashMap<String, Integer> uniqueSegments = new HashMap<>();
     SegmentsHolder segmentsHolder =
-        new SegmentManager().getAllSegments(table.getAbsoluteTableIdentifier());
+        SegmentManager.getInstance().getAllSegments(table.getAbsoluteTableIdentifier());
     for (CarbonInputSplit split : mbSplit.getAllSplits()) {
       String segmentId =
           Segment.getSegment(split.getSegmentId(), segmentsHolder.getValidSegments()).toString();

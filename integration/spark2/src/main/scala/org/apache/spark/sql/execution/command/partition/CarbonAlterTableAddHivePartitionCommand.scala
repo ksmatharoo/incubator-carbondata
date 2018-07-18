@@ -132,7 +132,7 @@ case class CarbonAlterTableAddHivePartitionCommand(
             loadModel.getSegmentId,
             SegmentStatus.INSERT_IN_PROGRESS,
             loadModel.getFactTimeStamp)
-        val newSegment = new SegmentManager()
+        val newSegment = SegmentManager.getInstance()
           .createNewSegment(loadModel.getCarbonDataLoadSchema.getCarbonTable
             .getAbsoluteTableIdentifier, segmentVO)
         loadModel.setCurrentDetailVO(newSegment)
@@ -151,7 +151,7 @@ case class CarbonAlterTableAddHivePartitionCommand(
         // Add size to the entry
         CarbonLoaderUtil.addDataIndexSizeIntoMetaEntry(detailVO, loadModel.getSegmentId, table)
         // Make the load as success in table status
-        new SegmentManager().commitLoadSegment(table.getAbsoluteTableIdentifier, detailVO)
+        SegmentManager.getInstance().commitLoadSegment(table.getAbsoluteTableIdentifier, detailVO)
       }
     }
     Seq.empty[Row]

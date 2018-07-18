@@ -81,12 +81,14 @@ class AggregateDataMapCompactor(carbonLoadModel: CarbonLoadModel,
           "true")
         loadCommand.processData(sqlContext.sparkSession)
         val updatedSegs = loadMetaDataDetails.asScala.map{seg =>
-          new SegmentDetailVO().
-            setSegmentId(seg.getSegmentId).
-            setStatus(SegmentStatus.COMPACTED.toString).
-            setModificationOrDeletionTimestamp(System.currentTimeMillis())
+          new SegmentDetailVO()
+            .setSegmentId(seg.getSegmentId)
+            .setMergedSegmentIds(mergedLoadName)
+            .setStatus(SegmentStatus.COMPACTED.toString)
+            .setModificationOrDeletionTimestamp(System.currentTimeMillis())
+            .setTransactionId(uuid)
         }.toList.asJava
-        new SegmentManager().updateSegments(carbonTable.getAbsoluteTableIdentifier,
+        SegmentManager.getInstance().updateSegments(carbonTable.getAbsoluteTableIdentifier,
           new util.ArrayList[SegmentDetailVO](updatedSegs))
       } finally {
         // check if any other segments needs compaction on in case of MINOR_COMPACTION.
@@ -107,12 +109,8 @@ class AggregateDataMapCompactor(carbonLoadModel: CarbonLoadModel,
         if (!compactionModel.compactionType.equals(CompactionType.MAJOR) &&
           !compactionModel.compactionType.equals(CompactionType.CUSTOM)) {
           if (!identifySegmentsToBeMerged().isEmpty) {
-            val uuidTableStaus = CarbonTablePath.getTableStatusFilePathWithUUID(
-              carbonTable.getTablePath, uuid)
-            val tableStatus = CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath)
-            if (!uuidTableStaus.equalsIgnoreCase(tableStatus)) {
-              FileFactory.getCarbonFile(uuidTableStaus).renameForce(tableStatus)
-            }
+            SegmentManager.getInstance().commitTransaction(
+              Seq(carbonTable.getAbsoluteTableIdentifier).asJava, uuid)
             executeCompaction()
           }
         }

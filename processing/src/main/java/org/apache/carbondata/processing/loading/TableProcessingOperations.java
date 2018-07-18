@@ -57,7 +57,7 @@ public class TableProcessingOperations {
   public static void deletePartialLoadDataIfExist(CarbonTable carbonTable,
       final boolean isCompactionFlow) throws IOException {
     final List<SegmentDetailVO> details =
-        new SegmentManager().getAllSegments(carbonTable.getAbsoluteTableIdentifier())
+        SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier())
             .getAllSegments();
 
     //delete folder which metadata no exist in tablestatus

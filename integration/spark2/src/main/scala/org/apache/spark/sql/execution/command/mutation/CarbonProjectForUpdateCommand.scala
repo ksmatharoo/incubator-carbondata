@@ -34,7 +34,7 @@ import org.apache.carbondata.core.features.TableOperation
 import org.apache.carbondata.core.locks.{CarbonLockFactory, CarbonLockUtil, LockUsage}
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.events.{OperationContext, OperationListenerBus, UpdateTablePostEvent, UpdateTablePreEvent}
 import org.apache.carbondata.processing.loading.FailureCauses
@@ -73,7 +73,7 @@ private[sql] case class CarbonProjectForUpdateCommand(
     if (SegmentStatusManager.isCompactionInProgress(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "compaction", "data update")
     }
-    if (SegmentStatusManager.isLoadInProgressInTable(carbonTable)) {
+    if (SegmentManager.getInstance().isLoadInProgressInTable(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "loading", "data update")
     }
 

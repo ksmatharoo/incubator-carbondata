@@ -180,7 +180,7 @@ abstract class LuceneDataMapFactoryBase<T extends DataMap> extends DataMapFactor
   private void deleteDatamap() throws MalformedDataMapCommandException {
     try {
       List<Segment> validSegments =
-          new SegmentManager().getValidSegments(getCarbonTable().getAbsoluteTableIdentifier())
+          SegmentManager.getInstance().getValidSegments(getCarbonTable().getAbsoluteTableIdentifier())
               .getValidSegments();
       for (Segment segment : validSegments) {
         deleteDatamapData(segment);

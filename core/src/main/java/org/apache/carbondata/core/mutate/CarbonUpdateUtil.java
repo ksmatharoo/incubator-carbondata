@@ -40,13 +40,17 @@ import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.mutate.data.BlockMappingVO;
 import org.apache.carbondata.core.mutate.data.RowCountDetailsVO;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
+import org.apache.carbondata.core.statusmanager.SegmentDetailVO;
+import org.apache.carbondata.core.statusmanager.SegmentManager;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager;
+import org.apache.carbondata.core.statusmanager.SegmentsHolder;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.fs.Path;
 
 /**
@@ -137,7 +141,7 @@ public class CarbonUpdateUtil {
           if (index != -1) {
             // update the element in existing list.
             SegmentUpdateDetails blockDetail = oldList.get(index);
-            if (blockDetail.getDeleteDeltaStartTimestamp().isEmpty() || (isCompaction == true)) {
+            if (blockDetail.getDeleteDeltaStartTimestamp().isEmpty() || isCompaction) {
               blockDetail
                   .setDeleteDeltaStartTimestamp(newBlockEntry.getDeleteDeltaStartTimestamp());
             }
@@ -199,90 +203,75 @@ public class CarbonUpdateUtil {
       CarbonTable table, String updatedTimeStamp, boolean isTimestampUpdationRequired,
       List<Segment> segmentsToBeDeleted, List<Segment> segmentFilesTobeUpdated, String uuid) {
 
-    boolean status = false;
-    String metaDataFilepath = table.getMetadataPath();
-    AbsoluteTableIdentifier identifier = table.getAbsoluteTableIdentifier();
-    String tableStatusPath =
-        CarbonTablePath.getTableStatusFilePathWithUUID(identifier.getTablePath(), uuid);
-    SegmentStatusManager segmentStatusManager = new SegmentStatusManager(identifier);
+    List<SegmentDetailVO> updateSegments = new ArrayList<>();
 
-    ICarbonLock carbonLock = segmentStatusManager.getTableStatusLock();
-    boolean lockStatus = false;
-    try {
-      lockStatus = carbonLock.lockWithRetries();
-      if (lockStatus) {
-        LOGGER.info(
-                "Acquired lock for table" + table.getDatabaseName() + "." + table.getTableName()
-                        + " for table status updation");
+    if (isTimestampUpdationRequired) {
+      // we are storing the link between the 2 status files in the segment 0 only.
+      updateSegments.add(new SegmentDetailVO().setSegmentId("0")
+          .setUpdateStatusFilename(CarbonUpdateUtil.getUpdateStatusFileName(updatedTimeStamp)));
 
-        LoadMetadataDetails[] listOfLoadFolderDetailsArray =
-                SegmentStatusManager.readLoadMetadata(metaDataFilepath);
-
-        for (LoadMetadataDetails loadMetadata : listOfLoadFolderDetailsArray) {
-
-          if (isTimestampUpdationRequired) {
-            // we are storing the link between the 2 status files in the segment 0 only.
-            if (loadMetadata.getLoadName().equalsIgnoreCase("0")) {
-              loadMetadata.setUpdateStatusFileName(
-                      CarbonUpdateUtil.getUpdateStatusFileName(updatedTimeStamp));
-            }
-
-            // if the segments is in the list of marked for delete then update the status.
-            if (segmentsToBeDeleted.contains(new Segment(loadMetadata.getLoadName(), null))) {
-              loadMetadata.setSegmentStatus(SegmentStatus.MARKED_FOR_DELETE);
-              loadMetadata.setModificationOrdeletionTimesStamp(Long.parseLong(updatedTimeStamp));
-            }
-          }
-          for (Segment segName : updatedSegmentsList) {
-            if (loadMetadata.getLoadName().equalsIgnoreCase(segName.getSegmentNo())) {
-              // if this call is coming from the delete delta flow then the time stamp
-              // String will come empty then no need to write into table status file.
-              if (isTimestampUpdationRequired) {
-                loadMetadata.setIsDeleted(CarbonCommonConstants.KEYWORD_TRUE);
-                // if in case of update flow.
-                if (loadMetadata.getUpdateDeltaStartTimestamp().isEmpty()) {
-                  // this means for first time it is getting updated .
-                  loadMetadata.setUpdateDeltaStartTimestamp(updatedTimeStamp);
-                }
-                // update end timestamp for each time.
-                loadMetadata.setUpdateDeltaEndTimestamp(updatedTimeStamp);
-              }
-              if (segmentFilesTobeUpdated
-                  .contains(Segment.toSegment(loadMetadata.getLoadName(), null))) {
-                loadMetadata.setSegmentFile(loadMetadata.getLoadName() + "_" + updatedTimeStamp
-                    + CarbonTablePath.SEGMENT_EXT);
-              }
-            }
-          }
-        }
-
-        try {
-          SegmentStatusManager
-                  .writeLoadDetailsIntoFile(tableStatusPath, listOfLoadFolderDetailsArray);
-        } catch (IOException e) {
-          return false;
-        }
-
-        status = true;
-      } else {
-        LOGGER.error("Not able to acquire the lock for Table status updation for table " + table
-                .getDatabaseName() + "." + table.getTableName());
-      }
-    } finally {
-      if (lockStatus) {
-        if (carbonLock.unlock()) {
-          LOGGER.info(
-                 "Table unlocked successfully after table status updation" + table.getDatabaseName()
-                          + "." + table.getTableName());
+      for (Segment segment : segmentsToBeDeleted) {
+        SegmentDetailVO detailVO = new SegmentDetailVO().setSegmentId(segment.getSegmentNo());
+        int index = updateSegments.indexOf(detailVO);
+        if (index >= 0) {
+          detailVO = updateSegments.get(index);
         } else {
-          LOGGER.error(
-                  "Unable to unlock Table lock for table" + table.getDatabaseName() + "." + table
-                          .getTableName() + " during table status updation");
+          updateSegments.add(detailVO);
         }
+        detailVO.setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
+            .setModificationOrDeletionTimestamp(Long.parseLong(updatedTimeStamp));
+      }
+
+    }
+
+    SegmentsHolder segments =
+        SegmentManager.getInstance().getAllSegments(table.getAbsoluteTableIdentifier());
+
+    for (Segment segment : updatedSegmentsList) {
+      SegmentDetailVO detailVO = new SegmentDetailVO().setSegmentId(segment.getSegmentNo());
+      int index = updateSegments.indexOf(detailVO);
+      if (index >= 0) {
+        detailVO = updateSegments.get(index);
+      } else {
+        updateSegments.add(detailVO);
+      }
+
+      // if this call is coming from the delete delta flow then the time stamp
+      // String will come empty then no need to write into table status file.
+      if (isTimestampUpdationRequired) {
+        detailVO.setIsDeleted(true);
+        SegmentDetailVO storedVO = segments.getSegmentDetailVO(segment.getSegmentNo());
+        // if in case of update flow.
+        if (storedVO.getUpdateDeltaStartTimestamp() == null) {
+          // this means for first time it is getting updated .
+          detailVO.setUpdateDeltaStartTimestamp(Long.parseLong(updatedTimeStamp));
+        }
+        // update end timestamp for each time.
+        detailVO.setUpdateDeltaEndTimestamp(Long.parseLong(updatedTimeStamp));
       }
     }
-    return status;
 
+    for (Segment segment : segmentFilesTobeUpdated) {
+      SegmentDetailVO detailVO = new SegmentDetailVO().setSegmentId(segment.getSegmentNo());
+      int index = updateSegments.indexOf(detailVO);
+      if (index >= 0) {
+        detailVO = updateSegments.get(index);
+      } else {
+        updateSegments.add(detailVO);
+      }
+
+      detailVO.setSegmentFileName(
+          SegmentFileStore.genSegmentFileName(segment.getSegmentNo(), updatedTimeStamp)
+              + CarbonTablePath.SEGMENT_EXT);
+    }
+    if (StringUtils.isNotEmpty(uuid)) {
+      for (SegmentDetailVO segment : updateSegments) {
+        segment.setTransactionId(uuid);
+      }
+    }
+    boolean status= SegmentManager.getInstance()
+        .updateSegments(table.getAbsoluteTableIdentifier(), updateSegments);
+    return status;
   }
 
   /**
@@ -457,7 +446,7 @@ public class CarbonUpdateUtil {
     for (LoadMetadataDetails segment : details) {
 
       // take the update status file name from 0th segment.
-      validUpdateStatusFile = ssm.getUpdateStatusFileName(details);
+      validUpdateStatusFile = getUpdateStatusFileName(details);
 
       // if this segment is valid then only we will go for delta file deletion.
       // if the segment is mark for delete or compacted then any way it will get deleted.
@@ -601,6 +590,26 @@ public class CarbonUpdateUtil {
         compareTimestampsAndDelete(invalidFile, forceDelete, true);
       }
     }
+  }
+
+  /**
+   * This API will return the update status file name.
+   * @param segmentList
+   * @return
+   */
+  private static String getUpdateStatusFileName(LoadMetadataDetails[] segmentList) {
+    if (segmentList.length == 0) {
+      return "";
+    }
+    else {
+      for (LoadMetadataDetails eachSeg : segmentList) {
+        // file name stored in 0th segment.
+        if (eachSeg.getLoadName().equalsIgnoreCase("0")) {
+          return eachSeg.getUpdateStatusFileName();
+        }
+      }
+    }
+    return "";
   }
 
   /**

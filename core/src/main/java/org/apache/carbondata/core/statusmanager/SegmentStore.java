@@ -55,6 +55,15 @@ public interface SegmentStore {
   boolean updateSegments(AbsoluteTableIdentifier identifier, List<SegmentDetailVO> detailVOS);
 
   /**
+   * Here commit transaction only means make the transaction id inside SegmentDetailVO as null so
+   * that it is available for reading
+   * @param identifiers
+   * @param uuid
+   * @return
+   */
+  boolean commitTransaction(List<AbsoluteTableIdentifier> identifiers, String uuid);
+
+  /**
    * Delete all segments for the corresponding table. It happens during drop table.
    *
    * @param identifier

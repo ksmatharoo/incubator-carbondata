@@ -222,7 +222,7 @@ case class RefreshCarbonTableCommand(
       absIdentifier: AbsoluteTableIdentifier,
       sparkSession: SparkSession): Unit = {
     val metadataDetails =
-      new SegmentManager().getValidSegments(absIdentifier).getValidSegments.asScala
+      SegmentManager.getInstance().getValidSegments(absIdentifier).getValidSegments.asScala
     // First read all partition information from each segment.
     val allpartitions = metadataDetails.map{ seg =>
       val mapper = new SegmentFileStore(absIdentifier.getTablePath, seg.getSegmentFileName)

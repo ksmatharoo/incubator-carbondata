@@ -60,7 +60,7 @@ class DeleteCarbonTableSubqueryTestCase extends Spark2QueryTest with BeforeAndAf
 
   override def afterAll {
     sql("drop table if exists iud_db_sub.source2")
-    sql("drop database  if exists iud_db_sub cascade")
+//    sql("drop database  if exists iud_db_sub cascade")
     sql("use default")
   }
 }

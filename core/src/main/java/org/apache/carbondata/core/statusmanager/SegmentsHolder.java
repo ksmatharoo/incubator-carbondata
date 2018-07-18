@@ -100,4 +100,13 @@ public class SegmentsHolder implements Serializable {
   public List<SegmentDetailVO> getAllSegments() {
     return allSegments;
   }
+
+  public SegmentDetailVO getSegmentDetailVO(String segmentId) {
+    for (SegmentDetailVO segment : allSegments) {
+      if (segment.getSegmentId().equals(segmentId)) {
+        return segment;
+      }
+    }
+    return null;
+  }
 }

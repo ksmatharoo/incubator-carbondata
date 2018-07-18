@@ -200,14 +200,6 @@ public class CarbonTablePath {
     return getMetadataPath(tablePath) + File.separator + TABLE_STATUS_FILE;
   }
 
-  public static String getTableStatusFilePathWithUUID(String tablePath, String uuid) {
-    if (!uuid.isEmpty()) {
-      return getTableStatusFilePath(tablePath) + CarbonCommonConstants.UNDERSCORE + uuid;
-    } else {
-      return getTableStatusFilePath(tablePath);
-    }
-  }
-
   /**
    * Below method will be used to get the index file present in the segment folder
    * based on task id

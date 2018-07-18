@@ -52,7 +52,7 @@ class CarbonTableCompactor(carbonLoadModel: CarbonLoadModel,
 
   override def executeCompaction(): Unit = {
     val allSegments =
-      new SegmentManager().getAllSegments(
+      SegmentManager.getInstance().getAllSegments(
         carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.getAbsoluteTableIdentifier).
         getAllSegments
     CarbonDataMergerUtil.sortSegments(allSegments)
@@ -74,7 +74,7 @@ class CarbonTableCompactor(carbonLoadModel: CarbonLoadModel,
       }
 
       // scan again and determine if anything is there to merge again.
-      var segList = new SegmentManager().getAllSegments(
+      var segList = SegmentManager.getInstance().getAllSegments(
         carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.getAbsoluteTableIdentifier).
         getAllSegments
       // in case of major compaction we will scan only once and come out as it will keep

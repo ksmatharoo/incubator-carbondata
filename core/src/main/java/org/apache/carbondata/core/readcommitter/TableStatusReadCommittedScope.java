@@ -94,7 +94,7 @@ public class TableStatusReadCommittedScope implements ReadCommittedScope {
   @Override public void takeCarbonIndexFileSnapShot() throws IOException {
     // Only Segment Information is updated.
     // File information will be fetched on the fly according to the fecthed segment info.
-    this.segmentsHolder = new SegmentManager().getAllSegments(identifier);
+    this.segmentsHolder = SegmentManager.getInstance().getAllSegments(identifier);
     this.segmentsHolder.setReadCommittedScope(this);
   }
 

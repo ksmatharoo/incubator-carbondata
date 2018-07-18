@@ -719,7 +719,7 @@ case class CarbonPreAggregateQueryRules(sparkSession: SparkSession) extends Rule
    */
   def setSegmentsForStreaming(parentTable: CarbonTable, dataMapSchema: DataMapSchema): Unit = {
     val mainTableKey = parentTable.getDatabaseName + '.' + parentTable.getTableName
-    val factManager = new SegmentManager()
+    val factManager = SegmentManager.getInstance()
     CarbonSession
       .threadSet(CarbonCommonConstantsInternal.QUERY_ON_PRE_AGG_STREAMING + mainTableKey, "true")
     CarbonSession
@@ -736,7 +736,7 @@ case class CarbonPreAggregateQueryRules(sparkSession: SparkSession) extends Rule
     val catalog = CarbonEnv.getInstance(sparkSession).carbonMetastore
     val carbonRelation =
       catalog.lookupRelation(identifier)(sparkSession).asInstanceOf[CarbonRelation]
-    val segmentStatusManager = new SegmentManager()
+    val segmentStatusManager = SegmentManager.getInstance()
     val validSegments = segmentStatusManager.getValidSegments(carbonRelation.carbonTable
       .getAbsoluteTableIdentifier).getValidSegments.asScala
       .mkString(",")

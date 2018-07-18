@@ -93,7 +93,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
       }
       SegmentDetailVO segmentVO = SegmentManagerHelper
           .createSegmentVO(loadModel.getSegmentId(), status, loadModel.getFactTimeStamp());
-      SegmentDetailVO newSegment = new SegmentManager().createNewSegment(identifier, segmentVO);
+      SegmentDetailVO newSegment = SegmentManager.getInstance().createNewSegment(identifier, segmentVO);
       loadModel.setCurrentDetailVO(newSegment);
     }
     // Take segment lock
@@ -173,7 +173,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
           overwritePartitions(loadModel, currentDetailVO);
         }
       } else {
-        new SegmentManager().commitLoadSegment(
+        SegmentManager.getInstance().commitLoadSegment(
             carbonTable.getAbsoluteTableIdentifier(),
             currentDetailVO);
       }
@@ -194,7 +194,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
           context.getConfiguration().get(CarbonTableOutputFormat.SEGMENTS_TO_BE_DELETED, "");
       List<Segment> segmentDeleteList = Segment.toSegmentList(segmentsToBeDeleted.split(","), null);
       Set<Segment> segmentSet = new HashSet<>(
-          new SegmentManager().getValidSegments(carbonTable.getAbsoluteTableIdentifier())
+          SegmentManager.getInstance().getValidSegments(carbonTable.getAbsoluteTableIdentifier())
               .getValidSegments());
       if (updateTime != null) {
         CarbonUpdateUtil.updateTableMetadataStatus(segmentSet, carbonTable, updateTime, true,
@@ -203,7 +203,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
     } else {
       SegmentDetailVO detailVO = SegmentManagerHelper
           .updateFailStatusAndGetSegmentVO(loadModel.getSegmentId(), uuid);
-      new SegmentManager().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier(), detailVO);
+      SegmentManager.getInstance().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier(), detailVO);
     }
     if (segmentLock != null) {
       segmentLock.unlock();
@@ -229,7 +229,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
    */
   private boolean overwritePartitions(CarbonLoadModel loadModel, SegmentDetailVO detailVO) throws IOException {
     CarbonTable table = loadModel.getCarbonDataLoadSchema().getCarbonTable();
-    return new SegmentManager()
+    return SegmentManager.getInstance()
         .commitOverwritePartitionSegment(table.getAbsoluteTableIdentifier(), detailVO);
   }
 
@@ -272,7 +272,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
           }
         }
       }
-      new SegmentManager().commitLoadSegment(
+      SegmentManager.getInstance().commitLoadSegment(
           loadModel.getCarbonDataLoadSchema().getCarbonTable().getAbsoluteTableIdentifier(),
           detailVO);
       // Clean the temp files

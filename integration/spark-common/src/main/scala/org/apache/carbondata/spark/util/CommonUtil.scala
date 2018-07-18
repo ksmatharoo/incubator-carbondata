@@ -675,7 +675,7 @@ object CommonUtil {
                 try {
                   val carbonTable = CarbonMetadata.getInstance
                     .getCarbonTable(tableUniqueName)
-                  new SegmentManager().deleteLoadsAndUpdateMetadata(carbonTable, true, null)
+                  SegmentManager.getInstance().deleteLoadsAndUpdateMetadata(carbonTable, true, null)
                 } catch {
                   case _: Exception =>
                     LOGGER.warn(s"Error while cleaning table " +

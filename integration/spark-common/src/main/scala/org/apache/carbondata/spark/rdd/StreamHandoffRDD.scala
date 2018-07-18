@@ -222,7 +222,7 @@ object StreamHandoffRDD {
 
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
 
-  private val manager = new SegmentManager()
+  private val manager = SegmentManager.getInstance()
 
   def iterateStreamingHandoff(
       carbonLoadModel: CarbonLoadModel,

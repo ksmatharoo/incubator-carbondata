@@ -41,18 +41,37 @@ import org.apache.carbondata.core.scan.expression.LiteralExpression;
 import org.apache.carbondata.core.scan.expression.conditional.EqualToExpression;
 import org.apache.carbondata.core.scan.expression.conditional.InExpression;
 import org.apache.carbondata.core.scan.expression.conditional.ListExpression;
+import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.DeleteLoadFolders;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 
 /**
  * Manages the segments of a table.
  */
-public class SegmentManager {
+public final class SegmentManager {
 
   private static final LogService LOGGER =
       LogServiceFactory.getLogService(SegmentManager.class.getName());
 
   private SegmentStore segmentStore = new FileBasedSegmentStore();
+
+  private static SegmentManager instance;
+
+  private static final Object lock = new Object();
+
+  private SegmentManager() {
+  }
+
+  public static SegmentManager getInstance() {
+    if (instance == null) {
+      synchronized (lock) {
+        if (instance == null) {
+          instance = new SegmentManager();
+        }
+      }
+    }
+    return instance;
+  }
 
   public SegmentDetailVO createNewOverwriteSegment(AbsoluteTableIdentifier identifier,
       SegmentDetailVO detailVO) {
@@ -114,7 +133,7 @@ public class SegmentManager {
   /**
    * Return true if the specified `loadName` is in progress, by checking the load lock.
    */
-  public static Boolean isLoadInProgress(AbsoluteTableIdentifier absoluteTableIdentifier,
+  private static Boolean isLoadInProgress(AbsoluteTableIdentifier absoluteTableIdentifier,
       String loadName) {
     ICarbonLock segmentLock = CarbonLockFactory.getCarbonLockObj(absoluteTableIdentifier,
         CarbonTablePath.addSegmentPrefix(loadName) + LockUsage.LOCK);
@@ -264,16 +283,19 @@ public class SegmentManager {
     }
   }
 
-  public boolean updateSegments(AbsoluteTableIdentifier identifier, List<SegmentDetailVO> detailVOs)
-      throws IOException {
+  public boolean updateSegments(AbsoluteTableIdentifier identifier,
+      List<SegmentDetailVO> detailVOs) {
     for (SegmentDetailVO detailVO : detailVOs) {
       if (detailVO.getSegmentId() == null) {
         throw new UnsupportedOperationException("SegmentId cannot be null during commit");
       }
     }
 
-    boolean status = segmentStore.updateSegments(identifier, detailVOs);
-    return status;
+    return segmentStore.updateSegments(identifier, detailVOs);
+  }
+
+  public boolean commitTransaction(List<AbsoluteTableIdentifier> identifiers, String uuid) {
+    return segmentStore.commitTransaction(identifiers, uuid);
   }
 
   /**
@@ -377,35 +399,111 @@ public class SegmentManager {
   }
 
   /**
+   * Removes/invalidates all the segments which are passed.
+   *
+   * @param identifier
+   * @param segmentIds
+   * @return
+   */
+  public List<String> deleteSegmentBySegmentIds(AbsoluteTableIdentifier identifier,
+      List<String> segmentIds) {
+    SegmentsHolder segments = getAllSegments(identifier);
+    List<SegmentDetailVO> updateSegments = new ArrayList<>();
+    List<String> invalidSegmentIds = new ArrayList<>();
+    for (String segmentId : segmentIds) {
+      SegmentDetailVO detailVO = segments.getSegmentDetailVO(segmentId);
+      if (detailVO == null) {
+        invalidSegmentIds.add(segmentId);
+      }
+      if (SegmentStatus.COMPACTED.toString().equals(detailVO.getStatus())) {
+        // if the segment is compacted then no need to delete that.
+        LOGGER.error("Cannot delete the Segment which is compacted. Segment is " + segmentId);
+        invalidSegmentIds.add(segmentId);
+      } else if (SegmentStatus.INSERT_IN_PROGRESS.toString().equals(detailVO.getStatus())
+          && isLoadInProgress(identifier, segmentId)) {
+        // if the segment status is in progress then no need to delete that.
+        LOGGER.error("Cannot delete the segment " + segmentId + " which is load in progress");
+        invalidSegmentIds.add(segmentId);
+      } else if (SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS.toString().equals(detailVO.getStatus())
+          && isLoadInProgress(identifier, segmentId)) {
+        // if the segment status is overwrite in progress, then no need to delete that.
+        LOGGER.error("Cannot delete the segment " + segmentId + " which is load overwrite " +
+            "in progress");
+        invalidSegmentIds.add(segmentId);
+      } else if (SegmentStatus.STREAMING.toString().equals(detailVO.getStatus())) {
+        // if the segment status is streaming, the segment can't be deleted directly.
+        LOGGER.error("Cannot delete the segment " + segmentId + " which is streaming in progress");
+      } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(detailVO.getStatus())) {
+        updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId)
+            .setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
+            .setModificationOrDeletionTimestamp((CarbonUpdateUtil.readCurrentTime())));
+        LOGGER.info("Segment ID " + segmentId + " Marked for Delete");
+      }
+    }
+
+    if (invalidSegmentIds.size() > 0) {
+      return invalidSegmentIds;
+    }
+    if (updateSegments.size() > 0) {
+      updateSegments(identifier, updateSegments);
+    }
+    return invalidSegmentIds;
+  }
+
+  /**
    * Removes/invalidates all the segments which are less than passed load time.
    *
-   * @param tableId
+   * @param identifier
    * @param loadTime
    * @return
    */
-  boolean deleteSegmentByLoadTime(String tableId, long loadTime) {
-    return false;
-  }
-
-  private static class ReturnTuple {
-    List<SegmentDetailVO> allSegments;
-    boolean isUpdateRequired;
-
-    ReturnTuple(List<SegmentDetailVO> allSegments, boolean isUpdateRequired) {
-      this.allSegments = allSegments;
-      this.isUpdateRequired = isUpdateRequired;
+  public boolean deleteSegmentByLoadTime(AbsoluteTableIdentifier identifier, long loadTime) {
+    List<SegmentDetailVO> allSegments = getAllSegments(identifier).getAllSegments();
+    List<String> segmentIds = new ArrayList<>();
+    List<SegmentDetailVO> updateSegments = new ArrayList<>();
+    for (SegmentDetailVO segment : allSegments) {
+      Integer result = segment.getLoadStartTime().compareTo(loadTime);
+      if (result < 0) {
+        String segmentId = segment.getSegmentId();
+        if (SegmentStatus.COMPACTED.toString().equals(segment.getStatus())) {
+          // if the segment is compacted then no need to delete that.
+          LOGGER.info("Ignoring the segment : " + segmentId
+              + "as the segment has been compacted.");
+        } else if (SegmentStatus.INSERT_IN_PROGRESS.toString().equals(segment.getStatus())
+            && isLoadInProgress(identifier, segmentId)) {
+          // if the segment status is in progress then no need to delete that.
+          LOGGER.info("Ignoring the segment : " + segmentId
+              + "as the segment is insert in progress.");
+        } else if (SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS.toString().equals(segment.getStatus())
+            && isLoadInProgress(identifier, segmentId)) {
+          // if the segment status is overwrite in progress, then no need to delete that.
+          LOGGER.info("Ignoring the segment : " + segmentId
+              + "as the segment is insert in progress.");
+        } else if (SegmentStatus.STREAMING.toString().equals(segment.getStatus())) {
+          // if the segment status is streaming, the segment can't be deleted directly.
+          LOGGER.info("Ignoring the segment : " + segmentId
+              + "as the segment is streaming in progress.");
+        } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(segment.getStatus())) {
+          updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId)
+              .setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
+              .setModificationOrDeletionTimestamp((CarbonUpdateUtil.readCurrentTime())));
+          LOGGER.info("Segment ID " + segmentId + " Marked for Delete");
+        }
+      }
     }
+    if (updateSegments.size() > 0) {
+      updateSegments(identifier, updateSegments);
+    } else {
+      return false;
+    }
+    return true;
   }
 
-  private ReturnTuple isUpdationRequired(boolean isForceDeletion, CarbonTable carbonTable) {
-    List<SegmentDetailVO> allSegments =
-        getAllSegments(carbonTable.getAbsoluteTableIdentifier()).getAllSegments();
-
+  private List<SegmentDetailVO> isUpdationRequired(boolean isForceDeletion, CarbonTable carbonTable) {
     // Delete marked loads
-    boolean isUpdationRequired = DeleteLoadFolders
-        .deleteLoadFoldersFromFileSystem(carbonTable.getAbsoluteTableIdentifier(), isForceDeletion,
-            allSegments);
-    return new ReturnTuple(allSegments, isUpdationRequired);
+    List<SegmentDetailVO> detailVOS = DeleteLoadFolders
+        .deleteLoadFoldersFromFileSystem(carbonTable.getAbsoluteTableIdentifier(), isForceDeletion);
+    return detailVOS;
   }
 
   public void deleteLoadsAndUpdateMetadata(CarbonTable carbonTable, boolean isForceDeletion,
@@ -413,9 +511,12 @@ public class SegmentManager {
     // delete the expired segment lock files
     CarbonLockUtil.deleteExpiredSegmentLockFiles(carbonTable);
     if (isSegmentStatusDeletionRequired(carbonTable)) {
-      ReturnTuple tuple = isUpdationRequired(isForceDeletion, carbonTable);
-      if (tuple.isUpdateRequired) {
-        // TODO
+      List<SegmentDetailVO> updatedDetailVOs = isUpdationRequired(isForceDeletion, carbonTable);
+      if (updatedDetailVOs.size() > 0) {
+        // TODO Support history segments
+        updateSegments(carbonTable.getAbsoluteTableIdentifier(), updatedDetailVOs);
+        DeleteLoadFolders.physicalFactAndMeasureMetadataDeletion(
+            carbonTable.getAbsoluteTableIdentifier(), isForceDeletion, partitionSpecs);
       }
     }
   }
@@ -455,5 +556,56 @@ public class SegmentManager {
     }
     return false;
   }
+
+  /**
+   * Return true if any load or insert overwrite is in progress for specified table
+   */
+  public boolean isLoadInProgressInTable(CarbonTable carbonTable) {
+    if (carbonTable == null) {
+      return false;
+    }
+    boolean loadInProgress = false;
+    String metaPath = carbonTable.getMetadataPath();
+    LoadMetadataDetails[] listOfLoadFolderDetailsArray =
+        SegmentStatusManager.readLoadMetadata(metaPath);
+    if (listOfLoadFolderDetailsArray.length != 0) {
+      for (LoadMetadataDetails loaddetail :listOfLoadFolderDetailsArray) {
+        SegmentStatus segmentStatus = loaddetail.getSegmentStatus();
+        if (segmentStatus == SegmentStatus.INSERT_IN_PROGRESS
+            || segmentStatus == SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS) {
+          loadInProgress =
+              isLoadInProgress(carbonTable.getAbsoluteTableIdentifier(),
+                  loaddetail.getLoadName());
+        }
+      }
+    }
+    return loadInProgress;
+  }
+
+  /**
+   * Return true if insert overwrite is in progress for specified table
+   */
+  public boolean isOverwriteInProgressInTable(CarbonTable carbonTable) {
+    if (carbonTable == null) {
+      return false;
+    }
+    boolean loadInProgress = false;
+    String metaPath = carbonTable.getMetadataPath();
+    LoadMetadataDetails[] listOfLoadFolderDetailsArray =
+        SegmentStatusManager.readLoadMetadata(metaPath);
+    if (listOfLoadFolderDetailsArray.length != 0) {
+      for (LoadMetadataDetails loaddetail :listOfLoadFolderDetailsArray) {
+        SegmentStatus segmentStatus = loaddetail.getSegmentStatus();
+        if (segmentStatus == SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS) {
+          loadInProgress =
+              isLoadInProgress(carbonTable.getAbsoluteTableIdentifier(),
+                  loaddetail.getLoadName());
+        }
+      }
+    }
+    return loadInProgress;
+  }
+
+
 
 }

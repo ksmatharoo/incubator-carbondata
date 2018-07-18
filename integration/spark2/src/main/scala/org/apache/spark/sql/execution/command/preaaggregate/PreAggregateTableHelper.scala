@@ -263,7 +263,7 @@ case class PreAggregateTableHelper(
     // This will be used to check if the parent table has any segments or not. If not then no
     // need to fire load for pre-aggregate table. Therefore reading the load details for PARENT
     // table.
-    new SegmentManager().deleteLoadsAndUpdateMetadata(
+    SegmentManager.getInstance().deleteLoadsAndUpdateMetadata(
       parentTable,
       false,
       CarbonFilters.getCurrentPartitions(
@@ -272,13 +272,13 @@ case class PreAggregateTableHelper(
           Some(parentTable.getDatabaseName))
       ).map(_.asJava).orNull)
 
-    if (SegmentStatusManager.isLoadInProgressInTable(parentTable)) {
+    if (SegmentManager.getInstance().isLoadInProgressInTable(parentTable)) {
       throw new UnsupportedOperationException(
         "Cannot create pre-aggregate table when insert is in progress on parent table")
     }
     // check if any segment if available for load in the parent table
     val loadAvailable =
-      new SegmentManager().getValidSegments(
+      SegmentManager.getInstance().getValidSegments(
         parentTable.getAbsoluteTableIdentifier).getValidSegments.asScala.map(_.toString)
     if (loadAvailable.nonEmpty) {
       // Passing segmentToLoad as * because we want to load all the segments into the

@@ -125,6 +125,12 @@ public class LoadMetadataDetails implements Serializable {
    */
   private String segmentFile;
 
+  /**
+   * It is temporary transaction id to make sure that in progress segments
+   * would not come for reading.
+   */
+  private String transactionId;
+
   public long getLoadEndTime() {
     if (timestamp == null) {
       return CarbonCommonConstants.SEGMENT_LOAD_TIME_DEFAULT;
@@ -419,6 +425,14 @@ public class LoadMetadataDetails implements Serializable {
 
   public void setSegmentFile(String segmentFile) {
     this.segmentFile = segmentFile;
+  }
+
+  public String getTransactionId() {
+    return transactionId;
+  }
+
+  public void setTransactionId(String transactionId) {
+    this.transactionId = transactionId;
   }
 
   @Override public String toString() {

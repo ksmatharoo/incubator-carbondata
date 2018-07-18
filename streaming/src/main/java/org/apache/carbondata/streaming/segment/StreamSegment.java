@@ -64,7 +64,7 @@ public class StreamSegment {
    */
   public static String open(CarbonTable table) throws IOException {
     List<SegmentDetailVO> allSegments =
-        new SegmentManager().getAllSegments(table.getAbsoluteTableIdentifier())
+        SegmentManager.getInstance().getAllSegments(table.getAbsoluteTableIdentifier())
             .getAllSegments();
     SegmentDetailVO streamSegment = null;
     for (SegmentDetailVO detail : allSegments) {
@@ -80,7 +80,7 @@ public class StreamSegment {
       detailVO.setFileFormat(FileFormat.ROW_V1.toString());
       detailVO.setStatus(SegmentStatus.STREAMING.toString());
 
-      new SegmentManager().createNewSegment(table.getAbsoluteTableIdentifier(), detailVO);
+      SegmentManager.getInstance().createNewSegment(table.getAbsoluteTableIdentifier(), detailVO);
       return detailVO.getSegmentId();
     } else {
       return streamSegment.getSegmentId();
@@ -95,13 +95,13 @@ public class StreamSegment {
     SegmentDetailVO detailVO =
         new SegmentDetailVO().setSegmentId(segmentId).setLoadEndTime(System.currentTimeMillis())
             .setStatus(SegmentStatus.STREAMING_FINISH.toString());
-    new SegmentManager().commitLoadSegment(table.getAbsoluteTableIdentifier(), detailVO);
+    SegmentManager.getInstance().commitLoadSegment(table.getAbsoluteTableIdentifier(), detailVO);
 
     SegmentDetailVO newDetail =
         new SegmentDetailVO().setFileFormat(FileFormat.ROW_V1.toString())
             .setStatus(SegmentStatus.STREAMING.toString());
     SegmentDetailVO newSegment =
-        new SegmentManager().createNewSegment(table.getAbsoluteTableIdentifier(), newDetail);
+        SegmentManager.getInstance().createNewSegment(table.getAbsoluteTableIdentifier(), newDetail);
     return newSegment.getSegmentId();
   }
 
@@ -110,7 +110,7 @@ public class StreamSegment {
    */
   public static void finishStreaming(CarbonTable carbonTable) throws IOException {
     List<SegmentDetailVO> allSegments =
-        new SegmentManager().getAllSegments(carbonTable.getAbsoluteTableIdentifier())
+        SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier())
             .getAllSegments();
     boolean updated = false;
     List<SegmentDetailVO> updateSegments = new ArrayList<>();
@@ -123,7 +123,7 @@ public class StreamSegment {
       }
     }
     if (updated) {
-      new SegmentManager()
+      SegmentManager.getInstance()
           .updateSegments(carbonTable.getAbsoluteTableIdentifier(), updateSegments);
     }
   }

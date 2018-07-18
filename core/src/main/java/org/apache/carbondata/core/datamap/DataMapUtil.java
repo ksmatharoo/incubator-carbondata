@@ -99,7 +99,7 @@ public class DataMapUtil {
     DataMapJob dataMapJob = (DataMapJob) createDataMapJob(dataMapJobClassName);
     String className = "org.apache.carbondata.core.datamap.DistributableDataMapFormat";
     SegmentsHolder segmentsHolder =
-        new SegmentManager().getAllSegments(carbonTable.getAbsoluteTableIdentifier());
+        SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier());
     List<Segment> validSegments = segmentsHolder.getValidSegments();
     List<Segment> invalidSegments = segmentsHolder.getInvalidSegments();
     DataMapExprWrapper dataMapExprWrapper = null;
@@ -140,7 +140,7 @@ public class DataMapUtil {
       List<PartitionSpec> partitionsToPrune) throws IOException {
     String className = "org.apache.carbondata.core.datamap.DistributableDataMapFormat";
     List<Segment> invalidSegments =
-        new SegmentManager().getInvalidSegments(carbonTable.getAbsoluteTableIdentifier())
+        SegmentManager.getInstance().getInvalidSegments(carbonTable.getAbsoluteTableIdentifier())
             .getInvalidSegments();
     DistributableDataMapFormat dataMapFormat =
         createDataMapJob(carbonTable, dataMapExprWrapper, validSegments, invalidSegments,

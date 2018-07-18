@@ -468,7 +468,7 @@ object CarbonDataRDDFactory {
       val detailVO = SegmentManagerHelper.updateFailStatusAndGetSegmentVO(
         carbonLoadModel.getSegmentId,
         uniqueTableStatusId)
-      new SegmentManager().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
+      SegmentManager.getInstance().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
       LOGGER.info("********starting clean up**********")
       if (carbonLoadModel.isCarbonTransactionalTable) {
         // delete segment is applicable for transactional table
@@ -490,7 +490,7 @@ object CarbonDataRDDFactory {
         val detailVO = SegmentManagerHelper.updateFailStatusAndGetSegmentVO(
           carbonLoadModel.getSegmentId,
           uniqueTableStatusId)
-        new SegmentManager().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
+        SegmentManager.getInstance().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
         LOGGER.info("********starting clean up**********")
         if (carbonLoadModel.isCarbonTransactionalTable) {
           // delete segment is applicable for transactional table
@@ -557,7 +557,7 @@ object CarbonDataRDDFactory {
         val detailVO = SegmentManagerHelper.updateFailStatusAndGetSegmentVO(
           carbonLoadModel.getSegmentId,
           uniqueTableStatusId)
-        new SegmentManager().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
+        SegmentManager.getInstance().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
         LOGGER.info("********starting clean up**********")
         if (carbonLoadModel.isCarbonTransactionalTable) {
           // delete segment is applicable for transactional table
@@ -697,7 +697,7 @@ object CarbonDataRDDFactory {
       val keyRDD = updateRdd.map(row =>
         (row.get(row.size - 1).toString, Row(row.toSeq.slice(0, row.size - 1): _*)))
 
-      val segments = new SegmentManager().getValidSegments(
+      val segments = SegmentManager.getInstance().getValidSegments(
         carbonTable.getAbsoluteTableIdentifier).getValidSegments.asScala
       val segmentIdIndex = segments.map(_.getSegmentNo).zipWithIndex.toMap
       val segmentId2maxTaskNo = segments.map { seg =>
@@ -925,11 +925,11 @@ object CarbonDataRDDFactory {
       CarbonLoaderUtil.deleteNonTransactionalTableForInsertOverwrite(carbonLoadModel)
     }
     val done = if (overwriteTable) {
-        new SegmentManager().commitOverwriteSegment(
+        SegmentManager.getInstance().commitOverwriteSegment(
           carbonTable.getAbsoluteTableIdentifier,
           detailVO)
       } else {
-        new SegmentManager().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
+        SegmentManager.getInstance().commitLoadSegment(carbonTable.getAbsoluteTableIdentifier, detailVO)
       }
     if (!done) {
       val errorMessage = s"Dataload failed due to failure in table status updation for" +

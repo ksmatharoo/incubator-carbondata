@@ -290,7 +290,7 @@ public class SegmentFileStore {
    */
   public static boolean updateSegmentFile(AbsoluteTableIdentifier identifier, String segmentId, String segmentFile)
       throws IOException {
-    boolean status = new SegmentManager().commitLoadSegment(identifier,
+    boolean status = SegmentManager.getInstance().commitLoadSegment(identifier,
         new SegmentDetailVO().setSegmentId(segmentId).setSegmentFileName(segmentFile));
     detail.setIndexSize(String.valueOf(CarbonUtil
         .getCarbonIndexSize(segmentFileStore, segmentFileStore.getLocationMap())));
@@ -671,7 +671,7 @@ public class SegmentFileStore {
       throws IOException {
     if (toBeDeleteSegments.size() > 0 || toBeUpdatedSegments.size() > 0) {
       Set<Segment> segmentSet = new HashSet<>(
-          new SegmentManager().getValidSegments(carbonTable.getAbsoluteTableIdentifier())
+          SegmentManager.getInstance().getValidSegments(carbonTable.getAbsoluteTableIdentifier())
               .getValidSegments());
       CarbonUpdateUtil.updateTableMetadataStatus(segmentSet, carbonTable, uniqueId, true,
           Segment.toSegmentList(toBeDeleteSegments, null),
@@ -691,7 +691,7 @@ public class SegmentFileStore {
       boolean forceDelete) throws IOException {
 
     List<SegmentDetailVO> details =
-        new SegmentManager().getValidSegments(table.getAbsoluteTableIdentifier())
+        SegmentManager.getInstance().getValidSegments(table.getAbsoluteTableIdentifier())
             .getValidSegmentDetailVOs();
     // scan through each segment.
     for (SegmentDetailVO segment : details) {
@@ -849,7 +849,7 @@ public class SegmentFileStore {
       AbsoluteTableIdentifier identifier) throws IOException {
     SegmentDetailVO segEntry = null;
     List<SegmentDetailVO> details =
-        new SegmentManager().getAllSegments(identifier).getAllSegments();
+        SegmentManager.getInstance().getAllSegments(identifier).getAllSegments();
     for (SegmentDetailVO entry : details) {
       if (entry.getSegmentId().equals(segmentId)) {
         segEntry = entry;

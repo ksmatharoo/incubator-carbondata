@@ -50,7 +50,7 @@ abstract class Compactor(carbonLoadModel: CarbonLoadModel,
     CarbonDataMergerUtil
       .identifySegmentsToBeMerged(carbonLoadModel,
         compactionModel.compactionSize,
-        new SegmentManager()
+        SegmentManager.getInstance()
           .getAllSegments(carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
             .getAbsoluteTableIdentifier).getAllSegments,
         compactionModel.compactionType,
