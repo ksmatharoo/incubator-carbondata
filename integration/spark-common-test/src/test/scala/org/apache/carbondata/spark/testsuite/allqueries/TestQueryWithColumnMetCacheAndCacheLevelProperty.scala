@@ -74,7 +74,7 @@ class TestQueryWithColumnMetCacheAndCacheLevelProperty extends QueryTest with Be
       .asInstanceOf[CarbonRelation]
     val carbonTable = relation.carbonTable
     assert(carbonTable.getTableInfo.isSchemaModified == isSchemaModified)
-    val segment: Segment = Segment.getSegment(segmentId, carbonTable.getTablePath)
+    val segment: Segment = Segment.getSegment(segmentId, carbonTable.getAbsoluteTableIdentifier)
     val defaultDataMap: TableDataMap = DataMapStoreManager.getInstance()
       .getDefaultDataMap(carbonTable)
     val dataMaps: List[DataMap[_ <: Blocklet]] = defaultDataMap.getDataMapFactory

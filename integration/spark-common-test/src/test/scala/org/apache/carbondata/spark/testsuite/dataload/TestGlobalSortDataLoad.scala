@@ -279,7 +279,7 @@ class TestGlobalSortDataLoad extends QueryTest with BeforeAndAfterEach with Befo
     if (FileFactory.isFileExist(segmentDir)) {
       assertResult(Math.max(4, defaultParallelism) + 1)(new File(segmentDir).listFiles().length)
     } else {
-      val segment = Segment.getSegment("0", carbonTable.getTablePath)
+      val segment = Segment.getSegment("0", carbonTable.getAbsoluteTableIdentifier)
       val store = new SegmentFileStore(carbonTable.getTablePath, segment.getSegmentFileName)
       store.readIndexFiles()
       val size = store.getIndexFilesMap.asScala.map(f => f._2.size()).sum
@@ -393,7 +393,7 @@ class TestGlobalSortDataLoad extends QueryTest with BeforeAndAfterEach with Befo
     if (FileFactory.isFileExist(segmentDir)) {
       new SegmentIndexFileStore().getIndexFilesFromSegment(segmentDir).size()
     } else {
-      val segment = Segment.getSegment(segmentNo, carbonTable.getTablePath)
+      val segment = Segment.getSegment(segmentNo, carbonTable.getAbsoluteTableIdentifier)
       new SegmentFileStore(carbonTable.getTablePath, segment.getSegmentFileName).getIndexCarbonFiles.size()
     }
   }

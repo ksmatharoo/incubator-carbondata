@@ -763,7 +763,7 @@ public class SegmentUpdateStatusManager {
    */
   public UpdateVO getInvalidTimestampRange(String segmentId) {
     UpdateVO range = new UpdateVO();
-    for (SegmentDetailVO segment : segmentsHolder.getValidSegmentDetailVOs()) {
+    for (SegmentDetailVO segment : segmentsHolder.getAllSegments()) {
       if (segment.getSegmentId().equalsIgnoreCase(segmentId)) {
         range.setSegmentId(segmentId);
         range.setFactTimestamp(segment.getLoadStartTime());

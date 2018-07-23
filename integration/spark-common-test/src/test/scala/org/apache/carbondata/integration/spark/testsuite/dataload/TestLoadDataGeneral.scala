@@ -54,7 +54,7 @@ class TestLoadDataGeneral extends QueryTest with BeforeAndAfterEach {
     val fileType: FileFactory.FileType = FileFactory.getFileType(partitionPath)
     val carbonFile = FileFactory.getCarbonFile(partitionPath, fileType)
     val segments: ArrayBuffer[String] = ArrayBuffer()
-    val segment = Segment.getSegment(segmentId, carbonTable.getAbsoluteTableIdentifier.getTablePath)
+    val segment = Segment.getSegment(segmentId, carbonTable.getAbsoluteTableIdentifier)
     segment != null
   }
 

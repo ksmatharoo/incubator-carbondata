@@ -18,7 +18,6 @@
 package org.apache.carbondata.spark.testsuite.datamap
 
 import scala.collection.JavaConverters._
-
 import java.io.{File, FilenameFilter}
 
 import org.apache.spark.sql.Row
@@ -30,7 +29,7 @@ import org.apache.carbondata.common.exceptions.sql.{MalformedDataMapCommandExcep
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.datastore.impl.FileFactory
-import org.apache.carbondata.core.metadata.{CarbonMetadata, SegmentFileStore}
+import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, CarbonMetadata, SegmentFileStore}
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.core.util.path.CarbonTablePath
 
@@ -336,7 +335,8 @@ class TestDataMapCommand extends QueryTest with BeforeAndAfterAll {
            }
          }).length > 0)
     } else {
-      val segment = Segment.getSegment("0", path)
+      val identifier = AbsoluteTableIdentifier.from(path, "default", "preagg_table")
+      val segment = Segment.getSegment("0", identifier)
       val store = new SegmentFileStore(path, segment.getSegmentFileName)
       store.readIndexFiles()
       val size = store.getIndexFilesMap.asScala.map(f => f._2.size()).sum

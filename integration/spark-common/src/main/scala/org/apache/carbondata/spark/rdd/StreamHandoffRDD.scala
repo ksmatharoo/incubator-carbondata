@@ -308,6 +308,7 @@ object StreamHandoffRDD {
         new SegmentDetailVO)
 
       carbonLoadModel.setCurrentDetailVO(detailVO)
+      carbonLoadModel.setSegmentId(detailVO.getSegmentId)
       // convert a streaming segment to columnar segment
       val status = new StreamHandoffRDD(
         sparkSession.sparkContext,

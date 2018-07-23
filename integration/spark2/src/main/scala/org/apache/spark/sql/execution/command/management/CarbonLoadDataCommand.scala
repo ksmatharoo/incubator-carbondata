@@ -267,7 +267,8 @@ case class CarbonLoadDataCommand(
           } else {
             carbonLoadModel.setCurrentDetailVO(
               SegmentManager.getInstance().createNewSegment(
-                table.getAbsoluteTableIdentifier, new SegmentDetailVO))
+                table.getAbsoluteTableIdentifier,
+                new SegmentDetailVO().setSegmentId(carbonLoadModel.getSegmentId)))
           }
           isUpdateTableStatusRequired = true
         }

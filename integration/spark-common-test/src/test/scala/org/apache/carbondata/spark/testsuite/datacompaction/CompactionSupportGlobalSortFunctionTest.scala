@@ -534,7 +534,7 @@ class CompactionSupportGlobalSortFunctionTest extends QueryTest with BeforeAndAf
     if (FileFactory.isFileExist(segmentDir)) {
       new SegmentIndexFileStore().getIndexFilesFromSegment(segmentDir).size()
     } else {
-      val segment = Segment.getSegment(segmentNo, carbonTable.getTablePath)
+      val segment = Segment.getSegment(segmentNo, carbonTable.getAbsoluteTableIdentifier)
       new SegmentFileStore(carbonTable.getTablePath, segment.getSegmentFileName).getIndexCarbonFiles.size()
     }
   }

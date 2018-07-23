@@ -76,7 +76,7 @@ class TestDataLoadingForPartitionTable extends QueryTest with BeforeAndAfterAll 
         }
       })
     } else {
-      val segment = Segment.getSegment(segmentId, carbonTable.getTablePath)
+      val segment = Segment.getSegment(segmentId, carbonTable.getAbsoluteTableIdentifier)
       val store = new SegmentFileStore(carbonTable.getTablePath, segment.getSegmentFileName)
       store.readIndexFiles()
       store.getIndexFilesMap.asScala.flatMap(_._2.asScala).map(f => FileFactory.getCarbonFile(f)).toArray

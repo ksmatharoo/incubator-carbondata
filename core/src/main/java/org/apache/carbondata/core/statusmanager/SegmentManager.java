@@ -433,6 +433,7 @@ public final class SegmentManager {
       } else if (SegmentStatus.STREAMING.toString().equals(detailVO.getStatus())) {
         // if the segment status is streaming, the segment can't be deleted directly.
         LOGGER.error("Cannot delete the segment " + segmentId + " which is streaming in progress");
+        invalidSegmentIds.add(segmentId);
       } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(detailVO.getStatus())) {
         updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId)
             .setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
