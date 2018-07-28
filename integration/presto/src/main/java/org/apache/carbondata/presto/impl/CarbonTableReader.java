@@ -36,6 +36,7 @@ import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.DataMapStoreManager;
+import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
@@ -52,7 +53,9 @@ import org.apache.carbondata.core.metadata.schema.table.TableInfo;
 import org.apache.carbondata.core.reader.ThriftReader;
 import org.apache.carbondata.core.scan.expression.Expression;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
+import org.apache.carbondata.core.statusmanager.SegmentManager;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
+import org.apache.carbondata.core.statusmanager.SegmentsHolder;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.hadoop.CarbonInputSplit;
@@ -119,7 +122,7 @@ public class CarbonTableReader {
    */
   private AtomicReference<HashMap<SchemaTableName, CarbonTableCacheModel>> carbonCache;
 
-  private LoadMetadataDetails loadMetadataDetails[];
+  private SegmentsHolder segmentsHolder;
 
   private String queryId;
 
@@ -425,14 +428,9 @@ public class CarbonTableReader {
     PartitionInfo partitionInfo = carbonTable.getPartitionInfo(carbonTable.getTableName());
 
     if (partitionInfo != null && partitionInfo.getPartitionType() == PartitionType.NATIVE_HIVE) {
-      try {
-        loadMetadataDetails = SegmentStatusManager.readTableStatusFile(
-            CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath()));
-      } catch (IOException exception) {
-        LOGGER.error(exception.getMessage());
-        throw exception;
-      }
-      filteredPartitions = findRequiredPartitions(constraints, carbonTable, loadMetadataDetails);
+      segmentsHolder =
+          SegmentManager.getInstance().getValidSegments(carbonTable.getAbsoluteTableIdentifier());
+      filteredPartitions = findRequiredPartitions(constraints, carbonTable, segmentsHolder);
     }
     try {
       CarbonTableInputFormat.setTableInfo(config, tableInfo);
@@ -483,15 +481,15 @@ public class CarbonTableReader {
    * @throws IOException
    */
   private List<PartitionSpec> findRequiredPartitions(TupleDomain<ColumnHandle> constraints,
-      CarbonTable carbonTable, LoadMetadataDetails[] loadMetadataDetails) throws IOException {
+      CarbonTable carbonTable, SegmentsHolder segmentsHolder) throws IOException {
     Set<PartitionSpec> partitionSpecs = new HashSet<>();
     List<PartitionSpec> prunePartitions = new ArrayList();
 
-    for (LoadMetadataDetails loadMetadataDetail : loadMetadataDetails) {
+    for (Segment segment : segmentsHolder.getValidSegments()) {
       SegmentFileStore segmentFileStore = null;
       try {
         segmentFileStore =
-            new SegmentFileStore(carbonTable.getTablePath(), loadMetadataDetail.getSegmentFile());
+            new SegmentFileStore(carbonTable.getTablePath(), segment.getSegmentFileName());
         partitionSpecs.addAll(segmentFileStore.getPartitionSpecs());
 
       } catch (IOException exception) {

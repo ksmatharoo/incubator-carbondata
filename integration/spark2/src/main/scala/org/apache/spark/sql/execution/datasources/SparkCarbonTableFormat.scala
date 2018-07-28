@@ -44,7 +44,7 @@ import org.apache.carbondata.core.indexstore
 import org.apache.carbondata.core.metadata.SegmentFileStore
 import org.apache.carbondata.core.metadata.datatype.DataTypes
 import org.apache.carbondata.core.metadata.encoder.Encoding
-import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentDetailVO, SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.core.util.{CarbonProperties, DataTypeConverterImpl, DataTypeUtil, ObjectSerializationUtil}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.hadoop.api.{CarbonOutputCommitter, CarbonTableOutputFormat}
@@ -135,10 +135,8 @@ with Serializable {
     val currEntry = options.getOrElse("currentloadentry", null)
     if (currEntry != null) {
       val loadEntry =
-        ObjectSerializationUtil.convertStringToObject(currEntry).asInstanceOf[LoadMetadataDetails]
-      model.setCurrentDetailVO(SegmentManager.getInstance()
-        .getSegment(model.getCarbonDataLoadSchema.getCarbonTable.getAbsoluteTableIdentifier,
-          model.getSegmentId))
+        ObjectSerializationUtil.convertStringToObject(currEntry).asInstanceOf[SegmentDetailVO]
+      model.setCurrentDetailVO(loadEntry)
     }
     // Set the update timestamp if user sets in case of update query. It needs to be updated
     // in load status update time

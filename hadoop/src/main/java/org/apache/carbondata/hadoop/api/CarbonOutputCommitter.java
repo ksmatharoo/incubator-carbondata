@@ -127,6 +127,9 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
     boolean overwriteSet = CarbonTableOutputFormat.isOverwriteSet(context.getConfiguration());
     CarbonLoadModel loadModel = CarbonTableOutputFormat.getLoadModel(context.getConfiguration());
     SegmentDetailVO currentDetailVO = new SegmentDetailVO().setSegmentId(loadModel.getSegmentId());
+    if (loadModel.getCurrentDetailVO() != null) {
+      currentDetailVO.setLoadStartTime(loadModel.getCurrentDetailVO().getLoadStartTime());
+    }
     String readPath = CarbonTablePath.getSegmentFilesLocation(loadModel.getTablePath())
         + CarbonCommonConstants.FILE_SEPARATOR
         + loadModel.getSegmentId() + "_" + loadModel.getFactTimeStamp() + ".tmp";

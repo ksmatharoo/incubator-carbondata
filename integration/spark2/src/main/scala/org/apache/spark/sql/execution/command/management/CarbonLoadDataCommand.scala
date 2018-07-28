@@ -265,10 +265,14 @@ case class CarbonLoadDataCommand(
               SegmentManager.getInstance().createNewOverwriteSegment(
                 table.getAbsoluteTableIdentifier, new SegmentDetailVO))
           } else {
+            val detailVO = new SegmentDetailVO()
+            if (StringUtils.isNotEmpty(carbonLoadModel.getSegmentId)) {
+              detailVO.setSegmentId(carbonLoadModel.getSegmentId)
+            }
             carbonLoadModel.setCurrentDetailVO(
               SegmentManager.getInstance().createNewSegment(
                 table.getAbsoluteTableIdentifier,
-                new SegmentDetailVO().setSegmentId(carbonLoadModel.getSegmentId)))
+                detailVO))
           }
           isUpdateTableStatusRequired = true
         }
@@ -775,11 +779,17 @@ case class CarbonLoadDataCommand(
         carbonLoadModel.setFactTimeStamp(updateModel.get.updatedTimeStamp)
       }
       // Create and update the status of segment to the tablestatus.
+      val detailVO = new SegmentDetailVO
+      if (carbonLoadModel.getFactTimeStamp != 0) {
+        detailVO.setLoadStartTime(carbonLoadModel.getFactTimeStamp)
+      }
       if (isOverwriteTable) {
-        SegmentManager.getInstance().createNewOverwriteSegment(
-          table.getAbsoluteTableIdentifier, new SegmentDetailVO)
+        carbonLoadModel.setCurrentDetailVO(SegmentManager.getInstance().createNewOverwriteSegment(
+        table.getAbsoluteTableIdentifier, detailVO))
       } else {
-        SegmentManager.getInstance().createNewSegment(table.getAbsoluteTableIdentifier, new SegmentDetailVO)
+        carbonLoadModel
+          .setCurrentDetailVO(SegmentManager.getInstance()
+            .createNewSegment(table.getAbsoluteTableIdentifier, detailVO))
       }
       val convertRelation = convertToLogicalRelation(
         catalogTable,

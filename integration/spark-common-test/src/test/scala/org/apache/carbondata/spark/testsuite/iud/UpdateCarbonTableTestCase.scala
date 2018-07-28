@@ -774,7 +774,7 @@ class UpdateCarbonTableTestCase extends QueryTest with BeforeAndAfterAll {
 
   override def afterAll {
     sql("use default")
-    sql("drop database  if exists iud cascade")
+//    sql("drop database  if exists iud cascade")
     CarbonProperties.getInstance()
       .addProperty(CarbonCommonConstants.isHorizontalCompactionEnabled , "true")
     CarbonProperties.getInstance()

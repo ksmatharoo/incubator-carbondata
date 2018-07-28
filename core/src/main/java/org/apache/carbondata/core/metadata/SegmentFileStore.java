@@ -651,9 +651,11 @@ public class SegmentFileStore {
     }
     if (updateSegment) {
       SegmentDetailVO updateSeg = new SegmentDetailVO().setSegmentId(segment.getSegmentNo())
-          .setSegmentFileName(
-              segment.getSegmentNo() + "_" + uniqueId + CarbonTablePath.SEGMENT_EXT);
-      toBeUpdatedSegments.add(updateSeg);
+          .setSegmentFileName(segment.getSegmentNo() + "_" + uniqueId + CarbonTablePath.SEGMENT_EXT)
+          .setStatus(SegmentStatus.SUCCESS.toString());
+      if (!toBeUpdatedSegments.contains(updateSeg)) {
+        toBeUpdatedSegments.add(updateSeg);
+      }
     }
   }
 

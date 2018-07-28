@@ -28,17 +28,16 @@ import scala.collection.mutable.ListBuffer
 import scala.util.Random
 import scala.util.control.Breaks._
 
-import com.univocity.parsers.common.TextParsingException
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.NullWritable
 import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.mapreduce.Job
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat, FileSplit}
-import org.apache.spark.{SparkEnv, SparkException, TaskContext}
+import org.apache.spark.{SparkEnv, TaskContext}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.rdd.{DataLoadCoalescedRDD, DataLoadPartitionCoalescer, NewHadoopRDD, RDD}
-import org.apache.spark.sql.{AnalysisException, CarbonEnv, DataFrame, Row, SQLContext}
+import org.apache.spark.sql.{CarbonEnv, DataFrame, Row, SQLContext}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.execution.command.{CompactionModel, ExecutionErrors, UpdateTableModel}
 import org.apache.spark.sql.hive.DistributionUtil
@@ -69,7 +68,7 @@ import org.apache.carbondata.processing.exception.DataLoadingException
 import org.apache.carbondata.processing.loading.FailureCauses
 import org.apache.carbondata.processing.loading.csvinput.{BlockDetails, CSVInputFormat, StringArrayWritable}
 import org.apache.carbondata.processing.loading.events.LoadEvents.{LoadTablePostStatusUpdateEvent, LoadTablePreStatusUpdateEvent}
-import org.apache.carbondata.processing.loading.exception.{CarbonDataLoadingException, NoRetryException}
+import org.apache.carbondata.processing.loading.exception.NoRetryException
 import org.apache.carbondata.processing.loading.model.{CarbonDataLoadSchema, CarbonLoadModel}
 import org.apache.carbondata.processing.loading.sort.SortScopeOptions
 import org.apache.carbondata.processing.merger.{CarbonCompactionUtil, CarbonDataMergerUtil, CompactionType}
@@ -300,7 +299,7 @@ object CarbonDataRDDFactory {
     // Check if any load need to be deleted before loading new data
     val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
     var status: Array[(String, (SegmentStatus, ExecutionErrors))] = null
-    var res: Array[List[(String, (LoadMetadataDetails, ExecutionErrors))]] = null
+    var res: Array[List[(String, (SegmentStatus, String, ExecutionErrors))]] = null
 
     // create new segment folder  in carbon store
     if (updateModel.isEmpty && carbonLoadModel.isCarbonTransactionalTable) {
@@ -328,17 +327,17 @@ object CarbonDataRDDFactory {
             resultOfSeg.foreach { resultOfBlock =>
               if (resultOfBlock._2._1 == SegmentStatus.LOAD_FAILURE) {
                 loadStatus = SegmentStatus.LOAD_FAILURE
-                if (resultOfBlock._2._2.failureCauses == FailureCauses.NONE) {
+                if (resultOfBlock._2._3.failureCauses == FailureCauses.NONE) {
                   updateModel.get.executorErrors.failureCauses = FailureCauses.EXECUTOR_FAILURE
                   updateModel.get.executorErrors.errorMsg = "Failure in the Executor."
                 } else {
-                  updateModel.get.executorErrors = resultOfBlock._2._2
+                  updateModel.get.executorErrors = resultOfBlock._2._3
                 }
               } else if (resultOfBlock._2._1 ==
                          SegmentStatus.LOAD_PARTIAL_SUCCESS) {
                 loadStatus = SegmentStatus.LOAD_PARTIAL_SUCCESS
-                updateModel.get.executorErrors.failureCauses = resultOfBlock._2._2.failureCauses
-                updateModel.get.executorErrors.errorMsg = resultOfBlock._2._2.errorMsg
+                updateModel.get.executorErrors.failureCauses = resultOfBlock._2._3.failureCauses
+                updateModel.get.executorErrors.errorMsg = resultOfBlock._2._3.errorMsg
               }
             }
           }
@@ -428,7 +427,7 @@ object CarbonDataRDDFactory {
         res.foreach { resultOfSeg =>
           resultSize = resultSize + resultOfSeg.size
           resultOfSeg.foreach { resultOfBlock =>
-            segmentDetails.add(new Segment(resultOfBlock._2._1.getLoadName, null))
+            segmentDetails.add(new Segment(resultOfBlock._2._2, null))
           }
         }
         val segmentFiles = updateSegmentFiles(carbonTable, segmentDetails, updateModel.get)
@@ -635,11 +634,11 @@ object CarbonDataRDDFactory {
       segmentDetails: util.HashSet[Segment],
       updateModel: UpdateTableModel) = {
     val metadataDetails =
-      SegmentStatusManager.readTableStatusFile(
-        CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath))
+      SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier)
     val segmentFiles = segmentDetails.asScala.map { seg =>
       val segmentFile =
-        metadataDetails.find(_.getLoadName.equals(seg.getSegmentNo)).get.getSegmentFile
+        metadataDetails.getAllSegments.asScala.
+          find(_.getSegmentId.equals(seg.getSegmentNo)).get.getSegmentFileName
       var segmentFiles: Seq[CarbonFile] = Seq.empty[CarbonFile]
 
       val file = SegmentFileStore.writeSegmentFile(
@@ -683,7 +682,7 @@ object CarbonDataRDDFactory {
       dataFrame: Option[DataFrame],
       carbonLoadModel: CarbonLoadModel,
       updateModel: Option[UpdateTableModel],
-      carbonTable: CarbonTable): Array[List[(String, (LoadMetadataDetails, ExecutionErrors))]] = {
+      carbonTable: CarbonTable): Array[List[(String, (SegmentStatus, String, ExecutionErrors))]] = {
     val segmentUpdateParallelism = CarbonProperties.getInstance().getParallelismForSegmentUpdate
 
     val updateRdd = dataFrame.get.rdd
@@ -691,7 +690,7 @@ object CarbonDataRDDFactory {
     // return directly if no rows to update
     val noRowsToUpdate = updateRdd.isEmpty()
     if (noRowsToUpdate) {
-      Array[List[(String, (LoadMetadataDetails, ExecutionErrors))]]()
+      Array[List[(String, (SegmentStatus, String, ExecutionErrors))]]()
     } else {
       // splitting as (key, value) i.e., (segment, updatedRows)
       val keyRDD = updateRdd.map(row =>
@@ -744,13 +743,13 @@ object CarbonDataRDDFactory {
       updateModel: Option[UpdateTableModel],
       key: String,
       taskNo: Long,
-      iter: Iterator[Row]): Iterator[(String, (LoadMetadataDetails, ExecutionErrors))] = {
+      iter: Iterator[Row]): Iterator[(String, (SegmentStatus, String, ExecutionErrors))] = {
     val rddResult = new updateResultImpl()
     val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
-    val resultIter = new Iterator[(String, (LoadMetadataDetails, ExecutionErrors))] {
-      val loadMetadataDetails = new LoadMetadataDetails
+    val resultIter = new Iterator[(String, (SegmentStatus, String, ExecutionErrors))] {
       val executionErrors = ExecutionErrors(FailureCauses.NONE, "")
       var uniqueLoadStatusId = ""
+      var status = SegmentStatus.SUCCESS
       try {
         val segId = key
         val index = taskNo
@@ -758,26 +757,22 @@ object CarbonDataRDDFactory {
                              CarbonCommonConstants.UNDERSCORE +
                              (index + "_0")
 
-        loadMetadataDetails.setLoadName(segId)
-        loadMetadataDetails.setSegmentStatus(SegmentStatus.LOAD_FAILURE)
         carbonLoadModel.setSegmentId(segId)
         carbonLoadModel.setTaskNo(String.valueOf(index))
         carbonLoadModel.setFactTimeStamp(updateModel.get.updatedTimeStamp)
 
-        loadMetadataDetails.setSegmentStatus(SegmentStatus.SUCCESS)
         UpdateDataLoad.DataLoadForUpdate(segId,
           index,
           iter,
-          carbonLoadModel,
-          loadMetadataDetails)
+          carbonLoadModel)
       } catch {
         case e: NoRetryException =>
-          loadMetadataDetails
-            .setSegmentStatus(SegmentStatus.LOAD_PARTIAL_SUCCESS)
           executionErrors.failureCauses = FailureCauses.BAD_RECORDS
           executionErrors.errorMsg = e.getMessage
           LOGGER.info("Bad Record Found")
+          status = SegmentStatus.LOAD_PARTIAL_SUCCESS
         case e: Exception =>
+          status = SegmentStatus.LOAD_FAILURE
           LOGGER.info("DataLoad failure")
           LOGGER.error(e)
           throw e
@@ -787,11 +782,11 @@ object CarbonDataRDDFactory {
 
       override def hasNext: Boolean = !finished
 
-      override def next(): (String, (LoadMetadataDetails, ExecutionErrors)) = {
+      override def next(): (String, (SegmentStatus, String, ExecutionErrors)) = {
         finished = true
         rddResult
           .getKey(uniqueLoadStatusId,
-            (loadMetadataDetails, executionErrors))
+            (status, key, executionErrors))
       }
     }
     resultIter

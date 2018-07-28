@@ -61,16 +61,16 @@ class DataLoadResultImpl extends DataLoadResult[String, (SegmentStatus, Executio
 
 trait updateResult[K, V] extends Serializable {
   def getKey(key: String,
-             value: (LoadMetadataDetails, ExecutionErrors)):
+             value: (SegmentStatus, String, ExecutionErrors)):
   (K, V)
 }
 
 class updateResultImpl
-  extends updateResult[String, (LoadMetadataDetails, ExecutionErrors)] {
+  extends updateResult[String, (SegmentStatus, String, ExecutionErrors)] {
   override def getKey(key: String,
-                      value: (LoadMetadataDetails, ExecutionErrors)):
+                      value: (SegmentStatus, String, ExecutionErrors)):
   (String,
-    (LoadMetadataDetails, ExecutionErrors)) = {
+    (SegmentStatus, String, ExecutionErrors)) = {
     (key, value)
   }
 }

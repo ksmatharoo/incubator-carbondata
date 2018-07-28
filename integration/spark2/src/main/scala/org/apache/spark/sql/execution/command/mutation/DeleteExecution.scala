@@ -40,7 +40,7 @@ import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier
 import org.apache.carbondata.core.mutate.{CarbonUpdateUtil, DeleteDeltaBlockDetails, SegmentUpdateDetails, TupleIdEnum}
 import org.apache.carbondata.core.mutate.data.RowCountDetailsVO
-import org.apache.carbondata.core.statusmanager.{SegmentStatus, SegmentStatusManager, SegmentUpdateStatusManager}
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatus, SegmentStatusManager, SegmentUpdateStatusManager}
 import org.apache.carbondata.core.util.CarbonUtil
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.core.writer.CarbonDeleteDeltaWriterImpl
@@ -110,8 +110,8 @@ object DeleteExecution {
     CarbonUpdateUtil
       .createBlockDetailsMap(blockMappingVO, segmentUpdateStatusMngr)
 
-    val metadataDetails = SegmentStatusManager.readTableStatusFile(
-      CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath))
+    val metadataDetails =
+      SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier)
     val isStandardTable = CarbonUtil.isStandardCarbonTable(carbonTable)
     val rowContRdd =
       sparkSession.sparkContext.parallelize(
@@ -127,8 +127,9 @@ object DeleteExecution {
           while (records.hasNext) {
             val ((key), (rowCountDetailsVO, groupedRows)) = records.next
             val segmentId = key.substring(0, key.indexOf(CarbonCommonConstants.FILE_SEPARATOR))
-            val loadDetail =
-              metadataDetails.find(_.getLoadName.equals(segmentId)).get
+            val segmentFile =
+              metadataDetails.getAllSegments.asScala.
+                find(_.getSegmentId.equals(segmentId)).get.getSegmentFileName
             result = result ++
                      deleteDeltaFunc(index,
                        key,

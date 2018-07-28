@@ -79,10 +79,12 @@ class CarbonDropPartitionRDD(
 
       override def next(): (String, String) = {
         finished = true
-        (toBeUpdatedSegments.asScala.filter(
-          _.getStatus.equals(SegmentStatus.MARKED_FOR_DELETE.toString)).mkString(","),
-          toBeUpdatedSegments.asScala.filterNot(
-          _.getStatus.equals(SegmentStatus.MARKED_FOR_DELETE.toString)).mkString(","))
+        (toBeUpdatedSegments.asScala.filterNot(
+          _.getStatus.equals(SegmentStatus.MARKED_FOR_DELETE.toString)).
+          map(_.getSegmentId).mkString(","),
+          toBeUpdatedSegments.asScala.filter(
+          _.getStatus.equals(SegmentStatus.MARKED_FOR_DELETE.toString)).
+            map(_.getSegmentId).mkString(","))
       }
     }
     iter

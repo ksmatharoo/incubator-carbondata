@@ -240,7 +240,14 @@ public final class SegmentManager {
    * @return
    */
   public SegmentsHolder getAllHistorySegments(AbsoluteTableIdentifier identifier) {
-    // TODO
+    if (segmentStore instanceof HistorySupportSegmentStore) {
+      List<Expression> filters = new ArrayList<>();
+      filters.add(new EqualToExpression(new ColumnExpression("tableId", DataTypes.STRING),
+          new LiteralExpression(identifier.getCarbonTableIdentifier().getTableId(),
+              DataTypes.STRING)));
+      return new SegmentsHolder(
+          ((HistorySupportSegmentStore) segmentStore).getHistorySegments(identifier, filters));
+    }
     return new SegmentsHolder(new ArrayList<SegmentDetailVO>());
   }
 
@@ -362,13 +369,7 @@ public final class SegmentManager {
     List<PartitionSpec> partitionSpecs = fileStore.getPartitionSpecs();
 
     if (partitionSpecs != null && partitionSpecs.size() > 0) {
-      List<Expression> filters = new ArrayList<>();
-      filters.add(new EqualToExpression(new ColumnExpression("segmentStatus", DataTypes.STRING),
-          new LiteralExpression(SegmentStatus.SUCCESS.toString(), DataTypes.STRING)));
-      filters.add(new EqualToExpression(new ColumnExpression("tableId", DataTypes.STRING),
-          new LiteralExpression(identifier.getCarbonTableIdentifier().getTableId(),
-              DataTypes.STRING)));
-      List<SegmentDetailVO> segments = segmentStore.getSegments(identifier, filters);
+      List<SegmentDetailVO> segments = getValidSegments(identifier).getValidSegmentDetailVOs();
       String uniqueId = String.valueOf(System.currentTimeMillis());
       List<SegmentDetailVO> tobeUpdatedSegs = new ArrayList<>();
       // First drop the partitions from partition mapper files of each segment
@@ -514,32 +515,19 @@ public final class SegmentManager {
     if (isSegmentStatusDeletionRequired(carbonTable)) {
       List<SegmentDetailVO> updatedDetailVOs = isUpdationRequired(isForceDeletion, carbonTable);
       if (updatedDetailVOs.size() > 0) {
-        // TODO Support history segments
         updateSegments(carbonTable.getAbsoluteTableIdentifier(), updatedDetailVOs);
-        DeleteLoadFolders.physicalFactAndMeasureMetadataDeletion(
-            carbonTable.getAbsoluteTableIdentifier(), isForceDeletion, partitionSpecs);
+        DeleteLoadFolders
+            .physicalFactAndMeasureMetadataDeletion(carbonTable.getAbsoluteTableIdentifier(),
+                isForceDeletion, partitionSpecs);
+      }
+      if (segmentStore instanceof HistorySupportSegmentStore) {
+        ((HistorySupportSegmentStore) segmentStore)
+            .moveHistorySegments(carbonTable.getAbsoluteTableIdentifier(), isForceDeletion);
       }
     }
   }
 
-  /**
-   * Get the number of invisible segment info from segment info list.
-   */
-  private int countInvisibleSegments(List<SegmentDetailVO> segmentList) {
-    int invisibleSegmentCnt = 0;
-    if (segmentList.size() != 0) {
-      for (SegmentDetailVO eachSeg : segmentList) {
-        // can not remove segment 0, there are some info will be used later
-        // for example: updateStatusFileName
-        // also can not remove the max segment id,
-        // otherwise will impact the generation of segment id
-        if (!eachSeg.getVisibility()) {
-          invisibleSegmentCnt += 1;
-        }
-      }
-    }
-    return invisibleSegmentCnt;
-  }
+
 
   private boolean isSegmentStatusDeletionRequired(CarbonTable carbonTable) {
     List<SegmentDetailVO> allSegments =

@@ -39,7 +39,7 @@ class TestSegmentReading extends QueryTest with BeforeAndAfterAll {
   }
 
   override def afterAll(): Unit = {
-    cleanAllTable()
+//    cleanAllTable()
   }
 
   test("test SET -V for segment reading property") {
@@ -252,8 +252,8 @@ class TestSegmentReading extends QueryTest with BeforeAndAfterAll {
         row => Row(row.getString(0),row.getString(1),row.getString(4))
       }.toSeq
       assert(col.equals(Seq(Row("2","Success","NA"),
-        Row("1","Compacted","0.1"),
         Row("0.1","Success","NA"),
+        Row("1","Compacted","0.1"),
         Row("0","Compacted","0.1"))))
     }
     finally {

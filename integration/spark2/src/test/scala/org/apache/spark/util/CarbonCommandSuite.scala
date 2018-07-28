@@ -29,8 +29,7 @@ import org.apache.carbondata.api.CarbonStore
 import org.apache.carbondata.common.constants.LoggerAction
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.metadata.CarbonMetadata
-import org.apache.carbondata.core.statusmanager.LoadMetadataDetails
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonProperties
 
 class CarbonCommandSuite extends Spark2QueryTest with BeforeAndAfterAll {
@@ -181,16 +180,16 @@ class CarbonCommandSuite extends Spark2QueryTest with BeforeAndAfterAll {
     sql(s"insert into ${tableName} select 'abc5',5")
     sql(s"insert into ${tableName} select 'abc6',6")
     assert(sql(s"show segments for table ${tableName}").collect().length == 10)
-    var detail = SegmentStatusManager.readLoadMetadata(carbonTable.getMetadataPath)
-    var historyDetail = SegmentStatusManager.readLoadHistoryMetadata(carbonTable.getMetadataPath)
-    assert(detail.length == 10)
-    assert(historyDetail.length == 0)
+    var detail = SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier)
+    var historyDetail = SegmentManager.getInstance().getAllHistorySegments(carbonTable.getAbsoluteTableIdentifier)
+    assert(detail.getAllSegments.size() == 10)
+    assert(historyDetail.getAllSegments.size() == 0)
     sql(s"clean files for table ${tableName}")
     assert(sql(s"show segments for table ${tableName}").collect().length == 2)
-    detail = SegmentStatusManager.readLoadMetadata(carbonTable.getMetadataPath)
-    historyDetail = SegmentStatusManager.readLoadHistoryMetadata(carbonTable.getMetadataPath)
-    assert(detail.length == 4)
-    assert(historyDetail.length == 6)
+    detail = SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier)
+    historyDetail = SegmentManager.getInstance().getAllHistorySegments(carbonTable.getAbsoluteTableIdentifier)
+    assert(detail.getAllSegments.size() == 4)
+    assert(historyDetail.getAllSegments.size() == 6)
     dropTable(tableName)
   }
 
@@ -213,17 +212,11 @@ class CarbonCommandSuite extends Spark2QueryTest with BeforeAndAfterAll {
     val segmentsHisotryList = sql(s"show history segments for table ${tableName}").collect()
     assert(segmentsHisotryList.length == 10)
     assert(segmentsHisotryList(0).getString(0).equalsIgnoreCase("5"))
-    assert(segmentsHisotryList(0).getString(6).equalsIgnoreCase("false"))
+    assert(segmentsHisotryList(0).getBoolean(6) == false)
     assert(segmentsHisotryList(0).getString(1).equalsIgnoreCase("Compacted"))
     assert(segmentsHisotryList(1).getString(0).equalsIgnoreCase("4.1"))
-    assert(segmentsHisotryList(1).getString(6).equalsIgnoreCase("true"))
+    assert(segmentsHisotryList(1).getBoolean(6) == true)
     assert(segmentsHisotryList(1).getString(1).equalsIgnoreCase("Success"))
-    assert(segmentsHisotryList(3).getString(0).equalsIgnoreCase("3"))
-    assert(segmentsHisotryList(3).getString(6).equalsIgnoreCase("false"))
-    assert(segmentsHisotryList(3).getString(1).equalsIgnoreCase("Compacted"))
-    assert(segmentsHisotryList(7).getString(0).equalsIgnoreCase("0.2"))
-    assert(segmentsHisotryList(7).getString(6).equalsIgnoreCase("true"))
-    assert(segmentsHisotryList(7).getString(1).equalsIgnoreCase("Success"))
     assert(sql(s"show history segments for table ${tableName} limit 3").collect().length == 3)
     dropTable(tableName)
   }

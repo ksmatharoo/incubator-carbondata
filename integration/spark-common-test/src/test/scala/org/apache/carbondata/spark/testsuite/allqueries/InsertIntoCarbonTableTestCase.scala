@@ -16,11 +16,14 @@
  */
 package org.apache.carbondata.spark.testsuite.allqueries
 
+import scala.collection.JavaConverters._
+
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
-import org.apache.carbondata.core.statusmanager.{SegmentStatus, SegmentStatusManager}
+import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatus, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.core.util.path.CarbonTablePath
 
@@ -367,8 +370,8 @@ class InsertIntoCarbonTableTestCase extends QueryTest with BeforeAndAfterAll {
 
   private def checkSegment(tableName: String) : Boolean ={
     val storePath_t1 = s"$storeLocation/${tableName.toLowerCase()}"
-    val detailses = SegmentStatusManager.readTableStatusFile(CarbonTablePath.getTableStatusFilePath(storePath_t1))
-    detailses.map(_.getSegmentStatus == SegmentStatus.SUCCESS).exists(f => f)
+    val detailses = SegmentManager.getInstance().getAllSegments(AbsoluteTableIdentifier.from(storePath_t1, "default", tableName)).getAllSegments.asScala
+    detailses.map(_.getStatus == SegmentStatus.SUCCESS).exists(f => f)
   }
 
   test("test show segments after clean files for insert overwrite") {

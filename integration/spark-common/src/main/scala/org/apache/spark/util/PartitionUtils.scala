@@ -41,7 +41,7 @@ import org.apache.carbondata.core.metadata.schema.partition.PartitionType
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.readcommitter.TableStatusReadCommittedScope
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonUtil
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.hadoop.CarbonInputSplit
@@ -300,10 +300,10 @@ object PartitionUtils {
       segmentId: String,
       carbonTable: CarbonTable, filesToBeDelete: Seq[File]) = {
     val metadataDetails =
-      SegmentStatusManager.readTableStatusFile(
-        CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath))
+      SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier)
     val segmentFile =
-      metadataDetails.find(_.getLoadName.equals(segmentId)).get.getSegmentFile
+      metadataDetails.getAllSegments.asScala.
+        find(_.getSegmentId.equals(segmentId)).get.getSegmentFileName
     var allSegmentFiles: Seq[CarbonFile] = Seq.empty[CarbonFile]
     val file = SegmentFileStore.writeSegmentFile(
       carbonTable,

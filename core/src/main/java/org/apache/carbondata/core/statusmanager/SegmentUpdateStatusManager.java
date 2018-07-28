@@ -691,8 +691,7 @@ public class SegmentUpdateStatusManager {
     if (segmentsHolder.getValidSegmentDetailVOs().size() == 0) {
       return null;
     }
-    // TODO get the max file name as we cannot update to first segment now
-    return segmentsHolder.getValidSegmentDetailVOs().get(0).getUpdateStatusFilename();
+    return segmentsHolder.getAllSegments().get(0).getUpdateStatusFilename();
   }
 
   /**

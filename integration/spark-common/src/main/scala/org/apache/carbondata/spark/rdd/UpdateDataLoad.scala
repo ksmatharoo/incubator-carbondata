@@ -24,7 +24,6 @@ import org.apache.spark.sql.Row
 
 import org.apache.carbondata.common.CarbonIterator
 import org.apache.carbondata.common.logging.LogServiceFactory
-import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus}
 import org.apache.carbondata.processing.loading.{DataLoadExecutor, TableProcessingOperations}
 import org.apache.carbondata.processing.loading.model.CarbonLoadModel
 
@@ -37,8 +36,7 @@ object UpdateDataLoad {
       segId: String,
       index: Long,
       iter: Iterator[Row],
-      carbonLoadModel: CarbonLoadModel,
-      loadMetadataDetails: LoadMetadataDetails): Unit = {
+      carbonLoadModel: CarbonLoadModel): Unit = {
     val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
     try {
       val recordReaders = mutable.Buffer[CarbonIterator[Array[AnyRef]]]()
@@ -52,11 +50,9 @@ object UpdateDataLoad {
       // Initialize to set carbon properties
       loader.initialize()
 
-      loadMetadataDetails.setSegmentStatus(SegmentStatus.SUCCESS)
       new DataLoadExecutor().execute(carbonLoadModel,
         loader.storeLocation,
         recordReaders.toArray)
-
     } catch {
       case e: Exception =>
         LOGGER.error(e)

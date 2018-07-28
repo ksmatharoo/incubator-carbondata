@@ -30,7 +30,7 @@ import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.metadata.{CarbonMetadata, SegmentFileStore}
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.spark.rdd.CarbonScanRDD
@@ -350,8 +350,8 @@ class StandardPartitionTableLoadingTestCase extends QueryTest with BeforeAndAfte
     sql(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE mergeindexpartitionthree OPTIONS('DELIMITER'= ',', 'QUOTECHAR'= '"')""")
 
     val carbonTable = CarbonMetadata.getInstance().getCarbonTable("default_mergeindexpartitionthree")
-    val details = SegmentStatusManager.readTableStatusFile(CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath))
-    val store = new SegmentFileStore(carbonTable.getTablePath, details(0).getSegmentFile)
+    val details = SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier).getAllSegments.asScala
+    val store = new SegmentFileStore(carbonTable.getTablePath, details(0).getSegmentFileName)
     store.readIndexFiles()
     store.getIndexFiles
     assert(store.getIndexFiles.size() == 10)

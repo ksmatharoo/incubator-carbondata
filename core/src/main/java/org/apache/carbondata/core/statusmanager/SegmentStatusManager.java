@@ -180,21 +180,21 @@ public class SegmentStatusManager {
     }
   }
 
-  /**
-   * Reads the table status file with the specified UUID if non empty.
-   */
-  public static LoadMetadataDetails[] readLoadMetadata(String metaDataFolderPath, String uuid)
-      throws IOException {
-    String tableStatusFileName;
-    if (uuid.isEmpty()) {
-      tableStatusFileName = metaDataFolderPath + CarbonCommonConstants.FILE_SEPARATOR
-          + CarbonTablePath.TABLE_STATUS_FILE;
-    } else {
-      tableStatusFileName = metaDataFolderPath + CarbonCommonConstants.FILE_SEPARATOR
-          + CarbonTablePath.TABLE_STATUS_FILE + CarbonCommonConstants.UNDERSCORE + uuid;
-    }
-    return readTableStatusFile(tableStatusFileName);
-  }
+//  /**
+//   * Reads the table status file with the specified UUID if non empty.
+//   */
+//  public static LoadMetadataDetails[] readLoadMetadata(String metaDataFolderPath, String uuid)
+//      throws IOException {
+//    String tableStatusFileName;
+//    if (uuid.isEmpty()) {
+//      tableStatusFileName = metaDataFolderPath + CarbonCommonConstants.FILE_SEPARATOR
+//          + CarbonTablePath.TABLE_STATUS_FILE;
+//    } else {
+//      tableStatusFileName = metaDataFolderPath + CarbonCommonConstants.FILE_SEPARATOR
+//          + CarbonTablePath.TABLE_STATUS_FILE + CarbonCommonConstants.UNDERSCORE + uuid;
+//    }
+//    return readTableStatusFile(tableStatusFileName);
+//  }
 
   /**
    * This method reads the load history metadata file
