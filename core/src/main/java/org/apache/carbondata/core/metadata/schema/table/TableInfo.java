@@ -333,7 +333,8 @@ public class TableInfo implements Serializable, Writable {
     if (identifier == null) {
       CarbonTableIdentifier carbontableIdentifier =
           new CarbonTableIdentifier(databaseName, factTable.getTableName(), factTable.getTableId());
-      identifier = AbsoluteTableIdentifier.from(tablePath, carbontableIdentifier);
+      identifier =
+          AbsoluteTableIdentifier.from(tablePath, carbontableIdentifier, isTransactionalTable);
     }
     return identifier;
   }

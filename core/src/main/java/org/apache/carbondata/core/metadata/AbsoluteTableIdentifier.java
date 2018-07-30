@@ -41,6 +41,8 @@ public class AbsoluteTableIdentifier implements Serializable {
    */
   private String dictionaryPath;
 
+  private boolean isTransactional;
+
 
   /**
    * carbon table identifier which will have table name and table database
@@ -52,6 +54,14 @@ public class AbsoluteTableIdentifier implements Serializable {
     //TODO this should be moved to common place where path handling will be handled
     this.tablePath = FileFactory.getUpdatedFilePath(tablePath);
     this.carbonTableIdentifier = carbonTableIdentifier;
+  }
+
+  private AbsoluteTableIdentifier(String tablePath, CarbonTableIdentifier carbonTableIdentifier,
+      boolean isTransactional) {
+    //TODO this should be moved to common place where path handling will be handled
+    this.tablePath = FileFactory.getUpdatedFilePath(tablePath);
+    this.carbonTableIdentifier = carbonTableIdentifier;
+    this.isTransactional = isTransactional;
   }
 
   /**
@@ -75,6 +85,13 @@ public class AbsoluteTableIdentifier implements Serializable {
       String tablePath,
       CarbonTableIdentifier carbonTableIdentifier) {
     return new AbsoluteTableIdentifier(tablePath, carbonTableIdentifier);
+  }
+
+  public static AbsoluteTableIdentifier from(
+      String tablePath,
+      CarbonTableIdentifier carbonTableIdentifier,
+      boolean isTransactional) {
+    return new AbsoluteTableIdentifier(tablePath, carbonTableIdentifier, isTransactional);
   }
 
   public String getTablePath() {
@@ -145,6 +162,10 @@ public class AbsoluteTableIdentifier implements Serializable {
 
   public String getTableName() {
     return carbonTableIdentifier.getTableName();
+  }
+
+  public boolean isTransactional() {
+    return isTransactional;
   }
 
   public String toString() {

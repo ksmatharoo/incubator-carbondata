@@ -122,7 +122,9 @@ public final class SegmentManager {
       }
     }
     try {
-      segmentStore.generateSegmentIdAndInsert(identifier, detailVO);
+      if (identifier.isTransactional()) {
+        segmentStore.generateSegmentIdAndInsert(identifier, detailVO);
+      }
     } catch (IOException e) {
       // TODO Create SegmentManagementException
       throw new RuntimeException(e);
@@ -272,7 +274,9 @@ public final class SegmentManager {
         .equals(SegmentStatus.MARKED_FOR_DELETE.toString())) {
       addToStaleFolders(identifier, staleFolders, detailVO.getSegmentId());
     }
-
+    if (!identifier.isTransactional()) {
+      return true;
+    }
     boolean status = segmentStore.updateSegments(identifier, detailVOS);
     if (!FileFactory.deleteAllCarbonFiles(staleFolders)) {
       LOGGER.error("Failed to delete stale folder: " + staleFolders.get(0).getAbsolutePath());
@@ -297,7 +301,9 @@ public final class SegmentManager {
         throw new UnsupportedOperationException("SegmentId cannot be null during commit");
       }
     }
-
+    if (!identifier.isTransactional()) {
+      return true;
+    }
     return segmentStore.updateSegments(identifier, detailVOs);
   }
 
@@ -347,6 +353,9 @@ public final class SegmentManager {
         addToStaleFolders(identifier, staleFolders, vo.getSegmentId());
       }
     }
+    if (!identifier.isTransactional()) {
+      return true;
+    }
     boolean status = segmentStore.updateSegments(identifier, detailVOS);
     if (!FileFactory.deleteAllCarbonFiles(staleFolders)) {
       LOGGER.error("Failed to delete stale folder: " + staleFolders.get(0).getAbsolutePath());
@@ -380,7 +389,9 @@ public final class SegmentManager {
       }
       detailVO.setUpdateStatusFilename(CarbonUpdateUtil.getUpdateStatusFileName(uniqueId));
       tobeUpdatedSegs.add(detailVO);
-
+      if (!identifier.isTransactional()) {
+        return true;
+      }
       // Commit the removed partitions in carbon store.
       boolean status = segmentStore.updateSegments(identifier, tobeUpdatedSegs);
 
