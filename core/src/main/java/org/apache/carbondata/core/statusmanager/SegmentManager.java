@@ -408,46 +408,56 @@ public final class SegmentManager {
    */
   public List<String> deleteSegmentBySegmentIds(AbsoluteTableIdentifier identifier,
       List<String> segmentIds) {
-    SegmentsHolder segments = getAllSegments(identifier);
-    List<SegmentDetailVO> updateSegments = new ArrayList<>();
+    ICarbonLock carbonDeleteSegmentLock =
+        CarbonLockFactory.getCarbonLockObj(identifier, LockUsage.DELETE_SEGMENT_LOCK);
     List<String> invalidSegmentIds = new ArrayList<>();
-    for (String segmentId : segmentIds) {
-      SegmentDetailVO detailVO = segments.getSegmentDetailVO(segmentId);
-      if (detailVO == null) {
-        invalidSegmentIds.add(segmentId);
-      }
-      if (SegmentStatus.COMPACTED.toString().equals(detailVO.getStatus())) {
-        // if the segment is compacted then no need to delete that.
-        LOGGER.error("Cannot delete the Segment which is compacted. Segment is " + segmentId);
-        invalidSegmentIds.add(segmentId);
-      } else if (SegmentStatus.INSERT_IN_PROGRESS.toString().equals(detailVO.getStatus())
-          && isLoadInProgress(identifier, segmentId)) {
-        // if the segment status is in progress then no need to delete that.
-        LOGGER.error("Cannot delete the segment " + segmentId + " which is load in progress");
-        invalidSegmentIds.add(segmentId);
-      } else if (SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS.toString().equals(detailVO.getStatus())
-          && isLoadInProgress(identifier, segmentId)) {
-        // if the segment status is overwrite in progress, then no need to delete that.
-        LOGGER.error("Cannot delete the segment " + segmentId + " which is load overwrite " +
-            "in progress");
-        invalidSegmentIds.add(segmentId);
-      } else if (SegmentStatus.STREAMING.toString().equals(detailVO.getStatus())) {
-        // if the segment status is streaming, the segment can't be deleted directly.
-        LOGGER.error("Cannot delete the segment " + segmentId + " which is streaming in progress");
-        invalidSegmentIds.add(segmentId);
-      } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(detailVO.getStatus())) {
-        updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId)
-            .setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
-            .setModificationOrDeletionTimestamp((CarbonUpdateUtil.readCurrentTime())));
-        LOGGER.info("Segment ID " + segmentId + " Marked for Delete");
-      }
-    }
+    try {
+      if (carbonDeleteSegmentLock.lockWithRetries()) {
+        LOGGER.info("Delete segment lock has been successfully acquired");
+        SegmentsHolder segments = getAllSegments(identifier);
+        List<SegmentDetailVO> updateSegments = new ArrayList<>();
+        for (String segmentId : segmentIds) {
+          SegmentDetailVO detailVO = segments.getSegmentDetailVO(segmentId);
+          if (detailVO == null) {
+            invalidSegmentIds.add(segmentId);
+          }
+          if (SegmentStatus.COMPACTED.toString().equals(detailVO.getStatus())) {
+            // if the segment is compacted then no need to delete that.
+            LOGGER.error("Cannot delete the Segment which is compacted. Segment is " + segmentId);
+            invalidSegmentIds.add(segmentId);
+          } else if (SegmentStatus.INSERT_IN_PROGRESS.toString().equals(detailVO.getStatus()) && isLoadInProgress(identifier, segmentId)) {
+            // if the segment status is in progress then no need to delete that.
+            LOGGER.error("Cannot delete the segment " + segmentId + " which is load in progress");
+            invalidSegmentIds.add(segmentId);
+          } else if (SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS.toString().equals(detailVO.getStatus())
+              && isLoadInProgress(identifier, segmentId)) {
+            // if the segment status is overwrite in progress, then no need to delete that.
+            LOGGER.error("Cannot delete the segment " + segmentId + " which is load overwrite "
+                + "in progress");
+            invalidSegmentIds.add(segmentId);
+          } else if (SegmentStatus.STREAMING.toString().equals(detailVO.getStatus())) {
+            // if the segment status is streaming, the segment can't be deleted directly.
+            LOGGER.error("Cannot delete the segment " + segmentId + " which is streaming in progress");
+            invalidSegmentIds.add(segmentId);
+          } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(detailVO.getStatus())) {
+            updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId).setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
+                .setModificationOrDeletionTimestamp((CarbonUpdateUtil.readCurrentTime())));
+            LOGGER.info("Segment ID " + segmentId + " Marked for Delete");
+          }
+        }
 
-    if (invalidSegmentIds.size() > 0) {
-      return invalidSegmentIds;
-    }
-    if (updateSegments.size() > 0) {
-      updateSegments(identifier, updateSegments);
+        if (invalidSegmentIds.size() > 0) {
+          return invalidSegmentIds;
+        }
+        if (updateSegments.size() > 0) {
+          updateSegments(identifier, updateSegments);
+        }
+      } else {
+        LOGGER.error("Delete segment lock failed to acquire");
+        invalidSegmentIds.addAll(segmentIds);
+      }
+    } finally {
+      CarbonLockUtil.fileUnlock(carbonDeleteSegmentLock, LockUsage.DELETE_SEGMENT_LOCK);
     }
     return invalidSegmentIds;
   }
@@ -460,43 +470,48 @@ public final class SegmentManager {
    * @return
    */
   public boolean deleteSegmentByLoadTime(AbsoluteTableIdentifier identifier, long loadTime) {
-    List<SegmentDetailVO> allSegments = getAllSegments(identifier).getAllSegments();
-    List<String> segmentIds = new ArrayList<>();
-    List<SegmentDetailVO> updateSegments = new ArrayList<>();
-    for (SegmentDetailVO segment : allSegments) {
-      Integer result = segment.getLoadStartTime().compareTo(loadTime);
-      if (result < 0) {
-        String segmentId = segment.getSegmentId();
-        if (SegmentStatus.COMPACTED.toString().equals(segment.getStatus())) {
-          // if the segment is compacted then no need to delete that.
-          LOGGER.info("Ignoring the segment : " + segmentId
-              + "as the segment has been compacted.");
-        } else if (SegmentStatus.INSERT_IN_PROGRESS.toString().equals(segment.getStatus())
-            && isLoadInProgress(identifier, segmentId)) {
-          // if the segment status is in progress then no need to delete that.
-          LOGGER.info("Ignoring the segment : " + segmentId
-              + "as the segment is insert in progress.");
-        } else if (SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS.toString().equals(segment.getStatus())
-            && isLoadInProgress(identifier, segmentId)) {
-          // if the segment status is overwrite in progress, then no need to delete that.
-          LOGGER.info("Ignoring the segment : " + segmentId
-              + "as the segment is insert in progress.");
-        } else if (SegmentStatus.STREAMING.toString().equals(segment.getStatus())) {
-          // if the segment status is streaming, the segment can't be deleted directly.
-          LOGGER.info("Ignoring the segment : " + segmentId
-              + "as the segment is streaming in progress.");
-        } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(segment.getStatus())) {
-          updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId)
-              .setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
-              .setModificationOrDeletionTimestamp((CarbonUpdateUtil.readCurrentTime())));
-          LOGGER.info("Segment ID " + segmentId + " Marked for Delete");
+    ICarbonLock carbonDeleteSegmentLock =
+        CarbonLockFactory.getCarbonLockObj(identifier, LockUsage.DELETE_SEGMENT_LOCK);
+    try {
+      if (carbonDeleteSegmentLock.lockWithRetries()) {
+        LOGGER.info("Delete segment lock has been successfully acquired");
+        List<SegmentDetailVO> allSegments = getAllSegments(identifier).getAllSegments();
+        List<SegmentDetailVO> updateSegments = new ArrayList<>();
+        for (SegmentDetailVO segment : allSegments) {
+          Integer result = segment.getLoadStartTime().compareTo(loadTime);
+          if (result < 0) {
+            String segmentId = segment.getSegmentId();
+            if (SegmentStatus.COMPACTED.toString().equals(segment.getStatus())) {
+              // if the segment is compacted then no need to delete that.
+              LOGGER.info("Ignoring the segment : " + segmentId + "as the segment has been compacted.");
+            } else if (SegmentStatus.INSERT_IN_PROGRESS.toString().equals(segment.getStatus()) && isLoadInProgress(identifier, segmentId)) {
+              // if the segment status is in progress then no need to delete that.
+              LOGGER.info("Ignoring the segment : " + segmentId + "as the segment is insert in progress.");
+            } else if (SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS.toString().equals(segment.getStatus())
+                && isLoadInProgress(identifier, segmentId)) {
+              // if the segment status is overwrite in progress, then no need to delete that.
+              LOGGER.info("Ignoring the segment : " + segmentId + "as the segment is insert in progress.");
+            } else if (SegmentStatus.STREAMING.toString().equals(segment.getStatus())) {
+              // if the segment status is streaming, the segment can't be deleted directly.
+              LOGGER.info("Ignoring the segment : " + segmentId + "as the segment is streaming in progress.");
+            } else if (!SegmentStatus.MARKED_FOR_DELETE.toString().equals(segment.getStatus())) {
+              updateSegments.add(new SegmentDetailVO().setSegmentId(segmentId).setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
+                  .setModificationOrDeletionTimestamp((CarbonUpdateUtil.readCurrentTime())));
+              LOGGER.info("Segment ID " + segmentId + " Marked for Delete");
+            }
+          }
         }
+        if (updateSegments.size() > 0) {
+          updateSegments(identifier, updateSegments);
+        } else {
+          return false;
+        }
+      } else {
+        LOGGER.error("Delete segment lock failed to acquire");
+        return false;
       }
-    }
-    if (updateSegments.size() > 0) {
-      updateSegments(identifier, updateSegments);
-    } else {
-      return false;
+    } finally {
+      CarbonLockUtil.fileUnlock(carbonDeleteSegmentLock, LockUsage.DELETE_SEGMENT_LOCK);
     }
     return true;
   }

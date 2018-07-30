@@ -110,22 +110,22 @@ class TestTimeseriesCompaction extends QueryTest with BeforeAndAfterAll {
 
   test("test if pre-agg table is compacted with parent table minor compaction") {
     val segmentNamesSecond = sql("show segments for table maintable_agg0_second").collect().map(_.get(0).toString)
-    segmentNamesSecond should equal (Array("3", "2", "1", "0.1", "0"))
+    segmentNamesSecond should equal (Array("0.1", "3", "2", "1", "0"))
 
     val segmentNamesMinute = sql("show segments for table maintable_agg0_minute").collect().map(_.get(0).toString)
-    segmentNamesMinute should equal (Array("3", "2", "1", "0.1", "0"))
+    segmentNamesMinute should equal (Array("0.1", "3", "2", "1", "0"))
 
     val segmentNamesHour = sql("show segments for table maintable_agg0_hour").collect().map(_.get(0).toString)
-    segmentNamesHour should equal (Array("3", "2", "1", "0.1", "0"))
+    segmentNamesHour should equal (Array("0.1", "3", "2", "1", "0"))
 
     val segmentNamesday = sql("show segments for table maintable_agg0_day").collect().map(_.get(0).toString)
-    segmentNamesday should equal (Array("3", "2", "1", "0.1", "0"))
+    segmentNamesday should equal (Array("0.1", "3", "2", "1", "0"))
 
     val segmentNamesmonth = sql("show segments for table maintable_agg0_month").collect().map(_.get(0).toString)
-    segmentNamesmonth should equal (Array("3", "2", "1", "0.1", "0"))
+    segmentNamesmonth should equal (Array("0.1", "3", "2", "1", "0"))
 
     val segmentNamesyear = sql("show segments for table maintable_agg0_year").collect().map(_.get(0).toString)
-    segmentNamesyear should equal (Array("3", "2", "1", "0.1", "0"))
+    segmentNamesyear should equal (Array("0.1", "3", "2", "1", "0"))
   }
 
   override def afterAll: Unit = {

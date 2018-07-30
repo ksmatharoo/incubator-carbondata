@@ -115,7 +115,7 @@ object AlterTableDropPartitionPostStatusListener extends OperationEventListener 
     if (childDropPartitionCommands != null && carbonTable.hasAggregationDataMap) {
       val childCommands =
         childDropPartitionCommands.asInstanceOf[Seq[CarbonAlterTableDropHivePartitionCommand]]
-      val updateFailed = try {
+      val updateSuccess = try {
         val childTablesIdents = childCommands.map(_.table.getAbsoluteTableIdentifier)
         SegmentManager.getInstance().commitTransaction(childTablesIdents.asJava, uuid)
       } finally {
@@ -126,7 +126,7 @@ object AlterTableDropPartitionPostStatusListener extends OperationEventListener 
           operationContext,
           uuid)
       }
-      if (updateFailed) {
+      if (!updateSuccess) {
         sys.error("Failed to update table status for pre-aggregate table")
       }
     }

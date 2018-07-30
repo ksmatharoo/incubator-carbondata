@@ -910,7 +910,7 @@ object CarbonDataRDDFactory {
     val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
     val detailVO = new SegmentDetailVO
     detailVO.setSegmentId(carbonLoadModel.getSegmentId).setSegmentFileName(segmentFileName).
-      setStatus(loadStatus.toString).setLoadEndTime(System.currentTimeMillis()).
+      setStatus(newEntryLoadStatus.toString).setLoadEndTime(System.currentTimeMillis()).
       setTransactionId(uuid)
 
     CarbonLoaderUtil

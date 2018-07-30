@@ -113,20 +113,36 @@ public class FileBasedSegmentStore implements SegmentStore, HistorySupportSegmen
 
   @Override public boolean updateSegments(AbsoluteTableIdentifier identifier,
       List<SegmentDetailVO> detailVOS) {
+    ICarbonLock carbonLock = getTableStatusLock(identifier);
     try {
-      LoadMetadataDetails[] details =
-          readTableStatusFile(CarbonTablePath.getTableStatusFilePath(identifier.getTablePath()));
-      for (LoadMetadataDetails detail : details) {
-        for (SegmentDetailVO detailVO : detailVOS) {
-          if (detailVO.getSegmentId().equals(detail.getLoadName())) {
-            SegmentManagerHelper.updateLoadMetadataDetails(detailVO, detail);
+      if (carbonLock.lockWithRetries(retryCount, maxTimeout)) {
+        LOGGER.info(
+            "Acquired lock for table" + identifier.uniqueName() + " for table status updation");
+        LoadMetadataDetails[] details = readTableStatusFile(CarbonTablePath.getTableStatusFilePath(identifier.getTablePath()));
+        for (LoadMetadataDetails detail : details) {
+          for (SegmentDetailVO detailVO : detailVOS) {
+            if (detailVO.getSegmentId().equals(detail.getLoadName())) {
+              SegmentManagerHelper.updateLoadMetadataDetails(detailVO, detail);
+            }
           }
         }
+        writeLoadDetailsIntoFile(identifier, details);
+        return true;
+      } else {
+        LOGGER.error("Unable to aquire Table lock for table" + identifier.uniqueName()
+            + " during table status updation");
+        return false;
       }
-      writeLoadDetailsIntoFile(identifier, details);
-      return true;
     } catch (IOException e) {
       throw new RuntimeException(e);
+    } finally {
+      if (carbonLock.unlock()) {
+        LOGGER.info(
+            "Table unlocked successfully after table status updation" + identifier.uniqueName());
+      } else {
+        LOGGER.error("Unable to unlock Table lock for table" + identifier.uniqueName()
+            + " during table status updation");
+      }
     }
   }
 

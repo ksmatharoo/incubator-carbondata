@@ -220,6 +220,9 @@ public class CarbonUpdateUtil {
         }
         detailVO.setStatus(SegmentStatus.MARKED_FOR_DELETE.toString())
             .setModificationOrDeletionTimestamp(Long.parseLong(updatedTimeStamp));
+        detailVO.setSegmentFileName(
+            SegmentFileStore.genSegmentFileName(segment.getSegmentNo(), updatedTimeStamp)
+                + CarbonTablePath.SEGMENT_EXT);
       }
 
     }

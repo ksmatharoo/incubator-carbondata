@@ -371,7 +371,7 @@ class InsertIntoCarbonTableTestCase extends QueryTest with BeforeAndAfterAll {
   private def checkSegment(tableName: String) : Boolean ={
     val storePath_t1 = s"$storeLocation/${tableName.toLowerCase()}"
     val detailses = SegmentManager.getInstance().getAllSegments(AbsoluteTableIdentifier.from(storePath_t1, "default", tableName)).getAllSegments.asScala
-    detailses.map(_.getStatus == SegmentStatus.SUCCESS).exists(f => f)
+    detailses.map(_.getStatus.equals(SegmentStatus.SUCCESS.toString)).exists(f => f)
   }
 
   test("test show segments after clean files for insert overwrite") {
