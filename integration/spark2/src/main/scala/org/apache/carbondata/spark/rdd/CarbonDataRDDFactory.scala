@@ -522,7 +522,6 @@ object CarbonDataRDDFactory {
         carbonTable,
         carbonLoadModel.getSegmentId,
         segmentFileName,
-        carbonTable.getCarbonTableIdentifier.getTableId,
         new SegmentFileStore(carbonTable.getTablePath, segmentFileName))
 
       operationContext.setProperty(carbonTable.getTableUniqueName + "_Segment",

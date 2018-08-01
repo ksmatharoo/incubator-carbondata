@@ -46,7 +46,6 @@ import org.apache.carbondata.core.indexstore.BlockletDetailInfo;
 import org.apache.carbondata.core.keygenerator.mdkey.NumberCompressor;
 import org.apache.carbondata.core.localdictionary.generator.ColumnLocalDictionaryGenerator;
 import org.apache.carbondata.core.localdictionary.generator.LocalDictionaryGenerator;
-import org.apache.carbondata.core.locks.ICarbonLock;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.ColumnarFormatVersion;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
@@ -78,11 +77,8 @@ import org.apache.carbondata.core.reader.CarbonIndexFileReader;
 import org.apache.carbondata.core.reader.ThriftReader;
 import org.apache.carbondata.core.reader.ThriftReader.TBaseCreator;
 import org.apache.carbondata.core.scan.model.ProjectionDimension;
-import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentDetailVO;
 import org.apache.carbondata.core.statusmanager.SegmentManager;
-import org.apache.carbondata.core.statusmanager.SegmentStatus;
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager;
 import org.apache.carbondata.core.util.comparator.Comparator;
 import org.apache.carbondata.core.util.comparator.SerializableComparator;
@@ -3180,11 +3176,9 @@ public final class CarbonUtil {
       storePath = carbonTable.getTablePath();
     } else {
       // get the valid segments
-      SegmentStatusManager segmentStatusManager =
-          new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier());
-      SegmentStatusManager.ValidAndInvalidSegmentsInfo validAndInvalidSegmentsInfo =
-          segmentStatusManager.getValidAndInvalidSegments();
-      List<Segment> validSegments = validAndInvalidSegmentsInfo.getValidSegments();
+      List<Segment> validSegments =
+          SegmentManager.getInstance().getValidSegments(
+              carbonTable.getAbsoluteTableIdentifier()).getValidSegments();
       CarbonProperties carbonProperties = CarbonProperties.getInstance();
       if (validSegments.isEmpty()) {
         return carbonProperties.getFormatVersion();

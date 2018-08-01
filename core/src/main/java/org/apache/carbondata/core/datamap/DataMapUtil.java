@@ -29,8 +29,6 @@ import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.scan.filter.resolver.FilterResolverIntf;
 import org.apache.carbondata.core.statusmanager.SegmentManager;
-import org.apache.carbondata.core.statusmanager.SegmentManagerHelper;
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.statusmanager.SegmentsHolder;
 import org.apache.carbondata.core.util.ObjectSerializationUtil;
 

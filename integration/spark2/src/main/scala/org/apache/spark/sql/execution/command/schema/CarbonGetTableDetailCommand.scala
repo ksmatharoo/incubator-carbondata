@@ -22,9 +22,7 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.execution.command.DataCommand
 import org.apache.spark.sql.types.{LongType, StringType}
 
-import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
-import org.apache.carbondata.core.util.CarbonProperties
+import org.apache.carbondata.core.statusmanager.SegmentManager
 
 /**
  * collect dynamic detail information of the table, including table size, last modified time, etc.
@@ -43,7 +41,7 @@ case class CarbonGetTableDetailCommand(
         Row(
           tablename,
           carbonTable.size,
-          SegmentStatusManager
+          SegmentManager.getInstance()
             .getTableStatusLastModifiedTime(carbonTable.getAbsoluteTableIdentifier))
       }
     } else {

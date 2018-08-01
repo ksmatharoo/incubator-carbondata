@@ -40,7 +40,6 @@ import org.apache.carbondata.core.statusmanager.SegmentDetailVO;
 import org.apache.carbondata.core.statusmanager.SegmentManager;
 import org.apache.carbondata.core.statusmanager.SegmentManagerHelper;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.util.CarbonSessionInfo;
 import org.apache.carbondata.core.util.ThreadLocalSessionInfo;
 import org.apache.carbondata.core.util.path.CarbonTablePath;

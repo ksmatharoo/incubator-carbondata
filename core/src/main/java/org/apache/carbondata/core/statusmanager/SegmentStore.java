@@ -70,4 +70,9 @@ public interface SegmentStore {
    */
   void deleteSegments(AbsoluteTableIdentifier identifier);
 
+  /**
+   * This method will return last modified time of tablestatus file
+   */
+  long getTableStatusLastModifiedTime(AbsoluteTableIdentifier identifier) throws IOException;
+
 }

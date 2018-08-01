@@ -49,7 +49,6 @@ import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.core.scan.filter.intf.ExpressionType;
 import org.apache.carbondata.core.statusmanager.SegmentManager;
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.events.Event;
@@ -185,7 +184,7 @@ abstract class LuceneDataMapFactoryBase<T extends DataMap> extends DataMapFactor
       for (Segment segment : validSegments) {
         deleteDatamapData(segment);
       }
-    } catch (RuntimeException ex) {
+    } catch (IOException ex) {
       throw new MalformedDataMapCommandException(
           "drop datamap failed, failed to delete datamap directory");
     }

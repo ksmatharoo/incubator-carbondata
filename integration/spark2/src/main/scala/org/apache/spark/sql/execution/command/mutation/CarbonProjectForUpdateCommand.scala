@@ -32,9 +32,8 @@ import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.exception.ConcurrentOperationException
 import org.apache.carbondata.core.features.TableOperation
 import org.apache.carbondata.core.locks.{CarbonLockFactory, CarbonLockUtil, LockUsage}
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.events.{OperationContext, OperationListenerBus, UpdateTablePostEvent, UpdateTablePreEvent}
 import org.apache.carbondata.processing.loading.FailureCauses
@@ -70,7 +69,7 @@ private[sql] case class CarbonProjectForUpdateCommand(
     if (!carbonTable.getTableInfo.isTransactionalTable) {
       throw new MalformedCarbonCommandException("Unsupported operation on non transactional table")
     }
-    if (SegmentStatusManager.isCompactionInProgress(carbonTable)) {
+    if (SegmentManager.getInstance().isCompactionInProgress(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "compaction", "data update")
     }
     if (SegmentManager.getInstance().isLoadInProgressInTable(carbonTable)) {

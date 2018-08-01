@@ -26,9 +26,8 @@ import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.exception.ConcurrentOperationException
 import org.apache.carbondata.core.features.TableOperation
 import org.apache.carbondata.core.locks.{CarbonLockFactory, CarbonLockUtil, LockUsage}
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.events.{DeleteFromTablePostEvent, DeleteFromTablePreEvent, OperationContext, OperationListenerBus}
 import org.apache.carbondata.processing.loading.FailureCauses
 
@@ -50,7 +49,7 @@ private[sql] case class CarbonProjectForDeleteCommand(
       throw new MalformedCarbonCommandException("Unsupported operation on non transactional table")
     }
 
-    if (SegmentStatusManager.isCompactionInProgress(carbonTable)) {
+    if (SegmentManager.getInstance().isCompactionInProgress(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "compaction", "data delete")
     }
 

@@ -37,7 +37,7 @@ import org.apache.carbondata.core.locks.{CarbonLockUtil, ICarbonLock, LockUsage}
 import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, SegmentFileStore}
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatus, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatus}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 
 object CarbonStore {

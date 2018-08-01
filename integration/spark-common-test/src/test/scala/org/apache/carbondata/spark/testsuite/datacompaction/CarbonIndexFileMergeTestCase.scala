@@ -36,7 +36,7 @@ import org.apache.carbondata.core.datamap.{DataMapStoreManager, Segment}
 import org.apache.carbondata.core.indexstore.TableBlockIndexUniqueIdentifier
 import org.apache.carbondata.core.indexstore.blockletindex.{BlockletDataMapFactory, SegmentIndexFileStore}
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.SegmentManager
 
 class CarbonIndexFileMergeTestCase
   extends QueryTest with BeforeAndAfterEach with BeforeAndAfterAll {
@@ -251,16 +251,14 @@ class CarbonIndexFileMergeTestCase
       """.stripMargin)
     sql(s"LOAD DATA LOCAL INPATH '$file2' INTO TABLE fileSize OPTIONS('header'='false')")
     val table = CarbonMetadata.getInstance().getCarbonTable("default", "fileSize")
-    var loadMetadataDetails = SegmentStatusManager
-      .readTableStatusFile(CarbonTablePath.getTableStatusFilePath(table.getTablePath))
-    var segment0 = loadMetadataDetails.filter(x=> x.getLoadName.equalsIgnoreCase("0"))
+    var loadMetadataDetails = SegmentManager.getInstance().getAllSegments(table.getAbsoluteTableIdentifier).getAllSegments.asScala
+    var segment0 = loadMetadataDetails.filter(x=> x.getSegmentId.equalsIgnoreCase("0"))
     Assert
       .assertEquals(getIndexOrMergeIndexFileSize(table, "0", CarbonTablePath.INDEX_FILE_EXT),
         segment0.head.getIndexSize.toLong)
     sql("Alter table fileSize compact 'segment_index'")
-    loadMetadataDetails = SegmentStatusManager
-      .readTableStatusFile(CarbonTablePath.getTableStatusFilePath(table.getTablePath))
-    segment0 = loadMetadataDetails.filter(x=> x.getLoadName.equalsIgnoreCase("0"))
+    loadMetadataDetails = SegmentManager.getInstance().getAllSegments(table.getAbsoluteTableIdentifier).getAllSegments.asScala
+    segment0 = loadMetadataDetails.filter(x=> x.getSegmentId.equalsIgnoreCase("0"))
     Assert
       .assertEquals(getIndexOrMergeIndexFileSize(table, "0", CarbonTablePath.MERGE_INDEX_FILE_EXT),
         segment0.head.getIndexSize.toLong)

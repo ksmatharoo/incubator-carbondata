@@ -41,7 +41,7 @@ import org.apache.carbondata.core.metadata.schema.table.{AggregationDataMapSchem
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema
 import org.apache.carbondata.core.preagg.{AggregateQueryPlan, AggregateTableSelector, QueryColumn}
 import org.apache.carbondata.core.profiler.ExplainCollector
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.core.util.{CarbonUtil, ThreadLocalSessionInfo}
 
 /**

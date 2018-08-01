@@ -26,14 +26,13 @@ import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan}
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.util.CarbonException
 import org.apache.spark.util.{CarbonMetastoreTypes, SparkTypeConverter}
 
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.datatype.DataTypes
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.metadata.schema.table.column.{CarbonColumn, CarbonDimension}
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.core.util.path.CarbonTablePath
 
 /**
@@ -158,8 +157,9 @@ case class CarbonRelation(
   private var sizeInBytesLocalValue = 0L
 
   def sizeInBytes: Long = {
-    val tableStatusNewLastUpdatedTime = SegmentStatusManager.getTableStatusLastModifiedTime(
-      carbonTable.getAbsoluteTableIdentifier)
+    val tableStatusNewLastUpdatedTime =
+      SegmentManager.getInstance().getTableStatusLastModifiedTime(
+        carbonTable.getAbsoluteTableIdentifier)
     if (tableStatusLastUpdateTime != tableStatusNewLastUpdatedTime) {
       if (SegmentManager.getInstance().getValidSegments(
         carbonTable.getAbsoluteTableIdentifier).getValidSegments.isEmpty) {

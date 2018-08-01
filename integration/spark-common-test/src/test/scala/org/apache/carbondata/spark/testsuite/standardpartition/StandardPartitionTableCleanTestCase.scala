@@ -16,6 +16,8 @@
  */
 package org.apache.carbondata.spark.testsuite.standardpartition
 
+import scala.collection.JavaConverters._
+
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.optimizer.CarbonFilters
@@ -24,9 +26,8 @@ import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.metadata.{CarbonMetadata, SegmentFileStore}
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.core.util.CarbonProperties
-import org.apache.carbondata.core.util.path.CarbonTablePath
 
 class StandardPartitionTableCleanTestCase extends QueryTest with BeforeAndAfterAll {
 
@@ -57,9 +58,9 @@ class StandardPartitionTableCleanTestCase extends QueryTest with BeforeAndAfterA
       sqlContext.sparkSession,
       TableIdentifier(carbonTable.getTableName, Some(carbonTable.getDatabaseName)))
     assert(partitions.get.length == partition)
-    val details = SegmentStatusManager.readLoadMetadata(CarbonTablePath.getMetadataPath(carbonTable.getTablePath))
-    val segLoad = details.find(_.getLoadName.equals(segmentId)).get
-    val seg = new SegmentFileStore(carbonTable.getTablePath, segLoad.getSegmentFile)
+    val details = SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier).getAllSegments.asScala
+    val segLoad = details.find(_.getSegmentId.equals(segmentId)).get
+    val seg = new SegmentFileStore(carbonTable.getTablePath, segLoad.getSegmentFileName)
     assert(seg.getIndexOrMergeFiles.size == indexes)
   }
 

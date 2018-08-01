@@ -68,7 +68,7 @@ class CarbonMergeFilesRDD(
       } else {
         new CarbonIndexFileMergeWriter(carbonTable)
           .mergeCarbonIndexFilesOfSegment(split.segmentId,
-            tablePath,
+            carbonTable.getAbsoluteTableIdentifier,
             readFileFooterFromCarbonDataFile,
             segmentFileNameToSegmentIdMap.get(split.segmentId))
       }

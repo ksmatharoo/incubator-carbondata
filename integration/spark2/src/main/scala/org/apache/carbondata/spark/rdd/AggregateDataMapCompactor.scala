@@ -28,9 +28,7 @@ import org.apache.spark.sql.execution.command.preaaggregate.PreAggregateUtil
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
-import org.apache.carbondata.core.datastore.impl.FileFactory
-import org.apache.carbondata.core.statusmanager.{SegmentDetailVO, SegmentManager, SegmentStatus, SegmentStatusManager}
-import org.apache.carbondata.core.util.path.CarbonTablePath
+import org.apache.carbondata.core.statusmanager.{SegmentDetailVO, SegmentManager, SegmentStatus}
 import org.apache.carbondata.events.OperationContext
 import org.apache.carbondata.processing.loading.model.CarbonLoadModel
 import org.apache.carbondata.processing.merger.{CarbonDataMergerUtil, CompactionType}

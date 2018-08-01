@@ -47,17 +47,13 @@ import org.apache.carbondata.core.fileoperations.AtomicFileOperations;
 import org.apache.carbondata.core.fileoperations.FileWriteOperation;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.indexstore.blockletindex.SegmentIndexFileStore;
-import org.apache.carbondata.core.locks.CarbonLockUtil;
-import org.apache.carbondata.core.locks.ICarbonLock;
 import org.apache.carbondata.core.metadata.blocklet.DataFileFooter;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil;
-import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentDetailVO;
 import org.apache.carbondata.core.statusmanager.SegmentManager;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.DataFileFooterConverter;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
@@ -288,14 +284,18 @@ public class SegmentFileStore {
    * @return boolean which determines whether status update is done or not.
    * @throws IOException
    */
-  public static boolean updateSegmentFile(AbsoluteTableIdentifier identifier, String segmentId, String segmentFile)
+  public static boolean updateSegmentFile(CarbonTable table,
+      String segmentId, String segmentFile, SegmentFileStore segmentFileStore)
       throws IOException {
-    boolean status = SegmentManager.getInstance().commitLoadSegment(identifier,
-        new SegmentDetailVO().setSegmentId(segmentId).setSegmentFileName(segmentFile));
-    detail.setIndexSize(String.valueOf(CarbonUtil
-        .getCarbonIndexSize(segmentFileStore, segmentFileStore.getLocationMap())));
+    SegmentDetailVO detailVO =
+        new SegmentDetailVO().setSegmentId(segmentId).setSegmentFileName(segmentFile);
+    detailVO.setIndexSize(
+        CarbonUtil.getCarbonIndexSize(segmentFileStore, segmentFileStore.getLocationMap()));
+    boolean status =
+        SegmentManager.getInstance().commitLoadSegment(table.getAbsoluteTableIdentifier(),
+        detailVO);
     // clear dataMap cache for the segmentId for which the table status file is getting updated
-    clearBlockDataMapCache(carbonTable, segmentId);
+    clearBlockDataMapCache(table, segmentId);
     return status;
   }
 
@@ -309,6 +309,9 @@ public class SegmentFileStore {
    * @param segmentId
    */
   public static void clearBlockDataMapCache(CarbonTable carbonTable, String segmentId) {
+    if (segmentId == null) {
+      return;
+    }
     TableDataMap defaultDataMap = DataMapStoreManager.getInstance().getDefaultDataMap(carbonTable);
     Segment segment = new Segment(segmentId);
     List<Segment> segments = new ArrayList<>();

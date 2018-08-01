@@ -179,7 +179,7 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
 
     val tasks = new util.ArrayList[Callable[String]]()
     var i = 0
-    val count = 5
+    val count = 50
     while (i < count) {
       tasks.add(new QueryTask(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE  partitionmultiplethreeconcurrent partition(empname='ravi') OPTIONS('DELIMITER'= ',', 'QUOTECHAR'= '"')"""))
       i = i + 1
@@ -1022,7 +1022,7 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
         CarbonCommonConstants.CARBON_DATE_DEFAULT_FORMAT)
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_TASK_DISTRIBUTION ,
       CarbonCommonConstants.CARBON_TASK_DISTRIBUTION_DEFAULT)
-    dropTable
+//    dropTable
     if (executorService != null && !executorService.isShutdown) {
       executorService.shutdownNow()
     }

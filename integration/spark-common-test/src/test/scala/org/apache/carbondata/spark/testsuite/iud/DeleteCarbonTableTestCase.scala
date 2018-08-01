@@ -282,12 +282,12 @@ class DeleteCarbonTableTestCase extends QueryTest with BeforeAndAfterAll {
       carbonTable.isTransactionalTable,
       CarbonUtil.isStandardCarbonTable(carbonTable))
     assert(blockId_part.startsWith("Part0/Segment_0/part-0-100100000100001_batchno0-0-0-"))
-    val segment = Segment.getSegment("0", carbonTable.getTablePath)
+    val segment = Segment.getSegment("0", carbonTable.getAbsoluteTableIdentifier)
     val tableBlockPath = CarbonUpdateUtil
       .getTableBlockPath(listOfTupleId(0),
         carbonTable.getTablePath,
         CarbonUtil.isStandardCarbonTable(carbonTable))
-    val segment_part = Segment.getSegment("0", carbonTable_part.getTablePath)
+    val segment_part = Segment.getSegment("0", carbonTable_part.getAbsoluteTableIdentifier)
     val tableBl0ckPath_part = CarbonUpdateUtil
       .getTableBlockPath(listOfTupleId_part(0),
         carbonTable_part.getTablePath,

@@ -22,7 +22,7 @@ import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.metadata.CarbonMetadata
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatus, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatus}
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.spark.sql.test.util.QueryTest
 
@@ -82,11 +82,10 @@ class MajorCompactionIgnoreInMinorTest extends QueryTest with BeforeAndAfterAll 
       "ignoremajor"
     )
 
-    val carbonTablePath = carbonTable.getMetadataPath
-    val segs = SegmentStatusManager.readLoadMetadata(carbonTablePath)
+    val segs = SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier).getAllSegments.asScala
 
     // status should remain as compacted.
-    assertResult(SegmentStatus.COMPACTED)(segs(3).getSegmentStatus)
+    assert(SegmentStatus.COMPACTED.toString.equals(segs(3).getStatus))
   }
 
   /**
@@ -102,13 +101,12 @@ class MajorCompactionIgnoreInMinorTest extends QueryTest with BeforeAndAfterAll 
       CarbonCommonConstants.DATABASE_DEFAULT_NAME,
       "ignoremajor"
     )
-    val carbontablePath = carbonTable.getMetadataPath
-    val segs = SegmentStatusManager.readLoadMetadata(carbontablePath)
+    val segs = SegmentManager.getInstance().getAllSegments(carbonTable.getAbsoluteTableIdentifier).getAllSegments.asScala
 
     // status should remain as compacted for segment 2.
-    assertResult(SegmentStatus.COMPACTED)(segs(3).getSegmentStatus)
+    assert(SegmentStatus.COMPACTED.toString.equals(segs(3).getStatus))
     // for segment 0.1 . should get deleted
-    assertResult(SegmentStatus.MARKED_FOR_DELETE)(segs(2).getSegmentStatus)
+    assert(SegmentStatus.MARKED_FOR_DELETE.toString.equals(segs(2).getStatus))
   }
 
   /**

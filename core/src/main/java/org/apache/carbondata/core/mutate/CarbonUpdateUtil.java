@@ -39,11 +39,9 @@ import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.mutate.data.BlockMappingVO;
 import org.apache.carbondata.core.mutate.data.RowCountDetailsVO;
-import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentDetailVO;
 import org.apache.carbondata.core.statusmanager.SegmentManager;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager;
 import org.apache.carbondata.core.statusmanager.SegmentsHolder;
 import org.apache.carbondata.core.util.CarbonProperties;
@@ -431,10 +429,9 @@ public class CarbonUpdateUtil {
    */
   public static void cleanUpDeltaFiles(CarbonTable table, boolean forceDelete) throws IOException {
 
-    SegmentStatusManager ssm = new SegmentStatusManager(table.getAbsoluteTableIdentifier());
-
-    LoadMetadataDetails[] details =
-        SegmentStatusManager.readLoadMetadata(table.getMetadataPath());
+    List<SegmentDetailVO> allSegments =
+        SegmentManager.getInstance().getAllSegments(table.getAbsoluteTableIdentifier())
+            .getAllSegments();
 
     String validUpdateStatusFile = "";
 
@@ -446,20 +443,20 @@ public class CarbonUpdateUtil {
 
     // scan through each segment.
 
-    for (LoadMetadataDetails segment : details) {
+    for (SegmentDetailVO detailVO : allSegments) {
 
       // take the update status file name from 0th segment.
-      validUpdateStatusFile = getUpdateStatusFileName(details);
+      validUpdateStatusFile = getUpdateStatusFileName(allSegments);
 
       // if this segment is valid then only we will go for delta file deletion.
       // if the segment is mark for delete or compacted then any way it will get deleted.
 
-      if (segment.getSegmentStatus() == SegmentStatus.SUCCESS
-              || segment.getSegmentStatus() == SegmentStatus.LOAD_PARTIAL_SUCCESS) {
+      if (detailVO.getStatus().equals(SegmentStatus.SUCCESS.toString())
+              || detailVO.getStatus().equals(SegmentStatus.LOAD_PARTIAL_SUCCESS.toString())) {
 
         // take the list of files from this segment.
         String segmentPath = CarbonTablePath.getSegmentPath(
-            table.getAbsoluteTableIdentifier().getTablePath(), segment.getLoadName());
+            table.getAbsoluteTableIdentifier().getTablePath(), detailVO.getSegmentId());
         CarbonFile segDir =
             FileFactory.getCarbonFile(segmentPath, FileFactory.getFileType(segmentPath));
         CarbonFile[] allSegmentFiles = segDir.listFiles();
@@ -469,13 +466,13 @@ public class CarbonUpdateUtil {
 
         boolean updateSegmentFile = false;
         // deleting of the aborted file scenario.
-        if (deleteStaleCarbonDataFiles(segment, allSegmentFiles, updateStatusManager)) {
+        if (deleteStaleCarbonDataFiles(detailVO, allSegmentFiles, updateStatusManager)) {
           updateSegmentFile = true;
         }
 
         // get Invalid update  delta files.
         CarbonFile[] invalidUpdateDeltaFiles = updateStatusManager
-            .getUpdateDeltaFilesList(segment.getLoadName(), false,
+            .getUpdateDeltaFilesList(detailVO.getSegmentId(), false,
                 CarbonCommonConstants.UPDATE_DELTA_FILE_EXT, true, allSegmentFiles,
                 isInvalidFile);
 
@@ -486,7 +483,7 @@ public class CarbonUpdateUtil {
         }
         // do the same for the index files.
         CarbonFile[] invalidIndexFiles = updateStatusManager
-            .getUpdateDeltaFilesList(segment.getLoadName(), false,
+            .getUpdateDeltaFilesList(detailVO.getSegmentId(), false,
                 CarbonCommonConstants.UPDATE_INDEX_FILE_EXT, true, allSegmentFiles,
                 isInvalidFile);
 
@@ -510,7 +507,7 @@ public class CarbonUpdateUtil {
           CarbonFile[] completeListOfDeleteDeltaFiles;
           CarbonFile[] invalidDeleteDeltaFiles;
 
-          if (!block.getSegmentName().equalsIgnoreCase(segment.getLoadName())) {
+          if (!block.getSegmentName().equalsIgnoreCase(detailVO.getSegmentId())) {
             continue;
           }
 
@@ -544,7 +541,7 @@ public class CarbonUpdateUtil {
           }
         }
         if (updateSegmentFile) {
-          segmentFilesToBeUpdated.add(Segment.toSegment(segment.getLoadName(), null));
+          segmentFilesToBeUpdated.add(Segment.toSegment(detailVO.getSegmentId(), null));
         }
       }
     }
@@ -600,15 +597,15 @@ public class CarbonUpdateUtil {
    * @param segmentList
    * @return
    */
-  private static String getUpdateStatusFileName(LoadMetadataDetails[] segmentList) {
-    if (segmentList.length == 0) {
+  private static String getUpdateStatusFileName(List<SegmentDetailVO> segmentList) {
+    if (segmentList.size() == 0) {
       return "";
     }
     else {
-      for (LoadMetadataDetails eachSeg : segmentList) {
+      for (SegmentDetailVO eachSeg : segmentList) {
         // file name stored in 0th segment.
-        if (eachSeg.getLoadName().equalsIgnoreCase("0")) {
-          return eachSeg.getUpdateStatusFileName();
+        if (eachSeg.getSegmentId().equalsIgnoreCase("0")) {
+          return eachSeg.getUpdateStatusFilename();
         }
       }
     }
@@ -624,10 +621,10 @@ public class CarbonUpdateUtil {
    * @param allSegmentFiles
    * @param updateStatusManager
    */
-  private static boolean deleteStaleCarbonDataFiles(LoadMetadataDetails segment,
+  private static boolean deleteStaleCarbonDataFiles(SegmentDetailVO segment,
       CarbonFile[] allSegmentFiles, SegmentUpdateStatusManager updateStatusManager) {
     CarbonFile[] invalidUpdateDeltaFiles = updateStatusManager
-        .getUpdateDeltaFilesList(segment.getLoadName(), false,
+        .getUpdateDeltaFilesList(segment.getSegmentId(), false,
             CarbonCommonConstants.UPDATE_DELTA_FILE_EXT, true, allSegmentFiles,
             true);
     // now for each invalid delta file need to check the query execution time out
@@ -637,7 +634,7 @@ public class CarbonUpdateUtil {
     }
     // do the same for the index files.
     CarbonFile[] invalidIndexFiles = updateStatusManager
-        .getUpdateDeltaFilesList(segment.getLoadName(), false,
+        .getUpdateDeltaFilesList(segment.getSegmentId(), false,
             CarbonCommonConstants.UPDATE_INDEX_FILE_EXT, true, allSegmentFiles,
             true);
     // now for each invalid index file need to check the query execution time out

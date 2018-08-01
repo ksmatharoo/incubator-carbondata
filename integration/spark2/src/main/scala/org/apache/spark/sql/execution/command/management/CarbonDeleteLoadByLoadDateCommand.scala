@@ -23,7 +23,7 @@ import org.apache.spark.sql.execution.command.{Checker, DataCommand}
 import org.apache.carbondata.api.CarbonStore
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.core.exception.ConcurrentOperationException
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.events.{DeleteSegmentByDatePostEvent, DeleteSegmentByDatePreEvent, OperationContext, OperationListenerBus}
 
 case class CarbonDeleteLoadByLoadDateCommand(

@@ -30,8 +30,7 @@ import org.apache.spark.sql.execution.command.{CarbonMergerMapping, CompactionCa
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.{DataMapStoreManager, Segment}
 import org.apache.carbondata.core.metadata.SegmentFileStore
-import org.apache.carbondata.core.readcommitter.{ReadCommittedScope, TableStatusReadCommittedScope}
-import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentDetailVO, SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{SegmentDetailVO, SegmentManager}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.events._
 import org.apache.carbondata.processing.loading.model.CarbonLoadModel

@@ -17,16 +17,18 @@
 
 package org.apache.carbondata.spark.testsuite.dataretention
 
+import scala.collection.JavaConverters._
+
 import java.text.SimpleDateFormat
 
-import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{SegmentDetailVO, SegmentManager}
 import org.apache.carbondata.core.locks.{CarbonLockFactory, ICarbonLock, LockUsage}
 import org.apache.commons.lang3.time.DateUtils
 import org.apache.spark.sql.Row
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.util.path.CarbonTablePath
-import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, CarbonMetadata, CarbonTableIdentifier}
+import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, CarbonMetadata}
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.spark.sql.test.util.QueryTest
@@ -109,7 +111,7 @@ class DataRetentionTestCase extends QueryTest with BeforeAndAfterAll {
   }
 
 
-  private def getSegmentStartTime(segments: Array[LoadMetadataDetails],
+  private def getSegmentStartTime(segments: Array[SegmentDetailVO],
       segmentId: Integer): String = {
     val segmentLoadTimeString = segments(segmentId).getLoadStartTime()
     var loadTime = carbonDateFormat.parse(carbonDateFormat.format(segmentLoadTimeString))
@@ -130,8 +132,8 @@ class DataRetentionTestCase extends QueryTest with BeforeAndAfterAll {
   }
 
   test("RetentionTest_DeleteSegmentsByLoadTime") {
-    val segments: Array[LoadMetadataDetails] =
-      SegmentStatusManager.readLoadMetadata(carbonTablePath)
+    val segments: Array[SegmentDetailVO] =
+      SegmentManager.getInstance().getAllSegments(absoluteTableIdentifierForRetention).getAllSegments.asScala.toArray
     // check segment length, it should be 3 (loads)
     if (segments.length != 2) {
       assert(false)

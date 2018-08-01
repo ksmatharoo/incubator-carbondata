@@ -16,6 +16,8 @@
  */
 package org.apache.carbondata.spark.testsuite.standardpartition
 
+import scala.collection.JavaConverters._
+
 import java.io.{File, FileWriter, IOException}
 import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors}
@@ -30,9 +32,8 @@ import org.scalatest.BeforeAndAfterAll
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.metadata.{CarbonMetadata, SegmentFileStore}
-import org.apache.carbondata.core.statusmanager.{SegmentManager, SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.core.util.CarbonProperties
-import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.spark.rdd.CarbonScanRDD
 
 class StandardPartitionTableLoadingTestCase extends QueryTest with BeforeAndAfterAll {

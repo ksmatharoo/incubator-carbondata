@@ -34,8 +34,8 @@ import org.apache.carbondata.common.logging.LogService;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.fileoperations.AtomicFileOperationFactory;
 import org.apache.carbondata.core.fileoperations.AtomicFileOperations;
-import org.apache.carbondata.core.fileoperations.AtomicFileOperationsImpl;
 import org.apache.carbondata.core.fileoperations.FileWriteOperation;
 import org.apache.carbondata.core.locks.CarbonLockFactory;
 import org.apache.carbondata.core.locks.CarbonLockUtil;
@@ -54,7 +54,7 @@ import static org.apache.carbondata.core.util.CarbonUtil.closeStreams;
 public class FileBasedSegmentStore implements SegmentStore, HistorySupportSegmentStore {
 
   private static final LogService LOGGER =
-      LogServiceFactory.getLogService(SegmentStatusManager.class.getName());
+      LogServiceFactory.getLogService(FileBasedSegmentStore.class.getName());
 
   private int retryCount = CarbonLockUtil
       .getLockProperty(CarbonCommonConstants.NUMBER_OF_TRIES_FOR_CONCURRENT_LOCK,
@@ -276,7 +276,7 @@ public class FileBasedSegmentStore implements SegmentStore, HistorySupportSegmen
     InputStreamReader inStream = null;
     LoadMetadataDetails[] listOfLoadFolderDetailsArray;
     AtomicFileOperations fileOperation =
-        new AtomicFileOperationsImpl(tableStatusPath, FileFactory.getFileType(tableStatusPath));
+        AtomicFileOperationFactory.getAtomicFileOperations(tableStatusPath);
 
     try {
       if (!FileFactory.isFileExist(tableStatusPath, FileFactory.getFileType(tableStatusPath))) {
@@ -326,15 +326,15 @@ public class FileBasedSegmentStore implements SegmentStore, HistorySupportSegmen
 
   private void writeStatusFile(LoadMetadataDetails[] listOfLoadFolderDetailsArray,
       String dataLoadLocation) throws IOException {
-    AtomicFileOperations fileWrite =
-        new AtomicFileOperationsImpl(dataLoadLocation, FileFactory.getFileType(dataLoadLocation));
+    AtomicFileOperations writeOperation =
+        AtomicFileOperationFactory.getAtomicFileOperations(dataLoadLocation);
     BufferedWriter brWriter = null;
     DataOutputStream dataOutputStream = null;
     Gson gsonObjectToWrite = new Gson();
     // write the updated data into the metadata file.
 
     try {
-      dataOutputStream = fileWrite.openForWrite(FileWriteOperation.OVERWRITE);
+      dataOutputStream = writeOperation.openForWrite(FileWriteOperation.OVERWRITE);
       brWriter = new BufferedWriter(new OutputStreamWriter(dataOutputStream,
           Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET)));
 
@@ -342,13 +342,14 @@ public class FileBasedSegmentStore implements SegmentStore, HistorySupportSegmen
       brWriter.write(metadataInstance);
     } catch (IOException ioe) {
       LOGGER.error("Error message: " + ioe.getLocalizedMessage());
+      writeOperation.setFailed();
       throw ioe;
     } finally {
       if (null != brWriter) {
         brWriter.flush();
       }
       CarbonUtil.closeStreams(brWriter);
-      fileWrite.close();
+      writeOperation.close();
     }
   }
 
@@ -474,6 +475,18 @@ public class FileBasedSegmentStore implements SegmentStore, HistorySupportSegmen
       return readTableStatusFile(metadataFileName);
     } catch (IOException e) {
       return new LoadMetadataDetails[0];
+    }
+  }
+
+  @Override
+  public long getTableStatusLastModifiedTime(AbsoluteTableIdentifier identifier)
+      throws IOException {
+    String tableStatusPath = CarbonTablePath.getTableStatusFilePath(identifier.getTablePath());
+    if (!FileFactory.isFileExist(tableStatusPath, FileFactory.getFileType(tableStatusPath))) {
+      return 0L;
+    } else {
+      return FileFactory.getCarbonFile(tableStatusPath, FileFactory.getFileType(tableStatusPath))
+          .getLastModifiedTime();
     }
   }
 }

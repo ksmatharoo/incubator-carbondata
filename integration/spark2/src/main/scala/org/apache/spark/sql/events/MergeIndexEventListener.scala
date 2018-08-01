@@ -33,7 +33,7 @@ import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.locks.{CarbonLockFactory, LockUsage}
 import org.apache.carbondata.core.metadata.SegmentFileStore
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
-import org.apache.carbondata.core.statusmanager.SegmentStatusManager
+import org.apache.carbondata.core.statusmanager.SegmentManager
 import org.apache.carbondata.events.{AlterTableCompactionPostEvent, AlterTableMergeIndexEvent, Event, OperationContext, OperationEventListener}
 import org.apache.carbondata.processing.loading.events.LoadEvents.LoadTablePostExecutionEvent
 import org.apache.carbondata.processing.merger.CarbonDataMergerUtil
@@ -109,14 +109,15 @@ class MergeIndexEventListener extends OperationEventListener with Logging {
               validSegments.foreach { segment =>
                 validSegmentIds += segment.getSegmentNo
               }
-              val loadFolderDetailsArray = SegmentStatusManager
-                .readLoadMetadata(carbonMainTable.getMetadataPath)
+              val detailVoes =
+                SegmentManager.getInstance().getAllSegments(
+                  carbonMainTable.getAbsoluteTableIdentifier).getAllSegments.asScala
               val segmentFileNameMap: java.util.Map[String, String] = new util.HashMap[String,
                 String]()
-              loadFolderDetailsArray.foreach(loadMetadataDetails => {
+              detailVoes.foreach(detailVo => {
                 segmentFileNameMap
-                  .put(loadMetadataDetails.getLoadName,
-                    String.valueOf(loadMetadataDetails.getLoadStartTime))
+                  .put(detailVo.getSegmentId,
+                    String.valueOf(detailVo.getLoadStartTime))
               })
               CommonUtil.mergeIndexFiles(sparkSession.sparkContext,
                 validSegmentIds,
@@ -162,12 +163,13 @@ class MergeIndexEventListener extends OperationEventListener with Logging {
                    CarbonCommonConstants.LOAD_FOLDER.length)
       mergedSegmentIds.add(loadName)
     })
-    val loadFolderDetailsArray = SegmentStatusManager
-      .readLoadMetadata(carbonTable.getMetadataPath)
+    val detailVoes =
+      SegmentManager.getInstance().getAllSegments(
+        carbonTable.getAbsoluteTableIdentifier).getAllSegments.asScala
     val segmentFileNameMap: java.util.Map[String, String] = new util.HashMap[String, String]()
-    loadFolderDetailsArray.foreach(loadMetadataDetails => {
+    detailVoes.foreach(loadMetadataDetails => {
       segmentFileNameMap
-        .put(loadMetadataDetails.getLoadName, String.valueOf(loadMetadataDetails.getLoadStartTime))
+        .put(loadMetadataDetails.getSegmentId, String.valueOf(loadMetadataDetails.getLoadStartTime))
     })
     // filter out only the valid segments from the list of compacted segments
     // Example: say compacted segments list contains 0.1, 3.1, 6.1, 0.2.
