@@ -93,7 +93,7 @@
               <!--<include>org.apache.carbondata:*</include>-->
             </includes>
             <excludes>
-              <exclude>org.apache.hadoop:*</exclude>
+              <!--<exclude>org.apache.hadoop:*</exclude>-->
               <exclude>org.apache.spark:*</exclude>
               <exclude>org.apache.zookeeper:*</exclude>
               <exclude>org.apache.avro:*</exclude>

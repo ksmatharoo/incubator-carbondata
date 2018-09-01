@@ -20,40 +20,33 @@ package org.apache.carbondata.examples.sdk;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
-import java.io.FilenameFilter;
 import java.io.IOException;
-import java.sql.Date;
-import java.sql.Timestamp;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.commons.io.FileUtils;
-
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.datatype.StructField;
-import org.apache.carbondata.sdk.file.CarbonReader;
-import org.apache.carbondata.sdk.file.CarbonSchemaReader;
 import org.apache.carbondata.sdk.file.CarbonWriter;
 import org.apache.carbondata.sdk.file.CarbonWriterBuilder;
 import org.apache.carbondata.sdk.file.Field;
 import org.apache.carbondata.sdk.file.Schema;
 
+import org.apache.commons.io.FileUtils;
+
 /**
  * Example fo CarbonReader with close method
- * After readNextRow of CarbonReader, User should close the reader,
+ * After readNextRow of CarbonReader, Ubnfer should close the reader,
  * otherwise main will continue run some time
  */
-public class CarbonReaderExample {
+public class CarbonReaderExample1 {
   public static void main(String[] args) {
     String path = args[0];
     int loop = Integer.parseInt(args[1]);
@@ -73,6 +66,10 @@ public class CarbonReaderExample {
     if (args.length > 6) {
       threads = Integer.parseInt(args[6]);
     }
+    String infolder = "/home/root1/Downloads/dickson-out";
+    if (args.length > 7) {
+      infolder = args[7];
+    }
 
     System.out.println("ak: "+ ak);
     System.out.println("sk: "+ sk);
@@ -90,21 +87,21 @@ public class CarbonReaderExample {
       fields[3] = new Field("subject", DataTypes.STRING);
       fields[4] = new Field("from_email", DataTypes.STRING);
 
-      List<StructField> arr1 = new java.util.ArrayList<>();
+      List<StructField> arr1 = new ArrayList<>();
       arr1.add(new StructField("to_email", DataTypes.STRING));
       fields[5] = new Field("to_email", "array", arr1);
 
-      List<StructField> arr2 = new java.util.ArrayList<>();
+      List<StructField> arr2 = new ArrayList<>();
       arr2.add(new StructField("cc_email", DataTypes.STRING));
       fields[6] = new Field("cc_email", "array", arr2);
 
-      List<StructField> arr3 = new java.util.ArrayList<>();
+      List<StructField> arr3 = new ArrayList<>();
       arr3.add(new StructField("bcc_email", DataTypes.STRING));
       fields[7] = new Field("bcc_email", "array", arr3);
 
       fields[8] = new Field("messagebody", DataTypes.STRING);
 
-      List<StructField> arr4 = new java.util.ArrayList<>();
+      List<StructField> arr4 = new ArrayList<>();
       arr4.add(new StructField("attachments", DataTypes.STRING));
       fields[9] = new Field("attachments", "array", arr4);
 
@@ -115,33 +112,37 @@ public class CarbonReaderExample {
       options.put("bad_records_action", "FORCE");
       options.put("complex_delimiter_level_1", "$");
       String csvPath = "/home/root1/Downloads/pro_table_last51-60.csv";
-//      String csvPath = "/opt/p-project/pro_table_last51-60.csv";
-      BufferedReader in =
-          new BufferedReader(new FileReader(csvPath));
-
-      String line = in.readLine();
-      List<String[]> data = new ArrayList<>();
-      try {
-        while (line != null) {
-          String[] alldata = line.split(",");
-          if (alldata.length > 9) {
-            if (alldata[8].length() > 31500) {
-              alldata[8] = alldata[8].substring(0, 31499);
-            }
-            alldata[5] = alldata[5].replace(" ", "$");
-            alldata[6] = alldata[6].replace(" ", "$");
-            alldata[7] = alldata[7].replace(" ", "$");
-            alldata[9] = alldata[9].replace(" ", "$");
-          }
-          data.add(alldata);
-          line = in.readLine();
-        }
-      } catch (Exception e) {
-        e.printStackTrace();
-      } finally {
-        in.close();
-        System.out.println(line);
+      List<List<List<String[]>>> data = new ArrayList<>();
+      File infile = new File(infolder);
+      File[] listFiles = infile.listFiles();
+      final List<List<File>> perThreadfiles = new ArrayList<>();
+      for (int i = 0; i < threads ; i++) {
+        perThreadfiles.add(new ArrayList<>());
       }
+      for (int i = 0; i < listFiles.length; i++) {
+        perThreadfiles.get(i % threads).add(listFiles[i]);
+      }
+
+      for (List<File> threadfile : perThreadfiles) {
+        ArrayList<List<String[]>> list = new ArrayList<>();
+        data.add(list);
+        for (File file : threadfile) {
+          ArrayList<String[]> strings = new ArrayList<>();
+          list.add(strings);
+          BufferedReader in =
+              new BufferedReader(new FileReader(file));
+          String line = in.readLine();
+          while (line != null) {
+            strings.add(line.split(","));
+            line = in.readLine();
+          }
+          in.close();
+        }
+      }
+
+
+      //      String csvPath = "/opt/p-project/pro_table_last51-60.csv";
+
       ExecutorService service =  Executors.newFixedThreadPool(threads);
       FileFactory.getConfiguration().set("fs.s3a.access.key", ak);
       FileFactory.getConfiguration().set("fs.s3a.secret.key", sk);
@@ -152,35 +153,34 @@ public class CarbonReaderExample {
                 .setSecretKey(sk).setEndPoint(ep);
         if (sort.equals("nosort")) {
           builder.sortBy(new String[0]);
+        } else {
+          builder.sortBy(new String[]{"event_id", "event_time", "ingestion_time", "subject", "from_email"});
         }
         CarbonWriter writer =
             builder.buildThreadSafeWriterForCSVInput(new Schema(fields), (short) threads);
         long start = System.currentTimeMillis();
         AtomicInteger counter = new AtomicInteger();
-        int size  = 17*8;
-        int dataSize = size/threads;
         List<Future> futures = new ArrayList<>();
         for (int i = 0; i < threads; i++) {
+          final int c = i;
           futures.add(service.submit(new Runnable() {
-            Random random = new Random();
-            @Override public void run() {
-              for (int i = 0; i < dataSize; i++) {
 
-                for (String[] datum : data) {
-                  try {
-                    if (datum.length > 3) {
-                      String[] newdatum = datum.clone();
-                      newdatum[0] = newdatum[0] + random.nextLong();
-                      newdatum[3] = newdatum[3] + random.nextLong();
-                      writer.write(datum);
-                    } else {
-                      writer.write(datum);
-                    }
-                  } catch (IOException e) {
+            @Override public void run() {
+              List<File> list = perThreadfiles.get(c);
+              for (File file : list) {
+                try {
+                BufferedReader in =
+                    new BufferedReader(new FileReader(file));
+                  String line = in.readLine();
+                  while (line != null) {
+                    writer.write(line.split(","));
+                    line = in.readLine();
+                    counter.incrementAndGet();
+                  }
+                  in.close();
+                } catch (IOException e) {
                     e.printStackTrace();
                     throw new RuntimeException(e);
-                  }
-                  counter.incrementAndGet();
                 }
               }
             }

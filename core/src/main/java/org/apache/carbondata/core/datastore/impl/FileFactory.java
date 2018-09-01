@@ -68,6 +68,9 @@ public final class FileFactory {
     } else {
       conf = (Configuration) confObject;
     }
+    conf.set("fs.s3a.access.key", "LGCUKNYSCPHOLEH5UPZP");
+    conf.set("fs.s3a.secret.key", "1g7ttzgdelafd1v6teb1qR2iKqRzJpYQuOwl8rgw");
+    conf.set("fs.s3a.endpoint", "obs.cn-north-1.myhwclouds.com");
     return conf;
   }
 
