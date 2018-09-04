@@ -24,6 +24,7 @@ import org.apache.carbondata.core.memory.CarbonUnsafe;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
+import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
 import org.apache.carbondata.core.util.ByteUtil;
 import org.apache.carbondata.core.util.DataTypeUtil;
 
@@ -60,6 +61,11 @@ public abstract class UnsafeVariableLengthDimensionDataChunkStore
     this.value = new byte[20];
   }
 
+  @Override public void putArray(int[] invertedIndex, int[] invertedIndexReverse, byte[] data,
+      ColumnVectorInfo vectorInfo) {
+
+  }
+
   /**
    * Below method will be used to put the rows and its metadata in offheap
    *
@@ -77,6 +83,8 @@ public abstract class UnsafeVariableLengthDimensionDataChunkStore
     if (isExplicitSorted) {
       this.dataPointersOffsets += (long) numberOfRows * CarbonCommonConstants.INT_SIZE_IN_BYTE;
     }
+
+
     // As data is of variable length and data format is
     // <length in short><data><length in short/int><data>
     // we need to store offset of each data so data can be accessed directly

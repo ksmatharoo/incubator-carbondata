@@ -19,6 +19,8 @@ package org.apache.carbondata.spark.vectorreader;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -278,7 +280,16 @@ public class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
         schema = schema.add(field);
       }
     }
-    columnarBatch = ColumnarBatch.allocate(schema, memMode);
+//    columnarBatch = ColumnarBatch.allocate(schema, memMode);
+    try {
+      Constructor<ColumnarBatch> constructor =
+          ColumnarBatch.class.getDeclaredConstructor(StructType.class, int.class, MemoryMode.class);
+      constructor.setAccessible(true);
+      columnarBatch = constructor.newInstance(schema, 32000, memMode);
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+
     if (partitionColumns != null) {
       int partitionIdx = fields.length;
       for (int i = 0; i < partitionColumns.fields().length; i++) {

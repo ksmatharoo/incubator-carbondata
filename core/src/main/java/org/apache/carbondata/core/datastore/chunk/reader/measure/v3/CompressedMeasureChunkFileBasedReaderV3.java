@@ -18,6 +18,7 @@ package org.apache.carbondata.core.datastore.chunk.reader.measure.v3;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.BitSet;
 import java.util.List;
 
 import org.apache.carbondata.core.datastore.FileReader;
@@ -28,6 +29,7 @@ import org.apache.carbondata.core.datastore.page.encoding.ColumnPageDecoder;
 import org.apache.carbondata.core.memory.MemoryException;
 import org.apache.carbondata.core.metadata.blocklet.BlockletInfo;
 import org.apache.carbondata.core.scan.executor.util.QueryUtil;
+import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.format.DataChunk2;
 import org.apache.carbondata.format.DataChunk3;
@@ -203,6 +205,25 @@ public class CompressedMeasureChunkFileBasedReaderV3 extends AbstractMeasureChun
     return decodedPage;
   }
 
+  public ColumnPage decodeColumnPage(
+      MeasureRawColumnChunk rawColumnChunk, int pageNumber, ColumnVectorInfo vectorInfo)
+      throws IOException, MemoryException {
+    // data chunk of blocklet column
+    DataChunk3 dataChunk3 = rawColumnChunk.getDataChunkV3();
+    // data chunk of page
+    DataChunk2 pageMetadata = dataChunk3.getData_chunk_list().get(pageNumber);
+    // calculating the start point of data
+    // as buffer can contain multiple column data, start point will be datachunkoffset +
+    // data chunk length + page offset
+    int offset = (int) rawColumnChunk.getOffSet() +
+        measureColumnChunkLength.get(rawColumnChunk.getColumnIndex()) +
+        dataChunk3.getPage_offset().get(pageNumber);
+    BitSet nullBitSet = QueryUtil.getNullBitSet(pageMetadata.presence);
+    ColumnPage decodedPage = decodeMeasure(pageMetadata, rawColumnChunk.getRawData(), offset, vectorInfo, nullBitSet);
+    decodedPage.setNullBits(nullBitSet);
+    return decodedPage;
+  }
+
   /**
    * Decode measure column page with page header and raw data starting from offset
    */
@@ -212,6 +233,14 @@ public class CompressedMeasureChunkFileBasedReaderV3 extends AbstractMeasureChun
     List<ByteBuffer> encoderMetas = pageMetadata.getEncoder_meta();
     ColumnPageDecoder codec = encodingFactory.createDecoder(encodings, encoderMetas);
     return codec.decode(pageData.array(), offset, pageMetadata.data_page_length);
+  }
+
+  protected ColumnPage decodeMeasure(DataChunk2 pageMetadata, ByteBuffer pageData, int offset, ColumnVectorInfo vectorInfo, BitSet nullBitSet)
+      throws MemoryException, IOException {
+    List<Encoding> encodings = pageMetadata.getEncoders();
+    List<ByteBuffer> encoderMetas = pageMetadata.getEncoder_meta();
+    ColumnPageDecoder codec = encodingFactory.createDecoder(encodings, encoderMetas);
+    return codec.decode(pageData.array(), offset, pageMetadata.data_page_length, vectorInfo, nullBitSet);
   }
 
 }

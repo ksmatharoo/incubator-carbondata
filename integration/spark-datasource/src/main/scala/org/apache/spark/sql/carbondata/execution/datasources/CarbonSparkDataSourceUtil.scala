@@ -244,6 +244,7 @@ object CarbonSparkDataSourceUtil {
         properties.put(CarbonCommonConstants.COLUMN_META_CACHE, createOrder.mkString(","))
       }
     }
+    tableInfo.getFactTable.getListOfColumns.asScala.foreach(_.setUseInvertedIndex(false))
     model
   }
 }
