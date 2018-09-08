@@ -304,7 +304,8 @@ public class VectorizedCarbonRecordReader extends AbstractRecordReader<Object> {
       if (isNoDictStringField[i]) {
         columnarBatch.column(i).reserveDictionaryIds(columnarBatch.capacity());
       }
-      vectors[i] = new ColumnarVectorWrapper(columnarBatch.column(i), filteredRows);
+//      vectors[i] = new ColumnarVectorWrapper(columnarBatch.column(i), filteredRows);
+      vectors[i] = new ColumnarVectorWrapperNew(columnarBatch.column(i));
     }
     carbonColumnarBatch = new CarbonColumnarBatch(vectors, columnarBatch.capacity(), filteredRows);
   }
