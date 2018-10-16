@@ -1710,6 +1710,18 @@ public final class CarbonCommonConstants {
   public static final int CARBON_MINMAX_ALLOWED_BYTE_COUNT_MIN = 10;
   public static final int CARBON_MINMAX_ALLOWED_BYTE_COUNT_MAX = 1000;
 
+  /**
+   * When enabled complete row filters will be handled by carbon in case of vector.
+   * If it is disabled then only page level pruning will be done by carbon and row level filtering
+   * will be done by spark for vector.
+   * There is no change in flow for non-vector based queries.
+   */
+  @CarbonProperty
+  public static final String CARBON_PUSH_ROW_FILTERS_FOR_VECTOR =
+      "carbon.push.rowfilters.for.vector";
+
+  public static final String CARBON_PUSH_ROW_FILTERS_FOR_VECTOR_DEFAULT = "true";
+
   //////////////////////////////////////////////////////////////////////////////////////////
   // Unused constants and parameters start here
   //////////////////////////////////////////////////////////////////////////////////////////
