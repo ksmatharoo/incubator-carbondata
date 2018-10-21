@@ -394,10 +394,7 @@ public class BlockletFilterScanner extends BlockletFullScanner {
     }
     long dimensionReadTime = System.currentTimeMillis();
     dimensionReadTime = System.currentTimeMillis() - dimensionReadTime;
-
     FileReader fileReader = rawBlockletColumnChunks.getFileReader();
-
-
     DimensionRawColumnChunk[] dimensionRawColumnChunks =
         new DimensionRawColumnChunk[blockExecutionInfo.getTotalNumberDimensionToRead()];
     int numDimensionChunks = dimensionRawColumnChunks.length;
