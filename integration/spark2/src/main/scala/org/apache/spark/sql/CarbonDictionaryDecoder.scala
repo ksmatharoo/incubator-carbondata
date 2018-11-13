@@ -37,7 +37,7 @@ import org.apache.spark.util.SerializableConfiguration
 import org.apache.carbondata.core.cache.{Cache, CacheProvider, CacheType}
 import org.apache.carbondata.core.cache.dictionary.{Dictionary, DictionaryColumnUniqueIdentifier}
 import org.apache.carbondata.core.constants.CarbonCommonConstants
-import org.apache.carbondata.core.metadata.{CarbonMetadata, ColumnIdentifier}
+import org.apache.carbondata.core.metadata.{ColumnIdentifier, datatype}
 import org.apache.carbondata.core.metadata.datatype.{DataTypes => CarbonDataTypes}
 import org.apache.carbondata.core.metadata.encoder.Encoding
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
@@ -145,79 +145,133 @@ case class CarbonDictionaryDecoder(
         ExpressionCanonicalizer.execute(BindReferences.bindReference(exp, child.output))
       }
       ctx.currentVars = input
+      val dictTuple = exprs.map(e => new DictTuple(null, false))
+      val tuple = ctx.addReferenceObj("dictTuple", dictTuple.asJava.toArray(new Array[DictTuple](0)), "org.apache.spark.sql.DictTuple[]")
+      val dictsRefs = ctx.addReferenceObj("dicts", dicts.asJava.toArray(new Array[ForwardDictionaryWrapper](0)), "org.apache.spark.sql.ForwardDictionaryWrapper[]")
+      val decodeDictionary = ctx.freshName("deDict")
+      ctx.addNewFunction(decodeDictionary,
+        s"""
+           |private void $decodeDictionary(int i, int surg) throws java.io.IOException {
+           |  boolean isNull = false;
+           |  byte[] valueIntern = $dictsRefs[i].getDictionaryValueForKeyInBytes(surg);
+           |  if (valueIntern == null ||
+           |    java.util.Arrays.equals(org.apache.carbondata.core.constants
+           |  .CarbonCommonConstants.MEMBER_DEFAULT_VAL_ARRAY, valueIntern)) {
+           |    isNull = true;
+           |    valueIntern = org.apache.carbondata.core.constants
+           |    .CarbonCommonConstants.ZERO_BYTE_ARRAY;
+           |  }
+           |  $tuple[i].setValue(valueIntern);
+           |  $tuple[i].setIsNull(isNull);
+           |}""".stripMargin)
+
+      val decodeDecimal = ctx.freshName("deDictDec")
+      ctx.addNewFunction(decodeDecimal,
+        s"""
+           |private void $decodeDecimal(int i, int surg)
+           | throws java.io.IOException {
+           |  $decodeDictionary(i, surg);
+           |  $tuple[i].setValue(new java.math.BigDecimal(new String((byte[])$tuple[i].getValue(),
+           |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |}""".stripMargin)
+
+      val decodeInt = ctx.freshName("deDictInt")
+      ctx.addNewFunction(decodeInt,
+        s"""
+           |private void $decodeInt(int i, int surg)
+           | throws java.io.IOException {
+           |  $decodeDictionary(i, surg);
+           |  $tuple[i].setValue(Integer.parseInt(new String((byte[])$tuple[i].getValue(),
+           |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |}""".stripMargin)
+      val decodeShort = ctx.freshName("deDictShort")
+      ctx.addNewFunction(decodeShort,
+        s"""
+           |private void $decodeShort(int i, int surg)
+           | throws java.io.IOException {
+           |  $decodeDictionary(i, surg);
+           |  $tuple[i].setValue(Short.parseShort(new String((byte[])$tuple[i].getValue(),
+           |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |}""".stripMargin)
+      val decodeDouble = ctx.freshName("deDictDoub")
+      ctx.addNewFunction(decodeDouble,
+        s"""
+           |private void $decodeDouble(int i, int surg)
+           | throws java.io.IOException {
+           |  $decodeDictionary(i, surg);
+           |  $tuple[i].setValue(Double.parseDouble(new String((byte[])$tuple[i].getValue(),
+           |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |}""".stripMargin)
+      val decodeLong = ctx.freshName("deDictLong")
+      ctx.addNewFunction(decodeLong,
+        s"""
+           |private void $decodeLong(int i, int surg)
+           | throws java.io.IOException {
+           |  $decodeDictionary(i, surg);
+           |  $tuple[i].setValue(Long.parseLong(new String((byte[])$tuple[i].getValue(),
+           |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |}""".stripMargin)
+      val decodeStr = ctx.freshName("deDictStr")
+      ctx.addNewFunction(decodeStr,
+        s"""
+           |private void $decodeStr(int i, int surg)
+           | throws java.io.IOException {
+           |  $decodeDictionary(i, surg);
+           |  $tuple[i].setValue(UTF8String.fromBytes((byte[])$tuple[i].getValue()));
+           |}""".stripMargin)
+
+
       val resultVars = exprs.zipWithIndex.map { case (expr, index) =>
         if (dicts(index) != null) {
           val ev = expr.genCode(ctx)
-          val value = ctx.freshName("value")
-          val valueIntern = ctx.freshName("valueIntern")
-          val isNull = ctx.freshName("isNull")
-          val dictsRef = ctx.addReferenceObj("dictsRef", dicts(index))
+          val dIndex = ctx.addReferenceObj("dIndex", index)
           var code =
             s"""
                |${ev.code}
              """.stripMargin
-          code +=
-            s"""
-             |boolean $isNull = false;
-             |byte[] $valueIntern = $dictsRef.getDictionaryValueForKeyInBytes(${ ev.value });
-             |if ($valueIntern == null ||
-             |  java.util.Arrays.equals(org.apache.carbondata.core.constants
-             |.CarbonCommonConstants.MEMBER_DEFAULT_VAL_ARRAY, $valueIntern)) {
-             |  $isNull = true;
-             |  $valueIntern = org.apache.carbondata.core.constants
-             |  .CarbonCommonConstants.ZERO_BYTE_ARRAY;
-             |}
-             """.stripMargin
-
-            val caseCode =
-              if (CarbonDataTypes.isDecimal(getDictionaryColumnIds(index)._3.getDataType)) {
+             if (CarbonDataTypes.isDecimal(getDictionaryColumnIds(index)._3.getDataType)) {
+               code +=
                 s"""
-                   |org.apache.spark.sql.types.Decimal $value =
-                   |Decimal.apply(new java.math.BigDecimal(
-                   |new String($valueIntern, org.apache.carbondata.core.constants
-                   |.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+                   |$decodeDecimal($dIndex, ${ev.value});
                  """.stripMargin
+                ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
+                  s"(java.math.BigDecimal)$tuple[$dIndex.intValue()].getValue()")
               } else {
                 getDictionaryColumnIds(index)._3.getDataType match {
-                  case CarbonDataTypes.INT =>
+                  case CarbonDataTypes.INT => code +=
                     s"""
-                       |int $value = Integer.parseInt(new String($valueIntern,
-                       |org.apache.carbondata.core.constants.CarbonCommonConstants
-                       |.DEFAULT_CHARSET_CLASS));
+                       |$decodeInt($dIndex, ${ ev.value });
                  """.stripMargin
-                  case CarbonDataTypes.SHORT =>
+                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
+                      s"(Integer)$tuple[$dIndex.intValue()].getValue()")
+                  case CarbonDataTypes.SHORT => code +=
                     s"""
-                       |short $value =
-                       |Short.parseShort(new String($valueIntern,
-                       |org.apache.carbondata.core.constants.CarbonCommonConstants
-                       |.DEFAULT_CHARSET_CLASS));
+                       |$decodeShort($dIndex, ${ ev.value });
                  """.stripMargin
-                  case CarbonDataTypes.DOUBLE =>
+                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
+                      s"(Short)$tuple[$dIndex.intValue()].getValue()")
+                  case CarbonDataTypes.DOUBLE => code +=
                     s"""
-                       |double $value =
-                       |Double.parseDouble(new String($valueIntern,
-                       |org.apache.carbondata.core.constants.CarbonCommonConstants
-                       |.DEFAULT_CHARSET_CLASS));
+                       |$decodeDouble($dIndex, ${ ev.value });
                  """.stripMargin
-                  case CarbonDataTypes.LONG =>
+                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
+                      s"(Double)$tuple[$dIndex.intValue()].getValue()")
+                  case CarbonDataTypes.LONG => code +=
                     s"""
-                       |long $value =
-                       |Long.parseLong(new String($valueIntern,
-                       |org.apache.carbondata.core.constants.CarbonCommonConstants
-                       |.DEFAULT_CHARSET_CLASS));
+                       |$decodeLong($dIndex, ${ ev.value });
                  """.stripMargin
-                  case _ =>
+                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
+                      s"(Long)$tuple[$dIndex.intValue()].getValue()")
+                  case _ => code +=
                     s"""
-                       | UTF8String $value = UTF8String.fromBytes($valueIntern);
+                       | $decodeStr($dIndex, ${ev.value});
                  """.stripMargin
+                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
+                      s"(UTF8String)$tuple[$dIndex.intValue()].getValue()")
+
                 }
               }
-          code +=
-            s"""
-               |$caseCode
-             """.stripMargin
 
-          ExprCode(code, isNull, value)
         } else {
           expr.genCode(ctx)
         }
@@ -298,7 +352,8 @@ case class CarbonDictionaryDecoder(
               newColumnIdentifier, carbonDimension.getDataType,
               dictionaryPath)
             allDictIdentifiers += dictionaryColumnUniqueIdentifier
-            new ForwardDictionaryWrapper(dictionaryColumnUniqueIdentifier, broadcastConf)
+            new ForwardDictionaryWrapper(dictionaryColumnUniqueIdentifier,
+              broadcastConf, carbonDimension.getDataType)
           } catch {
             case _: Throwable => null
           }
@@ -559,7 +614,7 @@ class CarbonDecoderRDD(
  */
 class ForwardDictionaryWrapper(
     dictIdentifier: DictionaryColumnUniqueIdentifier,
-    broadcastConf: Broadcast[SerializableConfiguration]) extends Serializable {
+    broadcastConf: Broadcast[SerializableConfiguration], dataType: datatype.DataType) extends Serializable {
 
   var dictionary: Dictionary = null
 
@@ -585,6 +640,21 @@ class ForwardDictionaryWrapper(
       dictionary = dictionaryLoader.getDictionary(dictIdentifier)
     }
     dictionary.clear()
+  }
+}
+
+class DictTuple(var value: AnyRef, var isNull: Boolean) extends Serializable {
+
+  def getValue:  AnyRef = value
+
+  def getIsNull : Boolean = isNull
+
+  def setValue(value: AnyRef): Unit = {
+    this.value = value
+  }
+
+  def setIsNull(isNull: Boolean): Unit = {
+    this.isNull = isNull
   }
 }
 

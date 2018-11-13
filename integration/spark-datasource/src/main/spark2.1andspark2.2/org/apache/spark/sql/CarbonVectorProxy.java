@@ -47,25 +47,6 @@ public class CarbonVectorProxy {
   private ColumnarBatch columnarBatch;
   private ColumnVectorProxy[] columnVectorProxies;
 
-  /**
-   * Adapter class which handles the columnar vector reading of the carbondata
-   * based on the spark ColumnVector and ColumnarBatch API. This proxy class
-   * handles the complexity of spark 2.3 version related api changes since
-   * spark ColumnVector and ColumnarBatch interfaces are still evolving.
-   *
-   * @param memMode       which represent the type onheap or offheap vector.
-   * @param rowNum        rows number for vector reading
-   * @param structFileds, metadata related to current schema of table.
-   */
-  public CarbonVectorProxy(MemoryMode memMode, int rowNum, StructField[] structFileds) {
-    columnarBatch = ColumnarBatch.allocate(new StructType(structFileds), memMode, rowNum);
-    columnVectorProxies = new ColumnVectorProxy[columnarBatch.numCols()];
-    for (int i = 0; i < columnVectorProxies.length; i++) {
-      columnVectorProxies[i] = new ColumnVectorProxy(columnarBatch.column(i), rowNum, memMode);
-    }
-    updateColumnVectors();
-
-  }
 
   private void updateColumnVectors() {
     try {
@@ -76,9 +57,18 @@ public class CarbonVectorProxy {
       throw new RuntimeException(e);
     }
   }
-
+  /**
+   * Adapter class which handles the columnar vector reading of the carbondata
+   * based on the spark ColumnVector and ColumnarBatch API. This proxy class
+   * handles the complexity of spark 2.3 version related api changes since
+   * spark ColumnVector and ColumnarBatch interfaces are still evolving.
+   *
+   * @param memMode       which represent the type onheap or offheap vector.
+   * @param outputSchema, metadata related to current schema of table.
+   * @param rowNum        rows number for vector reading
+   */
   public CarbonVectorProxy(MemoryMode memMode, StructType outputSchema, int rowNum) {
-    columnarBatch = ColumnarBatch.allocate(outputSchema, memMode, rowNum);
+    columnarBatch = ColumnarBatch.allocate(outputSchema, memMode, 1);
     columnVectorProxies = new ColumnVectorProxy[columnarBatch.numCols()];
     for (int i = 0; i < columnVectorProxies.length; i++) {
       columnVectorProxies[i] = new ColumnVectorProxy(columnarBatch.column(i), rowNum, memMode);
@@ -162,8 +152,17 @@ public class CarbonVectorProxy {
 
     private boolean isLoaded;
 
+    private boolean isInitialized;
+
+    private int capacity;
+
     public ColumnVectorProxy(ColumnVector columnVector, int capacity, MemoryMode mode) {
-      super(capacity, columnVector.dataType(), mode);
+      super(1, columnVector.dataType(), mode);
+      vector = columnVector;
+      this.capacity = capacity;
+    }
+
+    private void initialize(ColumnVector columnVector) {
       try {
         Field childColumns =
             columnVector.getClass().getSuperclass().getDeclaredField("childColumns");
@@ -179,8 +178,6 @@ public class CarbonVectorProxy {
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
-
-      vector = columnVector;
     }
 
     public void putRowToColumnBatch(int rowId, Object value) {
@@ -455,6 +452,14 @@ public class CarbonVectorProxy {
     }
 
     private void checkPageLoaded() {
+      if (!isInitialized) {
+        vector = ColumnVector.allocate(capacity, vector.dataType(), MemoryMode.ON_HEAP);
+        if (dictionaryIds != null) {
+          this.dictionaryIds = vector.reserveDictionaryIds(capacity);
+        }
+        initialize(vector);
+        isInitialized = true;
+      }
       if (!isLoaded) {
         if (pageLoad != null) {
           pageLoad.loadPage();

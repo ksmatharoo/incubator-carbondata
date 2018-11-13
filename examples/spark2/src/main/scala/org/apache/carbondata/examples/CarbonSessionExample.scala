@@ -36,8 +36,8 @@ object CarbonSessionExample {
     PropertyConfigurator.configure(
       s"$rootPath/examples/spark2/src/main/resources/log4j.properties")
 
-    CarbonProperties.getInstance()
-      .addProperty(CarbonCommonConstants.ENABLE_QUERY_STATISTICS, "true")
+//    CarbonProperties.getInstance()
+//      .addProperty(CarbonCommonConstants.ENABLE_QUERY_STATISTICS, "true")
     val spark = ExampleUtils.createCarbonSession("CarbonSessionExample")
     spark.sparkContext.setLogLevel("INFO")
     exampleBody(spark)
@@ -66,7 +66,8 @@ object CarbonSessionExample {
          | charField CHAR(5),
          | floatField FLOAT
          | )
-         | STORED AS carbondata
+         | STORED BY 'carbondata'
+         | TBLPROPERTIES('DICTIONARY_INCLUDE'='dateField, charField')
        """.stripMargin)
 
     val path = s"$rootPath/examples/spark2/src/main/resources/data.csv"
@@ -82,59 +83,59 @@ object CarbonSessionExample {
 
     spark.sql(
       s"""
-         | SELECT charField, stringField, intField
+         | explain codegen SELECT charField, stringField, intField
          | FROM source
          | WHERE stringfield = 'spark' AND decimalField > 40
-      """.stripMargin).show()
+      """.stripMargin).show(false)
 
-    spark.sql(
-      s"""
-         | SELECT *
-         | FROM source WHERE length(stringField) = 5
-       """.stripMargin).show()
-
-    spark.sql(
-      s"""
-         | SELECT *
-         | FROM source WHERE date_format(dateField, "yyyy-MM-dd") = "2015-07-23"
-       """.stripMargin).show()
-
-    spark.sql("SELECT count(stringField) FROM source").show()
-
-    spark.sql(
-      s"""
-         | SELECT sum(intField), stringField
-         | FROM source
-         | GROUP BY stringField
-       """.stripMargin).show()
-
-    spark.sql(
-      s"""
-         | SELECT t1.*, t2.*
-         | FROM source t1, source t2
-         | WHERE t1.stringField = t2.stringField
-      """.stripMargin).show()
-
-    spark.sql(
-      s"""
-         | WITH t1 AS (
-         | SELECT * FROM source
-         | UNION ALL
-         | SELECT * FROM source
-         | )
-         | SELECT t1.*, t2.*
-         | FROM t1, source t2
-         | WHERE t1.stringField = t2.stringField
-      """.stripMargin).show()
-
-    spark.sql(
-      s"""
-         | SELECT *
-         | FROM source
-         | WHERE stringField = 'spark' and floatField > 2.8
-       """.stripMargin).show()
-
-    // Drop table
-    spark.sql("DROP TABLE IF EXISTS source")
+//    spark.sql(
+//      s"""
+//         | SELECT *
+//         | FROM source WHERE length(stringField) = 5
+//       """.stripMargin).show()
+//
+//    spark.sql(
+//      s"""
+//         | SELECT *
+//         | FROM source WHERE date_format(dateField, "yyyy-MM-dd") = "2015-07-23"
+//       """.stripMargin).show()
+//
+//    spark.sql("SELECT count(stringField) FROM source").show()
+//
+//    spark.sql(
+//      s"""
+//         | SELECT sum(intField), stringField
+//         | FROM source
+//         | GROUP BY stringField
+//       """.stripMargin).show()
+//
+//    spark.sql(
+//      s"""
+//         | SELECT t1.*, t2.*
+//         | FROM source t1, source t2
+//         | WHERE t1.stringField = t2.stringField
+//      """.stripMargin).show()
+//
+//    spark.sql(
+//      s"""
+//         | WITH t1 AS (
+//         | SELECT * FROM source
+//         | UNION ALL
+//         | SELECT * FROM source
+//         | )
+//         | SELECT t1.*, t2.*
+//         | FROM t1, source t2
+//         | WHERE t1.stringField = t2.stringField
+//      """.stripMargin).show()
+//
+//    spark.sql(
+//      s"""
+//         | SELECT *
+//         | FROM source
+//         | WHERE stringField = 'spark' and floatField > 2.8
+//       """.stripMargin).show()
+//
+//    // Drop table
+//    spark.sql("DROP TABLE IF EXISTS source")
   }
 }
