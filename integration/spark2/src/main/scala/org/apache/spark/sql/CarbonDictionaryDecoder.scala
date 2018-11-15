@@ -146,14 +146,12 @@ case class CarbonDictionaryDecoder(
       }
       ctx.currentVars = input
       val dictTuple = exprs.map(e => new DictTuple(null, false))
-      val tuple = ctx.addReferenceObj("dictTuple", dictTuple.asJava.toArray(new Array[DictTuple](0)), "org.apache.spark.sql.DictTuple[]")
-      val dictsRefs = ctx.addReferenceObj("dicts", dicts.asJava.toArray(new Array[ForwardDictionaryWrapper](0)), "org.apache.spark.sql.ForwardDictionaryWrapper[]")
       val decodeDictionary = ctx.freshName("deDict")
       ctx.addNewFunction(decodeDictionary,
         s"""
-           |private void $decodeDictionary(int i, int surg) throws java.io.IOException {
+           |private org.apache.spark.sql.DictTuple $decodeDictionary(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg) throws java.io.IOException {
            |  boolean isNull = false;
-           |  byte[] valueIntern = $dictsRefs[i].getDictionaryValueForKeyInBytes(surg);
+           |  byte[] valueIntern = dict.getDictionaryValueForKeyInBytes(surg);
            |  if (valueIntern == null ||
            |    java.util.Arrays.equals(org.apache.carbondata.core.constants
            |  .CarbonCommonConstants.MEMBER_DEFAULT_VAL_ARRAY, valueIntern)) {
@@ -161,70 +159,72 @@ case class CarbonDictionaryDecoder(
            |    valueIntern = org.apache.carbondata.core.constants
            |    .CarbonCommonConstants.ZERO_BYTE_ARRAY;
            |  }
-           |  $tuple[i].setValue(valueIntern);
-           |  $tuple[i].setIsNull(isNull);
+           |  return new org.apache.spark.sql.DictTuple(valueIntern, isNull);
            |}""".stripMargin)
 
       val decodeDecimal = ctx.freshName("deDictDec")
       ctx.addNewFunction(decodeDecimal,
         s"""
-           |private void $decodeDecimal(int i, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeDecimal(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
-           |  $decodeDictionary(i, surg);
-           |  $tuple[i].setValue(new java.math.BigDecimal(new String((byte[])$tuple[i].getValue(),
+           |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
+           |  tuple.setValue(new java.math.BigDecimal(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |  return tuple;
            |}""".stripMargin)
 
       val decodeInt = ctx.freshName("deDictInt")
       ctx.addNewFunction(decodeInt,
         s"""
-           |private void $decodeInt(int i, int surg)
+           |private void $decodeInt(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
-           |  $decodeDictionary(i, surg);
-           |  $tuple[i].setValue(Integer.parseInt(new String((byte[])$tuple[i].getValue(),
+           |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
+           |  tuple.setValue(Integer.parseInt(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
            |}""".stripMargin)
       val decodeShort = ctx.freshName("deDictShort")
       ctx.addNewFunction(decodeShort,
         s"""
-           |private void $decodeShort(int i, int surg)
+           |private void $decodeShort(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
-           |  $decodeDictionary(i, surg);
-           |  $tuple[i].setValue(Short.parseShort(new String((byte[])$tuple[i].getValue(),
+           |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
+           |  tuple.setValue(Short.parseShort(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
            |}""".stripMargin)
       val decodeDouble = ctx.freshName("deDictDoub")
       ctx.addNewFunction(decodeDouble,
         s"""
-           |private void $decodeDouble(int i, int surg)
+           |private void $decodeDouble(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
-           |  $decodeDictionary(i, surg);
-           |  $tuple[i].setValue(Double.parseDouble(new String((byte[])$tuple[i].getValue(),
+           |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
+           |  tuple.setValue(Double.parseDouble(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
            |}""".stripMargin)
       val decodeLong = ctx.freshName("deDictLong")
       ctx.addNewFunction(decodeLong,
         s"""
-           |private void $decodeLong(int i, int surg)
+           |private void $decodeLong(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
-           |  $decodeDictionary(i, surg);
-           |  $tuple[i].setValue(Long.parseLong(new String((byte[])$tuple[i].getValue(),
+           |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
+           |  tuple.setValue(Long.parseLong(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
            |}""".stripMargin)
       val decodeStr = ctx.freshName("deDictStr")
       ctx.addNewFunction(decodeStr,
         s"""
-           |private void $decodeStr(int i, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeStr(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
-           |  $decodeDictionary(i, surg);
-           |  $tuple[i].setValue(UTF8String.fromBytes((byte[])$tuple[i].getValue()));
+           |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
+           |  tuple.setValue(UTF8String.fromBytes((byte[])tuple.getValue()));
+           |  return tuple;
            |}""".stripMargin)
 
 
       val resultVars = exprs.zipWithIndex.map { case (expr, index) =>
         if (dicts(index) != null) {
           val ev = expr.genCode(ctx)
-          val dIndex = ctx.addReferenceObj("dIndex", index)
+          val dictRef = ctx.addReferenceObj("df", dicts(index))
+          val value = ctx.freshName("v")
           var code =
             s"""
                |${ev.code}
@@ -232,42 +232,36 @@ case class CarbonDictionaryDecoder(
              if (CarbonDataTypes.isDecimal(getDictionaryColumnIds(index)._3.getDataType)) {
                code +=
                 s"""
-                   |$decodeDecimal($dIndex, ${ev.value});
+                   |org.apache.spark.sql.DictTuple $value = $decodeDecimal($dictRef, ${ev.value});
                  """.stripMargin
-                ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
-                  s"(java.math.BigDecimal)$tuple[$dIndex.intValue()].getValue()")
+                ExprCode(code, s"$value.getIsNull()", s"(java.math.BigDecimal)$value.getValue()")
               } else {
                 getDictionaryColumnIds(index)._3.getDataType match {
                   case CarbonDataTypes.INT => code +=
                     s"""
-                       |$decodeInt($dIndex, ${ ev.value });
+                       |org.apache.spark.sql.DictTuple $value = $decodeInt($dictRef, ${ ev.value });
                  """.stripMargin
-                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
-                      s"(Integer)$tuple[$dIndex.intValue()].getValue()")
+                    ExprCode(code, s"$value.getIsNull()", s"(Integer)$value.getValue()")
                   case CarbonDataTypes.SHORT => code +=
                     s"""
-                       |$decodeShort($dIndex, ${ ev.value });
+                       |org.apache.spark.sql.DictTuple $value = $decodeShort($dictRef, ${ ev.value });
                  """.stripMargin
-                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
-                      s"(Short)$tuple[$dIndex.intValue()].getValue()")
+                    ExprCode(code, s"$value.getIsNull()", s"(Short)$value.getValue()")
                   case CarbonDataTypes.DOUBLE => code +=
                     s"""
-                       |$decodeDouble($dIndex, ${ ev.value });
+                       |org.apache.spark.sql.DictTuple $value = $decodeDouble($dictRef, ${ ev.value });
                  """.stripMargin
-                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
-                      s"(Double)$tuple[$dIndex.intValue()].getValue()")
+                    ExprCode(code, s"$value.getIsNull()", s"(Double)$value.getValue()")
                   case CarbonDataTypes.LONG => code +=
                     s"""
-                       |$decodeLong($dIndex, ${ ev.value });
+                       |org.apache.spark.sql.DictTuple $value = $decodeLong($dictRef, ${ ev.value });
                  """.stripMargin
-                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
-                      s"(Long)$tuple[$dIndex.intValue()].getValue()")
+                    ExprCode(code, s"$value.getIsNull()", s"(Long)$value.getValue()")
                   case _ => code +=
                     s"""
-                       | $decodeStr($dIndex, ${ev.value});
+                       |org.apache.spark.sql.DictTuple $value = $decodeStr($dictRef, ${ev.value});
                  """.stripMargin
-                    ExprCode(code, s"$tuple[$dIndex.intValue()].getIsNull()",
-                      s"(UTF8String)$tuple[$dIndex.intValue()].getValue()")
+                    ExprCode(code, s"$value.getIsNull()",s"(UTF8String)$value.getValue()")
 
                 }
               }
