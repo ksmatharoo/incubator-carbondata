@@ -83,7 +83,7 @@ object CarbonSessionExample {
 
     spark.sql(
       s"""
-         | SELECT charField, stringField, intField
+         | explain codegen SELECT charField, stringField, intField
          | FROM source
          | WHERE stringfield = 'spark' AND decimalField > 40
       """.stripMargin).show(false)

@@ -149,7 +149,9 @@ case class CarbonDictionaryDecoder(
       val decodeDictionary = ctx.freshName("deDict")
       ctx.addNewFunction(decodeDictionary,
         s"""
-           |private org.apache.spark.sql.DictTuple $decodeDictionary(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg) throws java.io.IOException {
+           |private org.apache.spark.sql.DictTuple $decodeDictionary(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |    throws java.io.IOException {
            |  boolean isNull = false;
            |  byte[] valueIntern = dict.getDictionaryValueForKeyInBytes(surg);
            |  if (valueIntern == null ||
@@ -165,7 +167,8 @@ case class CarbonDictionaryDecoder(
       val decodeDecimal = ctx.freshName("deDictDec")
       ctx.addNewFunction(decodeDecimal,
         s"""
-           |private org.apache.spark.sql.DictTuple $decodeDecimal(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeDecimal(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
            |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
            |  tuple.setValue(new java.math.BigDecimal(new String((byte[])tuple.getValue(),
@@ -176,43 +179,52 @@ case class CarbonDictionaryDecoder(
       val decodeInt = ctx.freshName("deDictInt")
       ctx.addNewFunction(decodeInt,
         s"""
-           |private void $decodeInt(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeInt(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
            |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
            |  tuple.setValue(Integer.parseInt(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |  return tuple;
            |}""".stripMargin)
       val decodeShort = ctx.freshName("deDictShort")
       ctx.addNewFunction(decodeShort,
         s"""
-           |private void $decodeShort(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeShort(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
            |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
            |  tuple.setValue(Short.parseShort(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |  return tuple;
            |}""".stripMargin)
       val decodeDouble = ctx.freshName("deDictDoub")
       ctx.addNewFunction(decodeDouble,
         s"""
-           |private void $decodeDouble(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeDouble(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
            |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
            |  tuple.setValue(Double.parseDouble(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |  return tuple;
            |}""".stripMargin)
       val decodeLong = ctx.freshName("deDictLong")
       ctx.addNewFunction(decodeLong,
         s"""
-           |private void $decodeLong(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeLong(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
            |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
            |  tuple.setValue(Long.parseLong(new String((byte[])tuple.getValue(),
            |    org.apache.carbondata.core.constants.CarbonCommonConstants.DEFAULT_CHARSET_CLASS)));
+           |  return tuple;
            |}""".stripMargin)
       val decodeStr = ctx.freshName("deDictStr")
       ctx.addNewFunction(decodeStr,
         s"""
-           |private org.apache.spark.sql.DictTuple $decodeStr(org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
+           |private org.apache.spark.sql.DictTuple $decodeStr(
+           |  org.apache.spark.sql.ForwardDictionaryWrapper dict, int surg)
            | throws java.io.IOException {
            |  org.apache.spark.sql.DictTuple tuple = $decodeDictionary(dict, surg);
            |  tuple.setValue(UTF8String.fromBytes((byte[])tuple.getValue()));
