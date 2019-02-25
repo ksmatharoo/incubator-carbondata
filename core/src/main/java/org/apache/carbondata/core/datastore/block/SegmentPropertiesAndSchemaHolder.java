@@ -36,6 +36,7 @@ import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
+import org.apache.carbondata.core.util.CarbonUtil;
 
 import org.apache.log4j.Logger;
 
@@ -297,6 +298,7 @@ public class SegmentPropertiesAndSchemaHolder {
     private CarbonRowSchema[] taskSummarySchemaForBlocklet;
     private CarbonRowSchema[] fileFooterEntrySchemaForBlock;
     private CarbonRowSchema[] fileFooterEntrySchemaForBlocklet;
+    private short[] primaryKeyColIndexes;
 
     public SegmentPropertiesWrapper(CarbonTable carbonTable,
         List<ColumnSchema> columnsInTable, int[] columnCardinality) {
@@ -326,6 +328,7 @@ public class SegmentPropertiesAndSchemaHolder {
       taskSummarySchemaForBlocklet = null;
       fileFooterEntrySchemaForBlock = null;
       fileFooterEntrySchemaForBlocklet = null;
+      primaryKeyColIndexes = null;
     }
 
     @Override public boolean equals(Object obj) {
@@ -448,6 +451,16 @@ public class SegmentPropertiesAndSchemaHolder {
       return minMaxCacheColumns;
     }
 
+    public short[] getPrimaryKeyColIndexes() {
+      if (null == primaryKeyColIndexes) {
+        synchronized (fileFooterSchemaLock) {
+          if (null == primaryKeyColIndexes) {
+            primaryKeyColIndexes = CarbonUtil.getPrimaryKeyColumnIndexes(columnsInTable);
+          }
+        }
+      }
+      return primaryKeyColIndexes;
+    }
   }
 
   /**

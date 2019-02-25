@@ -39,6 +39,7 @@ import org.apache.carbondata.core.indexstore.Blocklet;
 import org.apache.carbondata.core.indexstore.BlockletDetailInfo;
 import org.apache.carbondata.core.indexstore.ExtendedBlocklet;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
+import org.apache.carbondata.core.indexstore.RangeColumnSplitMerger;
 import org.apache.carbondata.core.indexstore.SafeMemoryDMStore;
 import org.apache.carbondata.core.indexstore.UnsafeMemoryDMStore;
 import org.apache.carbondata.core.indexstore.row.DataMapRow;
@@ -679,11 +680,14 @@ public class BlockDataMap extends CoarseGrainDataMap
         boolean[] minMaxFlag = getMinMaxFlag(safeRow, BLOCK_MIN_MAX_FLAG);
         String fileName = getFileNameWithFilePath(safeRow, filePath);
         short blockletId = getBlockletId(safeRow);
+        byte[][] minValue = getMinMaxValue(safeRow, MIN_VALUES_INDEX);
+        byte[][] maxValue = getMinMaxValue(safeRow, MAX_VALUES_INDEX);
         boolean isValid =
-            addBlockBasedOnMinMaxValue(filterExecuter, getMinMaxValue(safeRow, MAX_VALUES_INDEX),
-                getMinMaxValue(safeRow, MIN_VALUES_INDEX), minMaxFlag, fileName, blockletId);
+            addBlockBasedOnMinMaxValue(filterExecuter, maxValue,
+                minValue, minMaxFlag, fileName, blockletId);
         if (isValid) {
-          blocklets.add(createBlocklet(safeRow, fileName, blockletId, useMinMaxForPruning));
+          blocklets.add(createBlocklet(safeRow, fileName, blockletId, useMinMaxForPruning, maxValue,
+              minValue));
           hitBlocklets += getBlockletNumOfEntry(entryIndex);
         }
         entryIndex++;
@@ -906,10 +910,18 @@ public class BlockDataMap extends CoarseGrainDataMap
 
   protected ExtendedBlocklet createBlocklet(DataMapRow row, String fileName, short blockletId,
       boolean useMinMaxForPruning) {
+    return createBlocklet(row, fileName, blockletId, useMinMaxForPruning,
+        getMinMaxValue(row, MAX_VALUES_INDEX), getMinMaxValue(row, MIN_VALUES_INDEX));
+  }
+
+  protected ExtendedBlocklet createBlocklet(DataMapRow row, String fileName, short blockletId,
+      boolean useMinMaxForPruning, byte[][] maxValues, byte[][] minValues) {
     ExtendedBlocklet blocklet = new ExtendedBlocklet(fileName, blockletId + "", false);
     BlockletDetailInfo detailInfo = getBlockletDetailInfo(row, blockletId, blocklet);
     detailInfo.setBlockletInfoBinary(new byte[0]);
     blocklet.setDetailInfo(detailInfo);
+    blocklet
+        .setSplitMerger(new RangeColumnSplitMerger(getPrimaryKeyIndexes(), minValues, maxValues));
     return blocklet;
   }
 
@@ -1000,6 +1012,11 @@ public class BlockDataMap extends CoarseGrainDataMap
   protected CarbonRowSchema[] getFileFooterEntrySchema() {
     return SegmentPropertiesAndSchemaHolder.getInstance()
         .getSegmentPropertiesWrapper(segmentPropertiesIndex).getBlockFileFooterEntrySchema();
+  }
+
+  protected short[] getPrimaryKeyIndexes() {
+    return SegmentPropertiesAndSchemaHolder.getInstance()
+        .getSegmentPropertiesWrapper(segmentPropertiesIndex).getPrimaryKeyColIndexes();
   }
 
   protected CarbonRowSchema[] getTaskSummarySchema() {

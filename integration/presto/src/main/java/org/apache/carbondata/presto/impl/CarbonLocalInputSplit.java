@@ -125,7 +125,6 @@ public class CarbonLocalInputSplit {
     this.segmentId = segmentId;
     this.locations = locations;
     this.numberOfBlocklets = numberOfBlocklets;
-    //this.tableBlockInfo = tableBlockInfo;
     this.version = version;
     this.deleteDeltaFiles = deleteDeltaFiles;
     this.blockletId = blockletId;
@@ -142,7 +141,7 @@ public class CarbonLocalInputSplit {
             .toArray(new String[carbonLocalInputSplit.getLocations().size()]),
         carbonLocalInputSplit.getNumberOfBlocklets(),
         ColumnarFormatVersion.valueOf(carbonLocalInputSplit.getVersion()),
-        carbonLocalInputSplit.getDeleteDeltaFiles());
+        carbonLocalInputSplit.getDeleteDeltaFiles(), null);
     inputSplit.setFormat(carbonLocalInputSplit.getFileFormat());
     if (FileFormat.COLUMNAR_V3.ordinal() == inputSplit.getFileFormat().ordinal()) {
       Gson gson = new Gson();

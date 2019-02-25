@@ -34,6 +34,7 @@ import org.apache.carbondata.core.datamap.TableDataMap;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.indexstore.ExtendedBlocklet;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
+import org.apache.carbondata.core.indexstore.RangeColumnSplitMerger;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.schema.PartitionInfo;
 import org.apache.carbondata.core.metadata.schema.SchemaReader;
@@ -97,6 +98,7 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
   // a cache for carbon table, it will be used in task side
   private CarbonTable carbonTable;
   private ReadCommittedScope readCommittedScope;
+  private short[] primaryKeyColIndexes;
 
   /**
    * Get the cached CarbonTable or create it by TableInfo in `configuration`
@@ -363,6 +365,10 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
           }
         }
       }
+      if (primaryKeyColIndexes == null) {
+        primaryKeyColIndexes = CarbonUtil.getPrimaryKeyColumnIndexes(
+            carbonTable.getTableInfo().getFactTable().getListOfColumns());
+      }
       StreamPruner streamPruner = new StreamPruner(carbonTable);
       streamPruner.init(filterResolverIntf);
       List<StreamFile> streamFiles = streamPruner.prune(streamSegments);
@@ -384,17 +390,25 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
           // there is 10% slop to avoid to generate very small split in the end
           while (((double) bytesRemaining) / splitSize > 1.1) {
             int blkIndex = getBlockIndex(blkLocations, length - bytesRemaining);
+            RangeColumnSplitMerger merger =
+                new RangeColumnSplitMerger(primaryKeyColIndexes,
+                    streamFile.getMinMaxIndex().getMinValues(),
+                    streamFile.getMinMaxIndex().getMaxValues());
             splits.add(
                 makeSplit(streamFile.getSegmentNo(), path, length - bytesRemaining,
                     splitSize, blkLocations[blkIndex].getHosts(),
-                    blkLocations[blkIndex].getCachedHosts(), FileFormat.ROW_V1));
+                    blkLocations[blkIndex].getCachedHosts(), FileFormat.ROW_V1, merger));
             bytesRemaining -= splitSize;
           }
           if (bytesRemaining != 0) {
+            RangeColumnSplitMerger merger =
+                new RangeColumnSplitMerger(primaryKeyColIndexes,
+                    streamFile.getMinMaxIndex().getMinValues(),
+                    streamFile.getMinMaxIndex().getMaxValues());
             int blkIndex = getBlockIndex(blkLocations, length - bytesRemaining);
             splits.add(makeSplit(streamFile.getSegmentNo(), path, length - bytesRemaining,
                 bytesRemaining, blkLocations[blkIndex].getHosts(),
-                blkLocations[blkIndex].getCachedHosts(), FileFormat.ROW_V1));
+                blkLocations[blkIndex].getCachedHosts(), FileFormat.ROW_V1, merger));
           }
         }
       }
@@ -403,14 +417,10 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
   }
 
   protected FileSplit makeSplit(String segmentId, Path file, long start, long length,
-      String[] hosts, FileFormat fileFormat) {
-    return new CarbonInputSplit(segmentId, file, start, length, hosts, fileFormat);
-  }
-
-
-  protected FileSplit makeSplit(String segmentId, Path file, long start, long length,
-      String[] hosts, String[] inMemoryHosts, FileFormat fileFormat) {
-    return new CarbonInputSplit(segmentId, file, start, length, hosts, inMemoryHosts, fileFormat);
+      String[] hosts, String[] inMemoryHosts, FileFormat fileFormat,
+      RangeColumnSplitMerger merger) {
+    return new CarbonInputSplit(segmentId, file, start, length, hosts, inMemoryHosts, fileFormat,
+        merger);
   }
 
   /**

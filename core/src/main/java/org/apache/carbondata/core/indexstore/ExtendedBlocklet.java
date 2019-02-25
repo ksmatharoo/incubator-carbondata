@@ -33,6 +33,8 @@ public class ExtendedBlocklet extends Blocklet {
 
   private String dataMapUniqueId;
 
+  private transient RangeColumnSplitMerger splitMerger;
+
   public ExtendedBlocklet(String filePath, String blockletId) {
     super(filePath, blockletId);
   }
@@ -88,6 +90,14 @@ public class ExtendedBlocklet extends Blocklet {
 
   public void setDataMapUniqueId(String dataMapUniqueId) {
     this.dataMapUniqueId = dataMapUniqueId;
+  }
+
+  public RangeColumnSplitMerger getSplitMerger() {
+    return splitMerger;
+  }
+
+  public void setSplitMerger(RangeColumnSplitMerger splitMerger) {
+    this.splitMerger = splitMerger;
   }
 
   @Override public boolean equals(Object o) {

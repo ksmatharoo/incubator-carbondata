@@ -478,6 +478,12 @@ public final class CarbonCommonConstants {
    */
   public static final String CACHE_LEVEL_DEFAULT_VALUE = "BLOCK";
 
+  /**
+   * Primary key columns which will be acted as unique, duplicate insertion record will be
+   * overwritten instead of adding duplicate record.
+   */
+  public static final String PRIMARY_KEY_COLUMNS = "primary_key_columns";
+
   //////////////////////////////////////////////////////////////////////////////////////////
   // Data loading parameter start here
   //////////////////////////////////////////////////////////////////////////////////////////

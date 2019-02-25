@@ -35,6 +35,7 @@ import org.apache.carbondata.core.datastore.block.Distributable;
 import org.apache.carbondata.core.datastore.block.TableBlockInfo;
 import org.apache.carbondata.core.indexstore.Blocklet;
 import org.apache.carbondata.core.indexstore.BlockletDetailInfo;
+import org.apache.carbondata.core.indexstore.RangeColumnSplitMerger;
 import org.apache.carbondata.core.metadata.ColumnarFormatVersion;
 import org.apache.carbondata.core.mutate.UpdateVO;
 import org.apache.carbondata.core.statusmanager.FileFormat;
@@ -91,6 +92,8 @@ public class CarbonInputSplit extends FileSplit
   private FileFormat fileFormat = FileFormat.COLUMNAR_V3;
 
   private String dataMapWritePath;
+
+  private transient RangeColumnSplitMerger splitMerger;
   /**
    * validBlockletIds will contain the valid blocklted ids for a given block that contains the data
    * after pruning from driver. These will be used in executor for further pruning of blocklets
@@ -109,7 +112,7 @@ public class CarbonInputSplit extends FileSplit
 
   private CarbonInputSplit(String segmentId, String blockletId, Path path, long start, long length,
       String[] locations, ColumnarFormatVersion version, String[] deleteDeltaFiles,
-      String dataMapWritePath) {
+      String dataMapWritePath, RangeColumnSplitMerger merger) {
     super(path, start, length, locations);
     this.segment = Segment.toSegment(segmentId);
     String taskNo = CarbonTablePath.DataFileUtil.getTaskNo(path.getName());
@@ -123,12 +126,14 @@ public class CarbonInputSplit extends FileSplit
     this.version = version;
     this.deleteDeltaFiles = deleteDeltaFiles;
     this.dataMapWritePath = dataMapWritePath;
+    this.splitMerger = merger;
   }
 
   public CarbonInputSplit(String segmentId, String blockletId, Path path, long start, long length,
       String[] locations, int numberOfBlocklets, ColumnarFormatVersion version,
-      String[] deleteDeltaFiles) {
-    this(segmentId, blockletId, path, start, length, locations, version, deleteDeltaFiles, null);
+      String[] deleteDeltaFiles, RangeColumnSplitMerger merger) {
+    this(segmentId, blockletId, path, start, length, locations, version, deleteDeltaFiles, null,
+        merger);
     this.numberOfBlocklets = numberOfBlocklets;
   }
 
@@ -146,7 +151,7 @@ public class CarbonInputSplit extends FileSplit
   }
 
   public CarbonInputSplit(String segmentId, Path path, long start, long length, String[] locations,
-      String[] inMemoryHosts, FileFormat fileFormat) {
+      String[] inMemoryHosts, FileFormat fileFormat, RangeColumnSplitMerger merger) {
     super(path, start, length, locations, inMemoryHosts);
     this.segment = Segment.toSegment(segmentId);
     this.fileFormat = fileFormat;
@@ -171,16 +176,18 @@ public class CarbonInputSplit extends FileSplit
    */
   public CarbonInputSplit(String segmentId, String blockletId, Path path, long start, long length,
       String[] locations, int numberOfBlocklets, ColumnarFormatVersion version,
-      Map<String, String> blockStorageIdMap, String[] deleteDeltaFiles) {
+      Map<String, String> blockStorageIdMap, String[] deleteDeltaFiles,
+      RangeColumnSplitMerger merger) {
     this(segmentId, blockletId, path, start, length, locations, numberOfBlocklets, version,
-        deleteDeltaFiles);
+        deleteDeltaFiles, merger);
     this.blockStorageIdMap = blockStorageIdMap;
   }
 
   public static CarbonInputSplit from(String segmentId, String blockletId, FileSplit split,
-      ColumnarFormatVersion version, String dataMapWritePath) throws IOException {
+      ColumnarFormatVersion version, String dataMapWritePath, RangeColumnSplitMerger merger)
+      throws IOException {
     return new CarbonInputSplit(segmentId, blockletId, split.getPath(), split.getStart(),
-        split.getLength(), split.getLocations(), version, null, dataMapWritePath);
+        split.getLength(), split.getLocations(), version, null, dataMapWritePath, merger);
   }
 
   public static List<TableBlockInfo> createBlocks(List<CarbonInputSplit> splitList) {
@@ -474,4 +481,7 @@ public class CarbonInputSplit extends FileSplit
     this.validBlockletIds = validBlockletIds;
   }
 
+  public RangeColumnSplitMerger getSplitMerger() {
+    return splitMerger;
+  }
 }

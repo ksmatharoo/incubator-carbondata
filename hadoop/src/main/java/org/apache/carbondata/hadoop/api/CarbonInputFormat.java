@@ -599,7 +599,7 @@ m filterExpression
             new FileSplit(new Path(blocklet.getPath()), 0, blocklet.getLength(),
                 blocklet.getLocations()),
             ColumnarFormatVersion.valueOf((short) blocklet.getDetailInfo().getVersionNumber()),
-            blocklet.getDataMapWriterPath());
+            blocklet.getDataMapWriterPath(), blocklet.getSplitMerger());
     split.setDetailInfo(blocklet.getDetailInfo());
     return split;
   }
