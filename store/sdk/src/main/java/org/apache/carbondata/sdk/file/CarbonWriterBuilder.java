@@ -320,7 +320,11 @@ public class CarbonWriterBuilder {
         }
         this.invertedIndexFor(invertedIndexColumns);
       } else {
-        options.put(entry.getKey(), entry.getValue());
+        if (this.options == null) {
+          // convert it to treeMap as keys need to be case insensitive
+          this.options = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        }
+        this.options.put(entry.getKey(), entry.getValue());
       }
     }
     return this;
@@ -671,7 +675,7 @@ public class CarbonWriterBuilder {
     } else {
       sortColumnsList = Arrays.asList(sortColumns);
     }
-    ColumnSchema[] sortColumnsSchemaList = new ColumnSchema[sortColumnsList.size()];
+    List<ColumnSchema> sortColumnsSchemaList = new ArrayList<>(sortColumnsList.size());
     List<String> invertedIdxColumnsList = new ArrayList<>();
     if (null != invertedIndexColumns) {
       invertedIdxColumnsList = Arrays.asList(invertedIndexColumns);
@@ -680,7 +684,7 @@ public class CarbonWriterBuilder {
     buildTableSchema(fields, tableSchemaBuilder, sortColumnsList, sortColumnsSchemaList,
         invertedIdxColumnsList);
 
-    tableSchemaBuilder.setSortColumns(Arrays.asList(sortColumnsSchemaList));
+    tableSchemaBuilder.setSortColumns(sortColumnsSchemaList);
     String tableName;
     String dbName;
     dbName = "";
@@ -694,7 +698,7 @@ public class CarbonWriterBuilder {
   }
 
   private void buildTableSchema(Field[] fields, TableSchemaBuilder tableSchemaBuilder,
-      List<String> sortColumnsList, ColumnSchema[] sortColumnsSchemaList,
+      List<String> sortColumnsList, List<ColumnSchema> sortColumnsSchemaList,
       List<String> invertedIdxColumnsList) {
     Set<String> uniqueFields = new HashSet<>();
     // a counter which will be used in case of complex array type. This valIndex will be assigned
@@ -713,13 +717,14 @@ public class CarbonWriterBuilder {
       String[] split = primaryKeyCols.split(",");
       for (String s : split) {
         if (StringUtils.isNotEmpty(s.trim())) {
-          primaryKeyList.add(s.trim());
+          primaryKeyList.add(s.toLowerCase().trim());
         }
       }
     }
     TreeSet<String> sortSet = new TreeSet<>(primaryKeyList);
     sortSet.addAll(sortColumnsList);
     sortColumnsList = new ArrayList<>(sortSet);
+    ColumnSchema[] sortColumnsSchemaArray = new ColumnSchema[sortSet.size()];
     // Check if any of the columns specified in inverted index are missing from schema.
     validateColumns(fields, primaryKeyList,
         " specified in primary key columns does not exist in schema");
@@ -766,7 +771,7 @@ public class CarbonWriterBuilder {
                   isSortColumn > -1, isInvertedIdxColumn > -1);
           if (isSortColumn > -1) {
             columnSchema.setSortColumn(true);
-            sortColumnsSchemaList[isSortColumn] = columnSchema;
+            sortColumnsSchemaArray[isSortColumn] = columnSchema;
           }
           if (isPrimaryColumn > -1) {
             columnSchema.setPrimaryKeyColumn(true);
@@ -774,6 +779,7 @@ public class CarbonWriterBuilder {
         }
       }
     }
+    sortColumnsSchemaList.addAll(Arrays.asList(sortColumnsSchemaArray));
   }
 
   private int getIsSortColumn(List<String> sortColumnsList, Field field) {

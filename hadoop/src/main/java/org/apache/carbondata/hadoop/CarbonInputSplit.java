@@ -161,6 +161,7 @@ public class CarbonInputSplit extends FileSplit
     numberOfBlocklets = 0;
     invalidSegments = new ArrayList<>();
     version = CarbonProperties.getInstance().getFormatVersion();
+    this.splitMerger = merger;
   }
 
   /**
