@@ -720,8 +720,9 @@ public class CarbonUpdateUtil {
                                                 Map<String, Long> segmentBlockCount) {
 
     String segId = details.getSegmentName();
-
-    segmentBlockCount.put(details.getSegmentName(), segmentBlockCount.get(segId) - 1);
+    if (segmentBlockCount.get(segId) != null) {
+      segmentBlockCount.put(details.getSegmentName(), segmentBlockCount.get(segId) - 1);
+    }
 
   }
 

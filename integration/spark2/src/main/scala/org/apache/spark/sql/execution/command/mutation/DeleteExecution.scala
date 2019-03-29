@@ -37,8 +37,9 @@ import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.{CarbonUpdateUtil, DeleteDeltaBlockDetails, SegmentUpdateDetails, TupleIdEnum}
-import org.apache.carbondata.core.mutate.data.RowCountDetailsVO
+import org.apache.carbondata.core.mutate.data.{BlockMappingVO, RowCountDetailsVO}
 import org.apache.carbondata.core.statusmanager.{SegmentStatus, SegmentStatusManager, SegmentUpdateStatusManager}
 import org.apache.carbondata.core.util.{CarbonUtil, ThreadLocalSessionInfo}
 import org.apache.carbondata.core.util.path.CarbonTablePath
@@ -47,6 +48,7 @@ import org.apache.carbondata.hadoop.api.{CarbonInputFormat, CarbonTableInputForm
 import org.apache.carbondata.processing.exception.MultipleMatchingException
 import org.apache.carbondata.processing.loading.FailureCauses
 import org.apache.carbondata.spark.DeleteDelataResultImpl
+import org.apache.carbondata.spark.util.CarbonScalaUtil
 
 object DeleteExecution {
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
@@ -145,69 +147,14 @@ object DeleteExecution {
     }
 
     // update new status file
-    checkAndUpdateStatusFiles()
+    segmentsTobeDeleted = CarbonScalaUtil.checkAndUpdateStatusFiles(res,
+      blockMappingVO,
+      carbonTable,
+      timestamp,
+      executorErrors,
+      isUpdateOperation)
 
-    // all or none : update status file, only if complete delete opeartion is successfull.
-    def checkAndUpdateStatusFiles(): Unit = {
-      val blockUpdateDetailsList = new util.ArrayList[SegmentUpdateDetails]()
-      val segmentDetails = new util.HashSet[Segment]()
-      res.foreach(resultOfSeg => resultOfSeg.foreach(
-        resultOfBlock => {
-          if (resultOfBlock._1 == SegmentStatus.SUCCESS) {
-            blockUpdateDetailsList.add(resultOfBlock._2._1)
-            segmentDetails.add(new Segment(resultOfBlock._2._1.getSegmentName))
-            // if this block is invalid then decrement block count in map.
-            if (CarbonUpdateUtil.isBlockInvalid(resultOfBlock._2._1.getSegmentStatus)) {
-              CarbonUpdateUtil.decrementDeletedBlockCount(resultOfBlock._2._1,
-                blockMappingVO.getSegmentNumberOfBlockMapping)
-            }
-          } else {
-            // In case of failure , clean all related delete delta files
-            CarbonUpdateUtil.cleanStaleDeltaFiles(carbonTable, timestamp)
-            val errorMsg =
-              "Delete data operation is failed due to failure in creating delete delta file for " +
-              "segment : " + resultOfBlock._2._1.getSegmentName + " block : " +
-              resultOfBlock._2._1.getBlockName
-            executorErrors.failureCauses = resultOfBlock._2._2.failureCauses
-            executorErrors.errorMsg = resultOfBlock._2._2.errorMsg
 
-            if (executorErrors.failureCauses == FailureCauses.NONE) {
-              executorErrors.failureCauses = FailureCauses.EXECUTOR_FAILURE
-              executorErrors.errorMsg = errorMsg
-            }
-            LOGGER.error(errorMsg)
-            return
-          }
-        }
-      )
-      )
-
-      val listOfSegmentToBeMarkedDeleted = CarbonUpdateUtil
-        .getListOfSegmentsToMarkDeleted(blockMappingVO.getSegmentNumberOfBlockMapping)
-
-      segmentsTobeDeleted = listOfSegmentToBeMarkedDeleted.asScala
-
-      // this is delete flow so no need of putting timestamp in the status file.
-      if (CarbonUpdateUtil
-            .updateSegmentStatus(blockUpdateDetailsList, carbonTable, timestamp, false) &&
-          CarbonUpdateUtil
-            .updateTableMetadataStatus(segmentDetails,
-              carbonTable,
-              timestamp,
-              !isUpdateOperation,
-              listOfSegmentToBeMarkedDeleted)
-      ) {
-        LOGGER.info(s"Delete data operation is successful for ${ database }.${ tableName }")
-      } else {
-        // In case of failure , clean all related delete delta files
-        CarbonUpdateUtil.cleanStaleDeltaFiles(carbonTable, timestamp)
-        val errorMessage = "Delete data operation is failed due to failure " +
-                           "in table status updation."
-        LOGGER.error("Delete data operation is failed due to failure in table status updation.")
-        executorErrors.failureCauses = FailureCauses.STATUS_FILE_UPDATION_FAILURE
-        executorErrors.errorMsg = errorMessage
-      }
-    }
 
     def deleteDeltaFunc(index: Int,
         key: String,
@@ -313,6 +260,7 @@ object DeleteExecution {
 
     segmentsTobeDeleted
   }
+
 
   private def createCarbonInputFormat(absoluteTableIdentifier: AbsoluteTableIdentifier) :
   (CarbonTableInputFormat[Array[Object]], Job) = {

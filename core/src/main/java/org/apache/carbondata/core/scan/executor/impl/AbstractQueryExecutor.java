@@ -837,5 +837,4 @@ public abstract class AbstractQueryExecutor<E> implements QueryExecutor<E> {
     }
     DataTypeUtil.clearFormatter();
   }
-
 }

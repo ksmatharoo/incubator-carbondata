@@ -19,6 +19,7 @@ package org.apache.carbondata.core.scan.model;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -132,6 +133,11 @@ public class QueryModel {
    * vector, so it is execution engine responsibility to filter the rows at row level.
    */
   private boolean isDirectVectorFill;
+
+  /**
+   * It is needed for generating delete delta inside iterator itself for primary key feature.
+   */
+  private long updateTimeStamp;
 
   private QueryModel(CarbonTable carbonTable) {
     tableBlockInfos = new ArrayList<TableBlockInfo>();
@@ -439,6 +445,14 @@ public class QueryModel {
     isDirectVectorFill = directVectorFill;
   }
 
+  public long getUpdateTimeStamp() {
+    return updateTimeStamp;
+  }
+
+  public void setUpdateTimeStamp(long updateTimeStamp) {
+    this.updateTimeStamp = updateTimeStamp;
+  }
+
   @Override
   public String toString() {
     return String.format("scan on table %s.%s, %d projection columns with filter (%s)",
@@ -453,6 +467,35 @@ public class QueryModel {
 
   public void setFreeUnsafeMemory(boolean freeUnsafeMemory) {
     this.freeUnsafeMemory = freeUnsafeMemory;
+  }
+
+  public QueryModel getCopy() {
+    QueryModel queryModel = new QueryModel(table);
+    if (columnToDictionaryMapping != null) {
+      queryModel.columnToDictionaryMapping = new LinkedHashMap<>(columnToDictionaryMapping);
+    }
+    queryModel.converter = converter;
+    queryModel.forcedDetailRawQuery = forcedDetailRawQuery;
+    queryModel.freeUnsafeMemory = freeUnsafeMemory;
+    queryModel.projection = projection.getCopy();
+    queryModel.queryId = queryId;
+    queryModel.filterExpressionResolverTree = filterExpressionResolverTree;
+    queryModel.filterExpression =  filterExpression;
+    queryModel.tableBlockInfos = new ArrayList<>(tableBlockInfos);
+    queryModel.statisticsRecorder = statisticsRecorder;
+    queryModel.vectorReader = vectorReader;
+    queryModel.invalidSegmentIds = invalidSegmentIds;
+    queryModel.invalidSegmentBlockIdMap = invalidSegmentBlockIdMap;
+    queryModel.isFilterDimensions = isFilterDimensions;
+    queryModel.isFilterMeasures = isFilterMeasures;
+    queryModel.readPageByPage = readPageByPage;
+    queryModel.requiredRowId = requiredRowId;
+    queryModel.isFG = isFG;
+    queryModel.freeUnsafeMemory = freeUnsafeMemory;
+    queryModel.preFetchData = preFetchData;
+    queryModel.isDirectVectorFill = isDirectVectorFill;
+    queryModel.updateTimeStamp = updateTimeStamp;
+    return queryModel;
   }
 
   public static class FilterProcessVO {
