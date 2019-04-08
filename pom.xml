@@ -46,9 +46,9 @@
   </licenses>
 
   <scm>
-    <connection>scm:git:https://git-wip-us.apache.org/repos/asf/carbondata.git</connection>
-    <developerConnection>scm:git:https://git-wip-us.apache.org/repos/asf/carbondata.git</developerConnection>
-    <url>https://git-wip-us.apache.org/repos/asf/carbondata.git</url>
+    <connection>scm:git:https://github.com/ravipesala/incubator-carbondata.git</connection>
+    <developerConnection>scm:git:https://github.com/ravipesala/incubator-carbondata.git</developerConnection>
+    <url>https://github.com/ravipesala/incubator-carbondata.git</url>
     <tag>HEAD</tag>
   </scm>
 
