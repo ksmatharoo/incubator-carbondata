@@ -83,7 +83,8 @@ public class CarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
     if (inputSplit instanceof CarbonInputSplit) {
       // Read the footer offset and set.
       String splitPath = ((CarbonInputSplit) inputSplit).getFilePath();
-      if (((CarbonInputSplit) inputSplit).getDetailInfo().getBlockFooterOffset() == 0L) {
+      if (((CarbonInputSplit) inputSplit).getDetailInfo() != null &&
+          ((CarbonInputSplit) inputSplit).getDetailInfo().getBlockFooterOffset() == 0L) {
         FileReader reader = FileFactory.getFileHolder(FileFactory.getFileType(splitPath),
             taskAttemptContext.getConfiguration());
         ByteBuffer buffer = reader
