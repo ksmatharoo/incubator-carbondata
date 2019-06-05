@@ -331,8 +331,8 @@ public class CarbonReplicationEndpoint extends BaseReplicationEndpoint {
     clonedProps.remove(CarbonMasterObserver.PATH);
 
     CarbonWriterBuilder builder =
-        CarbonWriter.builder().outputPath(path).withTableProperties(clonedProps).
-            withLoadOption("bad_records_action", "force")
+        CarbonWriter.builder().outputPath(path).withTableProperties(clonedProps)
+            .withLoadOption("bad_records_action", "force")
             .withRowFormat(tableSchema).writtenBy(CarbonReplicationEndpoint.class.getSimpleName())
             .withHadoopConf(new Configuration(conf));
     regionsWriterMap.put(regionName, builder.build());
@@ -372,7 +372,7 @@ public class CarbonReplicationEndpoint extends BaseReplicationEndpoint {
       }
       CarbonHbaseMeta hbaseMeta = tableSchemaMap.get(tName);
       DataTypeConverter converter = hbaseMeta.getDataTypeConverter();
-      // Check the keys in sequence order and if the keys are same then merge to the same carbon row.
+      // Check the keys in sequence order and if the keys are same then merge to the same carbon row
       ByteArrayWrapper rowKey = null;
       String[] row = null;
       for (Entry entry : batch) {
@@ -410,7 +410,7 @@ public class CarbonReplicationEndpoint extends BaseReplicationEndpoint {
               fillCell(row, cell, hbaseMeta, delete);
             }
 
-            if (delete ) {
+            if (delete) {
               row[hbaseMeta.getDeleteStatusMap()] = DELETE;
             } else if (deleteFamily) {
               row[hbaseMeta.getDeleteStatusMap()] = DELETEFAMILY;
