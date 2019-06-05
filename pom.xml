@@ -106,7 +106,7 @@
     <module>store/sdk</module>
     <module>assembly</module>
     <module>tools/cli</module>
-    <module>tools/hbase</module>
+    <module>hbase-connector</module>
   </modules>
 
   <properties>
