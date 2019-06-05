@@ -1,4 +1,4 @@
-package org.apache.hadoop.hbase.coprocessor;
+package org.apache.hadoop.hbase.carbon;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
