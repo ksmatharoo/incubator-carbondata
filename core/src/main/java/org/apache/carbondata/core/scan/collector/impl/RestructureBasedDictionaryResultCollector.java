@@ -75,6 +75,10 @@ public class RestructureBasedDictionaryResultCollector extends DictionaryBasedRe
     Map<Integer, GenericQueryType> comlexDimensionInfoMap =
         executionInfo.getComlexDimensionInfoMap();
     while (scannedResult.hasNext() && rowCounter < batchSize) {
+      scannedResult.incrementCounter();
+      if (scannedResult.containsDeletedRow(scannedResult.getCurrentRowId())) {
+        continue;
+      }
       Object[] row = new Object[queryDimensions.length + queryMeasures.length];
       if (isDimensionExists) {
         surrogateResult = scannedResult.getDictionaryKeyIntegerArray();
@@ -100,11 +104,6 @@ public class RestructureBasedDictionaryResultCollector extends DictionaryBasedRe
           fillDimensionData(scannedResult, surrogateResult, noDictionaryKeys, complexTypeKeyArray,
               comlexDimensionInfoMap, row, i);
         }
-      } else {
-        scannedResult.incrementCounter();
-      }
-      if (scannedResult.containsDeletedRow(scannedResult.getCurrentRowId())) {
-        continue;
       }
       fillMeasureData(scannedResult, row);
       listBasedResult.add(row);

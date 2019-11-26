@@ -127,7 +127,7 @@ public class BlockDataMap extends CoarseGrainDataMap
       // when index info is already read and converted to data file footer object
       indexInfo = blockletDataMapInfo.getIndexInfos();
     }
-    Path path = new Path(blockletDataMapInfo.getFilePath());
+    String path = blockletDataMapInfo.getFilePath();
     // store file path only in case of partition table, non transactional table and flat folder
     // structure
     byte[] filePath;
@@ -137,12 +137,14 @@ public class BlockDataMap extends CoarseGrainDataMap
         // if the segment data is written in tablepath then no need to store whole path of file.
         !blockletDataMapInfo.getFilePath().startsWith(
             blockletDataMapInfo.getCarbonTable().getTablePath())) {
-      filePath = path.getParent().toString().getBytes(CarbonCommonConstants.DEFAULT_CHARSET);
+      filePath =
+          path.substring(0, path.lastIndexOf("/")).getBytes(CarbonCommonConstants.DEFAULT_CHARSET);
       isFilePathStored = true;
     } else {
       filePath = new byte[0];
     }
-    byte[] fileName = path.getName().getBytes(CarbonCommonConstants.DEFAULT_CHARSET);
+    byte[] fileName = path.substring(path.lastIndexOf("/") + 1, path.length())
+        .getBytes(CarbonCommonConstants.DEFAULT_CHARSET);
     byte[] segmentId =
         blockletDataMapInfo.getSegmentId().getBytes(CarbonCommonConstants.DEFAULT_CHARSET);
     if (!indexInfo.isEmpty()) {
@@ -297,11 +299,17 @@ public class BlockDataMap extends CoarseGrainDataMap
     // min max flag for task summary
     boolean[] taskSummaryMinMaxFlag = new boolean[segmentProperties.getColumnsValueSize().length];
     Arrays.fill(taskSummaryMinMaxFlag, true);
+    LOGGER.warn("GGGGGGGGGGG KKKKKK BBBBBBB");
+    for (Map.Entry<String, BlockMetaInfo> entry : blockletDataMapInfo.getBlockMetaInfoMap()
+        .entrySet()) {
+      LOGGER.warn(entry.getKey());
+    }
     long totalRowCount = 0;
     for (DataFileFooter fileFooter : indexInfo) {
       TableBlockInfo blockInfo = fileFooter.getBlockInfo().getTableBlockInfo();
       BlockMetaInfo blockMetaInfo =
           blockletDataMapInfo.getBlockMetaInfoMap().get(blockInfo.getFilePath());
+      LOGGER.warn("loadBlockMetaInfo OOOO " + blockInfo.getFilePath());
       footerCounter++;
       if (blockMetaInfo != null) {
         // this variable will be used for adding the DataMapRow entry every time a unique block
