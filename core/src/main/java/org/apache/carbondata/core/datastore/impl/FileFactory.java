@@ -584,7 +584,7 @@ public final class FileFactory {
         .startsWith(CarbonCommonConstants.VIEWFSURL_PREFIX) || lowerPath
         .startsWith(CarbonCommonConstants.S3N_PREFIX) || lowerPath
         .startsWith(CarbonCommonConstants.S3A_PREFIX) || lowerPath
-        .startsWith(CarbonCommonConstants.S3_PREFIX)) {
+        .startsWith(CarbonCommonConstants.S3_PREFIX) || lowerPath.startsWith("file:/")) {
       return path;
     } else if (defaultFs != null) {
       return defaultFs + CarbonCommonConstants.FILE_SEPARATOR + path;
