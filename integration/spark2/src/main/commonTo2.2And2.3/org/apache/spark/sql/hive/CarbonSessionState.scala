@@ -262,6 +262,7 @@ class CarbonSessionStateBuilder(sparkSession: SparkSession,
 
       override val extendedResolutionRules: Seq[Rule[LogicalPlan]] =
         analyzer.extendedResolutionRules ++
+        Seq(CarbonRelationConversions(sparkSession))
         Seq(CarbonIUDAnalysisRule(sparkSession)) ++
         Seq(CarbonPreInsertionCasts(sparkSession)) ++ customResolutionRules
 

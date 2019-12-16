@@ -19,6 +19,7 @@ package org.apache.spark.sql.hive
 
 import java.io.IOException
 import java.net.URI
+import java.util
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.{Lock, ReentrantReadWriteLock}
@@ -28,12 +29,14 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql.{CarbonDatasourceHadoopRelation, CarbonEnv, SparkSession}
 import org.apache.spark.sql.CarbonExpressions.{CarbonSubqueryAlias => SubqueryAlias}
+import org.apache.spark.sql.carbondata.execution.datasources.CarbonSparkDataSourceUtil
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.sources.BaseRelation
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.{CarbonReflectionUtils, SparkUtil}
 
 import org.apache.carbondata.common.logging.LogServiceFactory
@@ -45,8 +48,8 @@ import org.apache.carbondata.core.fileoperations.FileWriteOperation
 import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, CarbonMetadata, CarbonTableIdentifier}
 import org.apache.carbondata.core.metadata.converter.ThriftWrapperSchemaConverterImpl
 import org.apache.carbondata.core.metadata.schema
-import org.apache.carbondata.core.metadata.schema.SchemaReader
-import org.apache.carbondata.core.metadata.schema.table
+import org.apache.carbondata.core.metadata.schema.partition.PartitionType
+import org.apache.carbondata.core.metadata.schema.{PartitionInfo, SchemaReader, table}
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil}
 import org.apache.carbondata.core.util.path.CarbonTablePath
@@ -145,26 +148,34 @@ class CarbonFileMetastore extends CarbonMetaStore {
    */
   override def createCarbonRelation(parameters: Map[String, String],
       absIdentifier: AbsoluteTableIdentifier,
-      sparkSession: SparkSession): CarbonRelation = {
+      sparkSession: SparkSession,
+      schema: Option[StructType],
+      partitionSchema: Option[StructType],
+      options: Map[String, String]): CarbonRelation = {
     val database = absIdentifier.getCarbonTableIdentifier.getDatabaseName
     val tableName = absIdentifier.getCarbonTableIdentifier.getTableName
     val tables = Option(CarbonMetadata.getInstance.getCarbonTable(database, tableName))
     tables match {
       case Some(t) =>
         if (isSchemaRefreshed(t.getAbsoluteTableIdentifier, sparkSession)) {
-          readCarbonSchema(t.getAbsoluteTableIdentifier, parameters)
+          readCarbonSchema(t.getAbsoluteTableIdentifier, parameters,
+            schema, partitionSchema, options)
         } else {
           CarbonRelation(database, tableName, CarbonSparkUtil.createSparkMeta(t), t)
         }
       case None =>
-        readCarbonSchema(absIdentifier, parameters)
+        readCarbonSchema(absIdentifier, parameters, schema, partitionSchema, options)
     }
   }
 
   private def readCarbonSchema(absIdentifier: AbsoluteTableIdentifier,
-      parameters: Map[String, String]): CarbonRelation = {
+      parameters: Map[String, String],
+      schema: Option[StructType],
+      partitionSchema: Option[StructType],
+      options: Map[String, String]): CarbonRelation = {
     readCarbonSchema(absIdentifier,
-      !parameters.getOrElse("isTransactional", "true").toBoolean) match {
+      parameters.getOrElse("isTransactional", "true").toBoolean,
+      schema, partitionSchema, options) match {
       case Some(meta) =>
         CarbonRelation(absIdentifier.getDatabaseName, absIdentifier.getTableName,
           CarbonSparkUtil.createSparkMeta(meta), meta)
@@ -212,13 +223,19 @@ class CarbonFileMetastore extends CarbonMetaStore {
           case Some(name) if (name.equals("org.apache.spark.sql.CarbonSource")
             || name.equalsIgnoreCase("carbondata")) => name
           case _ =>
-            CarbonMetadata.getInstance().removeTable(database, tableIdentifier.table)
-            throw new NoSuchTableException(database, tableIdentifier.table)
+            catalogTable.storage.serde match {
+              case Some(x) if x.equals("org.apache.carbondata.hive.CarbonHiveSerDe") => x
+              case None =>
+                CarbonMetadata.getInstance().removeTable(database, tableIdentifier.table)
+                throw new NoSuchTableException(database, tableIdentifier.table)
+            }
         }
         val identifier: AbsoluteTableIdentifier = AbsoluteTableIdentifier.from(
            catalogTable.location.toString, database, tableIdentifier.table)
         CarbonEnv.getInstance(sparkSession).carbonMetaStore.
-          createCarbonRelation(catalogTable.storage.properties, identifier, sparkSession)
+          createCarbonRelation(catalogTable.storage.properties, identifier, sparkSession,
+            Some(catalogTable.schema), Some(catalogTable.partitionSchema),
+            catalogTable.storage.properties)
       case _ =>
         CarbonMetadata.getInstance().removeTable(database, tableIdentifier.table)
         throw new NoSuchTableException(database, tableIdentifier.table)
@@ -252,7 +269,9 @@ class CarbonFileMetastore extends CarbonMetaStore {
   }
 
   private def readCarbonSchema(identifier: AbsoluteTableIdentifier,
-      inferSchema: Boolean): Option[CarbonTable] = {
+      isTransactional: Boolean, schema: Option[StructType],
+      partitionSchema: Option[StructType],
+      options: Map[String, String]): Option[CarbonTable] = {
     val schemaConverter = new ThriftWrapperSchemaConverterImpl
     val dbName = identifier.getCarbonTableIdentifier.getDatabaseName
     val tableName = identifier.getCarbonTableIdentifier.getTableName
@@ -260,7 +279,7 @@ class CarbonFileMetastore extends CarbonMetaStore {
     val tablePath = identifier.getTablePath
     var schemaRefreshTime = System.currentTimeMillis()
     val wrapperTableInfo =
-      if (inferSchema) {
+      if (!isTransactional) {
         val carbonTbl = CarbonMetadata.getInstance().getCarbonTable(dbName, tableName)
         val tblInfoFromCache = if (carbonTbl != null) {
           carbonTbl.getTableInfo
@@ -296,7 +315,31 @@ class CarbonFileMetastore extends CarbonMetaStore {
             .getCarbonFile(tableMetadataFile).getLastModifiedTime
           Some(wrapperTableInfo)
         } else {
-          None
+          schema match {
+            case Some(x) =>
+              val updatedSchema = if (partitionSchema.isDefined) {
+                StructType(x.toList ++ partitionSchema.get.filterNot(
+                  s => x.exists(_.name.equalsIgnoreCase(s.name))))
+              } else {
+                x
+              }
+              val table = CarbonSparkDataSourceUtil.prepareLoadModel(options, updatedSchema).
+                getCarbonDataLoadSchema.getCarbonTable.getTableInfo
+              table.setDatabaseName(dbName)
+              table.setTableUniqueName(tableUniqueName)
+              table.setTransactionalTable(true)
+              table.setTablePath(tablePath)
+              table.getFactTable.setTableName(tableName)
+              table.setIdentifier(null)
+              if (partitionSchema.isDefined && !partitionSchema.get.isEmpty) {
+                table.getFactTable.setPartitionInfo(new PartitionInfo(
+                new util.ArrayList(table.getFactTable.getListOfColumns.asScala.filter(
+                  p => partitionSchema.get.exists(_.name.equalsIgnoreCase(p.getColumnName))).asJava),
+                  PartitionType.NATIVE_HIVE))
+              }
+              Some(table)
+            case None => None
+          }
         }
       }
     wrapperTableInfo.map { tableInfo =>
@@ -570,7 +613,8 @@ class CarbonFileMetastore extends CarbonMetaStore {
         CarbonDatasourceHadoopRelation(sparkSession,
           Array(tableLocation.asInstanceOf[String]),
           catalogTable.storage.properties,
-          Option(catalogTable.schema))
+          Option(catalogTable.schema),
+          Option(catalogTable.partitionSchema))
       case _ => throw new NoSuchTableException(tableIdentifier.database.get, tableIdentifier.table)
     }
   }
