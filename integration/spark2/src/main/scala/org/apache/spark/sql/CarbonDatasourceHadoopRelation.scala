@@ -46,6 +46,7 @@ case class CarbonDatasourceHadoopRelation(
     paths: Array[String],
     parameters: Map[String, String],
     tableSchema: Option[StructType],
+    partitionSchema: Option[StructType],
     isSubquery: ArrayBuffer[Boolean] = new ArrayBuffer[Boolean]())
   extends BaseRelation with InsertableRelation {
 
@@ -58,7 +59,8 @@ case class CarbonDatasourceHadoopRelation(
 
   @transient lazy val carbonRelation: CarbonRelation =
     CarbonEnv.getInstance(sparkSession).carbonMetaStore.
-    createCarbonRelation(parameters, identifier, sparkSession)
+    createCarbonRelation(parameters, identifier, sparkSession,
+      tableSchema, partitionSchema,  parameters)
 
 
   @transient lazy val carbonTable: CarbonTable = carbonRelation.carbonTable

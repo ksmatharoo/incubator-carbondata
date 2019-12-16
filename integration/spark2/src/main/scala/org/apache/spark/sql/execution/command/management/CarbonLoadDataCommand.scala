@@ -31,7 +31,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, UnresolvedAttribute}
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Ascending, AttributeReference, SortOrder}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.LogicalRDD
@@ -91,7 +91,7 @@ case class CarbonLoadDataCommand(
 
   var table: CarbonTable = _
 
-  var logicalPartitionRelation: LogicalRelation = _
+  var catalogTable: CatalogTable = _
 
   var sizeInBytes: Long = _
 
@@ -118,13 +118,14 @@ case class CarbonLoadDataCommand(
         relation.carbonTable
       }
     if (table.isHivePartitionTable) {
-      logicalPartitionRelation =
-        new FindDataSourceTable(sparkSession).apply(
+      new FindDataSourceTable(sparkSession).apply(
           sparkSession.sessionState.catalog.lookupRelation(
             TableIdentifier(tableName, databaseNameOp))).collect {
-          case l: LogicalRelation => l
-        }.head
-      sizeInBytes = logicalPartitionRelation.relation.sizeInBytes
+          case l: LogicalRelation =>
+            catalogTable = l.catalogTable.get
+            sizeInBytes = l.relation.sizeInBytes
+          case h: HiveTableRelation => catalogTable = h.tableMeta
+      }
     }
     Seq.empty
   }
@@ -412,7 +413,6 @@ case class CarbonLoadDataCommand(
       operationContext: OperationContext,
       LOGGER: Logger): Seq[Row] = {
     val table = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
-    val catalogTable: CatalogTable = logicalPartitionRelation.catalogTable.get
     var timeStampformatString = carbonLoadModel.getTimestampformat
     if (timeStampformatString.isEmpty) {
       timeStampformatString = carbonLoadModel.getDefaultTimestampFormat
@@ -884,6 +884,8 @@ case class CarbonLoadDataCommand(
     val options = new mutable.HashMap[String, String]()
     options ++= catalogTable.storage.properties
     options += (("overwrite", overWrite.toString))
+    options += (("dbName", CarbonEnv.getDatabaseName(catalogTable.identifier.database)(sparkSession)))
+    options += (("tableName", catalogTable.identifier.table))
     if (partition.nonEmpty) {
       val staticPartitionStr = ObjectSerializationUtil.convertObjectToString(
         new util.HashMap[String, Boolean](
