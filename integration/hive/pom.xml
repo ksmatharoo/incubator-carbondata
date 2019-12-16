@@ -62,7 +62,7 @@
                     <groupId>com.esotericsoftware.kryo</groupId>
                 </exclusion>
             </exclusions>
-            <scope>compile</scope>
+            <scope>provided</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.hive</groupId>

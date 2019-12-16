@@ -17,10 +17,15 @@
 
 package org.apache.carbondata.core.datastore.filesystem;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.constants.CarbonCommonConstants;
+import org.apache.carbondata.core.util.CarbonUtil;
 
+import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hdfs.DistributedFileSystem;
@@ -68,6 +73,37 @@ public class AlluxioCarbonFile extends HDFSCarbonFile {
       return absolutePath.replace("alluxio:/", "alluxio:///");
     }
     return absolutePath;
+  }
+
+  @Override
+  public DataOutputStream getDataOutputStreamUsingAppend()
+      throws IOException {
+    return getDataOutputStream(CarbonCommonConstants.BYTEBUFFER_SIZE, true);
+  }
+
+  @Override
+  public DataOutputStream getDataOutputStream(int bufferSize, boolean append) throws
+      IOException {
+    FSDataOutputStream stream;
+    if (append) {
+      // append to a file only if file already exists else file not found
+      // exception will be thrown by hdfs
+      if (CarbonUtil.isFileExists(getAbsolutePath())) {
+        DataInputStream dataInputStream = fileSystem.open(path);
+        int count = dataInputStream.available();
+        // create buffer
+        byte[] byteStreamBuffer = new byte[count];
+        int bytesRead = dataInputStream.read(byteStreamBuffer);
+        dataInputStream.close();
+        stream = fileSystem.create(path, true, bufferSize);
+        stream.write(byteStreamBuffer, 0, bytesRead);
+      } else {
+        stream = fileSystem.create(path, true, bufferSize);
+      }
+    } else {
+      stream = fileSystem.create(path, true, bufferSize);
+    }
+    return stream;
   }
 
   @Override

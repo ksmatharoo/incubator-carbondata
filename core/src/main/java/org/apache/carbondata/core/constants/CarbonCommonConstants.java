@@ -1635,7 +1635,7 @@ public final class CarbonCommonConstants {
 
   public static final String VIEWFSURL_PREFIX = "viewfs://";
 
-  public static final String ALLUXIOURL_PREFIX = "alluxio://";
+  public static final String ALLUXIOURL_PREFIX = "alluxio:/";
 
   public static final String S3_PREFIX = "s3://";
 

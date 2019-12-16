@@ -132,21 +132,23 @@ public class CarbonLockUtil {
       lockFilesDir = CarbonTablePath.getLockFilesDirPath(
           CarbonLockFactory.getLockpath(carbonTable.getTableInfo().getFactTable().getTableId()));
     }
-    CarbonFile[] files = FileFactory.getCarbonFile(lockFilesDir)
-        .listFiles(new CarbonFileFilter() {
+    try {
+      CarbonFile[] files = FileFactory.getCarbonFile(lockFilesDir).listFiles(new CarbonFileFilter() {
 
-            @Override
-            public boolean accept(CarbonFile pathName) {
+            @Override public boolean accept(CarbonFile pathName) {
               if (CarbonTablePath.isSegmentLockFilePath(pathName.getName())) {
                 return (currTime - pathName.getLastModifiedTime()) > segmentLockFilesPreserveTime;
               }
               return false;
             }
-        }
-    );
+      });
 
-    for (CarbonFile file : files) {
-      file.delete();
+      for (CarbonFile file : files) {
+        file.delete();
+      }
+    } catch (Exception e) {
+      // Ignore
+      LOGGER.warn(e.getMessage());
     }
   }
 }

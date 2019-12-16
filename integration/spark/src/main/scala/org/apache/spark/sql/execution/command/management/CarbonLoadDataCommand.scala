@@ -59,7 +59,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
 
   var table: CarbonTable = _
 
-  var logicalPartitionRelation: LogicalRelation = _
+  var catalogTable: CatalogTable = _
 
   var sizeInBytes: Long = _
 
@@ -76,7 +76,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
   var dateFormat: SimpleDateFormat = _
 
   override def processMetadata(sparkSession: SparkSession): Seq[Row] = {
-    val (sizeInBytes, table, dbName, logicalPartitionRelation, finalPartition) =
+    val (sizeInBytes, table, dbName, catalogTable, finalPartition) =
       CommonLoadUtils.processMetadataCommon(sparkSession,
         databaseNameOp,
         tableName,
@@ -84,7 +84,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
         partition)
     this.sizeInBytes = sizeInBytes
     this.table = table
-    this.logicalPartitionRelation = logicalPartitionRelation
+    this.catalogTable = catalogTable
     this.finalPartition = finalPartition
     setAuditTable(dbName, tableName)
     Seq.empty
@@ -154,7 +154,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
         isOverwriteTable,
         carbonLoadModel,
         hadoopConf,
-        logicalPartitionRelation,
+        catalogTable,
         dateFormat,
         timeStampFormat,
         options,
@@ -256,6 +256,8 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
     val options = new mutable.HashMap[String, String]()
     options ++= catalogTable.storage.properties
     options += (("overwrite", overWrite.toString))
+    options += (("dbName", CarbonEnv.getDatabaseName(catalogTable.identifier.database)(sparkSession)))
+    options += (("tableName", catalogTable.identifier.table))
     if (partition.nonEmpty) {
       val staticPartitionStr = ObjectSerializationUtil.convertObjectToString(
         new util.HashMap[String, Boolean](

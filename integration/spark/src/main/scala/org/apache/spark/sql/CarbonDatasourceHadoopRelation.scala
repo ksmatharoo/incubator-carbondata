@@ -45,7 +45,8 @@ case class CarbonDatasourceHadoopRelation(
     sparkSession: SparkSession,
     paths: Array[String],
     parameters: Map[String, String],
-    tableSchema: Option[StructType])
+    tableSchema: Option[StructType],
+    partitionSchema: Option[StructType])
   extends BaseRelation with InsertableRelation {
 
   val caseInsensitiveMap: Map[String, String] = parameters.map(f => (f._1.toLowerCase, f._2))
@@ -57,7 +58,8 @@ case class CarbonDatasourceHadoopRelation(
 
   @transient lazy val carbonRelation: CarbonRelation =
     CarbonEnv.getInstance(sparkSession).carbonMetaStore.
-    createCarbonRelation(parameters, identifier, sparkSession)
+    createCarbonRelation(parameters, identifier, sparkSession,
+      tableSchema, partitionSchema,  parameters)
 
 
   @transient lazy val carbonTable: CarbonTable = carbonRelation.carbonTable

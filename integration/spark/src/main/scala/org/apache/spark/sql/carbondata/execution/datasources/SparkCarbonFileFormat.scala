@@ -18,7 +18,6 @@
 package org.apache.spark.sql.carbondata.execution.datasources
 
 import java.net.URI
-import java.util.UUID
 
 import scala.collection.JavaConverters._
 
@@ -47,7 +46,7 @@ import org.apache.spark.util.SerializableConfiguration
 import org.apache.carbondata.common.annotations.{InterfaceAudience, InterfaceStability}
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.converter.SparkDataTypeConverterImpl
-import org.apache.carbondata.core.constants.CarbonCommonConstants
+import org.apache.carbondata.core.constants.{CarbonCommonConstants, CarbonLoadOptionConstants}
 import org.apache.carbondata.core.datamap.DataMapFilter
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.indexstore.BlockletDetailInfo
@@ -153,12 +152,15 @@ class SparkCarbonFileFormat extends FileFormat
         } else {
           path
         }
+        FileFactory.mkdirs(updatedPath, context.getConfiguration)
         context.getConfiguration.set("carbon.outputformat.writepath", updatedPath)
         // "jobid"+"x"+"taskid", task retry should have same task number
         context.getConfiguration.set("carbon.outputformat.taskno",
           context.getTaskAttemptID.getJobID.getJtIdentifier +
           context.getTaskAttemptID.getJobID.getId
           + 'x' + context.getTaskAttemptID.getTaskID.getId)
+        CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
+          .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "true")
         new CarbonOutputWriter(path, context, dataSchema.fields)
       }
 

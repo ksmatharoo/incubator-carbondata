@@ -387,7 +387,7 @@ object CarbonSparkSqlParserUtil {
       CarbonEnv.getDatabaseName(table.identifier.database)(sparkSession).toLowerCase(),
       table.identifier.table.toLowerCase()
     )
-    val tableInfo = if (isExternal) {
+    val tableInfo = if (isExternal && fields.isEmpty) {
       if (partitionColumnNames.nonEmpty) {
         throw new MalformedCarbonCommandException(
           "Partition is not supported for external table")

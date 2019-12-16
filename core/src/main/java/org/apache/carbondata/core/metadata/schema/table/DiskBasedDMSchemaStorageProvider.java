@@ -139,6 +139,9 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
   private Set<DataMapSchema> retrieveAllSchemasInternal() throws IOException {
     Set<DataMapSchema> dataMapSchemas = new HashSet<>();
     CarbonFile carbonFile = FileFactory.getCarbonFile(storePath);
+    if (!carbonFile.exists()) {
+      return dataMapSchemas;
+    }
     CarbonFile[] carbonFiles = carbonFile.listFiles(new CarbonFileFilter() {
       @Override
       public boolean accept(CarbonFile file) {
