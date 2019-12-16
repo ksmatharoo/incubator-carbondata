@@ -30,7 +30,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.{NoSuchTableException, UnresolvedAttribute}
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Ascending, AttributeReference, SortOrder}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.LogicalRDD
@@ -106,7 +106,7 @@ object CommonLoadUtils {
       databaseNameOp: Option[String],
       tableName: String,
       tableInfoOp: Option[TableInfo],
-      partition: Map[String, Option[String]]): (Long, CarbonTable, String, LogicalRelation,
+      partition: Map[String, Option[String]]): (Long, CarbonTable, String, CatalogTable,
       Map[String, Option[String]]) = {
     val dbName = CarbonEnv.getDatabaseName(databaseNameOp)(sparkSession)
     var table: CarbonTable = null
@@ -118,18 +118,20 @@ object CommonLoadUtils {
     } else {
       CarbonEnv.getCarbonTable(Option(dbName), tableName)(sparkSession)
     }
+    var catalogTable: CatalogTable = null
     var finalPartition: Map[String, Option[String]] = Map.empty
     if (table.isHivePartitionTable) {
-      logicalPartitionRelation =
-        new FindDataSourceTable(sparkSession).apply(
-          sparkSession.sessionState.catalog.lookupRelation(
-            TableIdentifier(tableName, databaseNameOp))).collect {
-          case l: LogicalRelation => l
-        }.head
-      sizeInBytes = logicalPartitionRelation.relation.sizeInBytes
-      finalPartition = getCompletePartitionValues(partition, table)
+      new FindDataSourceTable(sparkSession).apply(
+        sparkSession.sessionState.catalog.lookupRelation(
+          TableIdentifier(tableName, databaseNameOp))).collect {
+        case l: LogicalRelation =>
+          catalogTable = l.catalogTable.get
+          sizeInBytes = l.relation.sizeInBytes
+        case h: HiveTableRelation => catalogTable = h.tableMeta
+          finalPartition = getCompletePartitionValues(partition, table)
+      }
     }
-    (sizeInBytes, table, dbName, logicalPartitionRelation, finalPartition)
+    (sizeInBytes, table, dbName, catalogTable, finalPartition)
   }
 
   def prepareLoadModel(hadoopConf: Configuration,
@@ -677,6 +679,8 @@ object CommonLoadUtils {
     val options = new mutable.HashMap[String, String]()
     options ++= catalogTable.storage.properties
     options += (("overwrite", overWrite.toString))
+    options += (("dbName", CarbonEnv.getDatabaseName(catalogTable.identifier.database)(sparkSession)))
+    options += (("tableName", catalogTable.identifier.table))
     if (partition.nonEmpty) {
       val staticPartitionStr = ObjectSerializationUtil.convertObjectToString(
         new util.HashMap[String, Boolean](
@@ -820,7 +824,7 @@ object CommonLoadUtils {
    */
   def loadDataWithPartition(loadParams: CarbonLoadParams): Seq[Row] = {
     val table = loadParams.carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
-    val catalogTable: CatalogTable = loadParams.logicalPartitionRelation.catalogTable.get
+    val catalogTable: CatalogTable = loadParams.catalogTable
     // Clean up the already dropped partitioned data
     SegmentFileStore.cleanSegments(table, null, false)
     CarbonUtils.threadSet("partition.operationcontext", loadParams.operationContext)

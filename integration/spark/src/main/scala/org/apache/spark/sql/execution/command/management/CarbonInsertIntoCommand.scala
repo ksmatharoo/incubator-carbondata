@@ -26,6 +26,7 @@ import scala.collection.mutable
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, CarbonEnv, CarbonToSparkAdapter, DataFrame, Dataset, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Literal, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.execution.command.AtomicRunnableCommand
@@ -68,7 +69,7 @@ case class CarbonInsertIntoCommand(databaseNameOp: Option[String],
 
   var table: CarbonTable = _
 
-  var logicalPartitionRelation: LogicalRelation = _
+  var catalogTable: CatalogTable = _
 
   var sizeInBytes: Long = _
 
@@ -105,7 +106,7 @@ case class CarbonInsertIntoCommand(databaseNameOp: Option[String],
     setAuditTable(CarbonEnv.getDatabaseName(databaseNameOp)(sparkSession), tableName)
     ThreadLocalSessionInfo
       .setConfigurationToCurrentThread(sparkSession.sessionState.newHadoopConf())
-    val (sizeInBytes, table, dbName, logicalPartitionRelation, finalPartition) = CommonLoadUtils
+    val (sizeInBytes, table, dbName, catalogTable, finalPartition) = CommonLoadUtils
       .processMetadataCommon(
         sparkSession,
         databaseNameOp,
@@ -114,7 +115,7 @@ case class CarbonInsertIntoCommand(databaseNameOp: Option[String],
         partition)
     this.sizeInBytes = sizeInBytes
     this.table = table
-    this.logicalPartitionRelation = logicalPartitionRelation
+    this.catalogTable = catalogTable
     this.finalPartition = finalPartition
     setAuditTable(dbName, tableName)
     Seq.empty
@@ -169,17 +170,17 @@ case class CarbonInsertIntoCommand(databaseNameOp: Option[String],
       selectedColumnSchema,
       convertedStaticPartition)
     scanResultRdd = sparkSession.sessionState.executePlan(newLogicalPlan).toRdd
-    if (logicalPartitionRelation != null) {
-      if (selectedColumnSchema.length != logicalPartitionRelation.output.length) {
+    if (catalogTable != null) {
+      if (selectedColumnSchema.length != catalogTable.schema.length) {
         throw new RuntimeException(" schema length doesn't match partition length")
       }
       val isNotReArranged = selectedColumnSchema.zipWithIndex.exists {
-        case (cs, i) => !cs.getColumnName.equals(logicalPartitionRelation.output(i).name)
+        case (cs, i) => !cs.getColumnName.equals(catalogTable.schema(i).name)
       }
       if (isNotReArranged) {
         // Re-arrange the catalog table schema and output for partition relation
-        logicalPartitionRelation =
-          getReArrangedSchemaLogicalRelation(reArrangedIndex, logicalPartitionRelation)
+        catalogTable =
+          getReArrangedSchemaLogicalRelation(reArrangedIndex, catalogTable)
       }
     }
     // Delete stale segment folders that are not in table status but are physically present in
@@ -230,7 +231,7 @@ case class CarbonInsertIntoCommand(databaseNameOp: Option[String],
         isOverwriteTable,
         carbonLoadModel,
         hadoopConf,
-        logicalPartitionRelation,
+        catalogTable,
         dateFormat,
         timeStampFormat,
         options,
@@ -409,33 +410,26 @@ case class CarbonInsertIntoCommand(databaseNameOp: Option[String],
   }
 
   def getReArrangedSchemaLogicalRelation(reArrangedIndex: Seq[Int],
-      logicalRelation: LogicalRelation): LogicalRelation = {
+      catalogTable: CatalogTable): CatalogTable = {
     // rearrange the schema in catalog table and output attributes of logical relation
-    if (reArrangedIndex.size != logicalRelation.schema.size) {
+    if (reArrangedIndex.size != catalogTable.schema.length) {
       throw new AnalysisException(
         s"Cannot insert into table $tableName because the number of columns are different: " +
         s"need ${ reArrangedIndex.size } columns, " +
-        s"but query has ${ logicalRelation.schema.size } columns.")
+        s"but query has ${ catalogTable.schema.size } columns.")
     }
-    val reArrangedFields = new Array[StructField](logicalRelation.schema.size)
-    val reArrangedAttributes = new Array[AttributeReference](logicalRelation.schema.size)
-    val fields = logicalRelation.schema.fields
-    val output = logicalRelation.output
+    val reArrangedFields = new Array[StructField](catalogTable.schema.size)
+    val fields = catalogTable.schema.fields
+    val output = catalogTable.schema
     var i = 0
     for (index <- reArrangedIndex) {
       // rearranged schema
       reArrangedFields(i) = fields(index)
       // rearranged output attributes of logical relation
-      reArrangedAttributes(i) = output(index)
       i = i + 1
     }
     // update the new schema and output attributes
-    val catalogTable = logicalRelation.catalogTable
-      .get
-      .copy(schema = new StructType(reArrangedFields))
-    logicalRelation.copy(logicalRelation.relation,
-      reArrangedAttributes,
-      Some(catalogTable))
+    catalogTable.copy(schema = new StructType(reArrangedFields))
   }
 
   def insertData(loadParams: CarbonLoadParams): (Seq[Row], LoadMetadataDetails) = {

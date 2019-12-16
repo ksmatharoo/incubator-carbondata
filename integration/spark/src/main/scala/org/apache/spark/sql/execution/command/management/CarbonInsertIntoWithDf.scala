@@ -61,7 +61,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
     val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
     ThreadLocalSessionInfo
       .setConfigurationToCurrentThread(sparkSession.sessionState.newHadoopConf())
-    val (sizeInBytes, table, dbName, logicalPartitionRelation, finalPartition) = CommonLoadUtils
+    val (sizeInBytes, table, dbName, catalogTable, finalPartition) = CommonLoadUtils
       .processMetadataCommon(
         sparkSession,
         databaseNameOp,
@@ -136,7 +136,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         isOverwriteTable,
         carbonLoadModel,
         hadoopConf,
-        logicalPartitionRelation,
+        catalogTable,
         dateFormat,
         timeStampFormat,
         options,
