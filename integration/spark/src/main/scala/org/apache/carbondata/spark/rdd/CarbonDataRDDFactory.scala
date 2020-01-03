@@ -337,7 +337,8 @@ object CarbonDataRDDFactory {
       .sparkContext
       .collectionAccumulator[Map[String, SegmentMetaDataInfo]]
     // create new segment folder  in carbon store
-    if (updateModel.isEmpty && carbonLoadModel.isCarbonTransactionalTable) {
+    if (updateModel.isEmpty && carbonLoadModel.isCarbonTransactionalTable ||
+        updateModel.isDefined && updateModel.get.loadAsNewSegment) {
       CarbonLoaderUtil.checkAndCreateCarbonDataLocation(carbonLoadModel.getSegmentId, carbonTable)
     }
     var loadStatus = SegmentStatus.SUCCESS
@@ -351,7 +352,7 @@ object CarbonDataRDDFactory {
 
     try {
       if (!carbonLoadModel.isCarbonTransactionalTable || segmentLock.lockWithRetries()) {
-        if (updateModel.isDefined) {
+        if (updateModel.isDefined && !updateModel.get.loadAsNewSegment) {
           res = loadDataFrameForUpdate(
             sqlContext,
             dataFrame,
@@ -493,7 +494,7 @@ object CarbonDataRDDFactory {
       segmentLock.unlock()
     }
     // handle the status file updation for the update cmd.
-    if (updateModel.isDefined) {
+    if (updateModel.isDefined && !updateModel.get.loadAsNewSegment) {
       if (loadStatus == SegmentStatus.LOAD_FAILURE) {
         CarbonScalaUtil.updateErrorInUpdateModel(updateModel.get, executorMessage)
         return null
@@ -553,6 +554,9 @@ object CarbonDataRDDFactory {
     }
     val uniqueTableStatusId = Option(operationContext.getProperty("uuid")).getOrElse("")
       .asInstanceOf[String]
+    val loadAsNewSeg = updateModel.isDefined && updateModel.get.loadAsNewSegment
+    val delSegs =
+      if (loadAsNewSeg) updateModel.get.deletedSegments.asJava else new util.ArrayList[Segment]()
     val transactionManager = TransactionManager.getInstance()
     val transactionId = transactionManager.getTransactionManager.
       asInstanceOf[SessionTransactionManager].
@@ -567,6 +571,8 @@ object CarbonDataRDDFactory {
             carbonLoadModel.getCurrentLoadMetadataDetail,
             overwriteTable,
             uniqueTableStatusId,
+            loadAsNewSeg,
+            delSegs,
             null,
             operationContext,
             hadoopConf),
@@ -596,6 +602,8 @@ object CarbonDataRDDFactory {
               carbonLoadModel.getCurrentLoadMetadataDetail,
               overwriteTable,
               uniqueTableStatusId,
+              loadAsNewSeg,
+              delSegs,
               null,
               operationContext,
               hadoopConf),
@@ -651,6 +659,7 @@ object CarbonDataRDDFactory {
             newEntryLoadStatus,
             overwriteTable,
             segmentFileName,
+            updateModel,
             uniqueTableStatusId,
             null == transactionId)
       if (null != transactionId) {
@@ -660,6 +669,8 @@ object CarbonDataRDDFactory {
             writtenSegment,
             overwriteTable,
             uniqueTableStatusId,
+            loadAsNewSeg,
+            delSegs,
             segmentFileName,
             operationContext,
             hadoopConf),
@@ -1113,6 +1124,7 @@ object CarbonDataRDDFactory {
       newEntryLoadStatus: SegmentStatus,
       overwriteTable: Boolean,
       segmentFileName: String,
+      updateModel: Option[UpdateTableModel],
       uuid: String = "",
       writeToFile: Boolean = true): (Boolean, LoadMetadataDetails) = {
     val metadataDetails = if (status != null && status.size > 0 && status(0) != null) {
@@ -1131,8 +1143,11 @@ object CarbonDataRDDFactory {
         carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
     metadataDetails.setLoadName(carbonLoadModel.getSegmentId);
     if (writeToFile) {
+      val loadAsNewSeg = updateModel.isDefined && updateModel.get.loadAsNewSegment
+      val delSegs =
+        if (loadAsNewSeg) updateModel.get.deletedSegments.asJava else new util.ArrayList[Segment]()
       val done = CarbonLoaderUtil.writeTableStatus(carbonLoadModel, metadataDetails,
-        overwriteTable, uuid)
+        overwriteTable, loadAsNewSeg, delSegs,  uuid)
       (done, metadataDetails)
     } else {
       (true, metadataDetails)

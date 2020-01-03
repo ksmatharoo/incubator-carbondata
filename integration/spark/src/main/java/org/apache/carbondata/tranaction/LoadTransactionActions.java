@@ -17,6 +17,9 @@
 
 package org.apache.carbondata.tranaction;
 
+import java.util.List;
+
+import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
@@ -48,8 +51,13 @@ public class LoadTransactionActions implements TransactionAction {
 
   private Configuration configuration;
 
+  private boolean loadAsNewSegment;
+
+  private List<Segment> segmentsToBeDeleted;
+
   public LoadTransactionActions(SparkSession sparkSession, CarbonLoadModel carbonLoadModel,
       LoadMetadataDetails loadMetadataDetails, boolean overwriteTable, String uuid,
+      boolean loadAsNewSegment, List<Segment> segmentsToBeDeleted,
       String segmentFileName, OperationContext operationContext, Configuration configuration) {
     this.sparkSession = sparkSession;
     this.carbonLoadModel = carbonLoadModel;
@@ -59,6 +67,8 @@ public class LoadTransactionActions implements TransactionAction {
     this.segmentFileName = segmentFileName;
     this.operationContext = operationContext;
     this.configuration = configuration;
+    this.loadAsNewSegment = loadAsNewSegment;
+    this.segmentsToBeDeleted = segmentsToBeDeleted;
   }
 
   public void commit() throws Exception {
@@ -67,7 +77,8 @@ public class LoadTransactionActions implements TransactionAction {
         || segmentStatus == SegmentStatus.LOAD_FAILURE) {
       throw new Exception("Failed to commit transaction:");
     }
-    CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable, uuid);
+    CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable,
+        loadAsNewSegment, segmentsToBeDeleted, uuid);
     CarbonDataRDDFactory
         .handlePostEvent(carbonLoadModel, operationContext, uuid, true, segmentFileName,
             sparkSession, loadMetadataDetails.getSegmentStatus(), configuration);

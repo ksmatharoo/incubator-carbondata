@@ -204,12 +204,25 @@ public final class CarbonLoaderUtil {
   }
 
   public static boolean writeTableStatus(CarbonLoadModel carbonLoadModel,
-      LoadMetadataDetails metadataDetails, boolean overwriteTable, String uuid) throws Exception {
+      LoadMetadataDetails metadataDetails, boolean overwriteTable, boolean loadAsNewSegment,
+      List<Segment> segmentsToBeDeleted,  String uuid) throws Exception {
     if (!carbonLoadModel.isCarbonTransactionalTable() && overwriteTable) {
       deleteNonTransactionalTableForInsertOverwrite(carbonLoadModel);
     }
-    boolean done = CarbonLoaderUtil.recordNewLoadMetadata(
-        metadataDetails, carbonLoadModel, false, overwriteTable, uuid);
+    boolean done = true;
+    // If the updated data should be added as new segment then update the segment information
+    if (loadAsNewSegment) {
+      done = done && CarbonUpdateUtil.updateTableMetadataStatus(
+          carbonLoadModel.getLoadMetadataDetails().stream().map(l ->
+              new Segment(l.getMergedLoadName(),
+                  l.getSegmentFile())).collect(Collectors.toSet()),
+          carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
+          carbonLoadModel.getFactTimeStamp() + "",
+          true,
+          segmentsToBeDeleted);
+    }
+    done = done && CarbonLoaderUtil.recordNewLoadMetadata(metadataDetails, carbonLoadModel, false,
+        overwriteTable, uuid);
     if (!done) {
       String errorMessage = "Dataload failed due to failure in table status updation for" +
           " ${carbonLoadModel.getTableName}";
