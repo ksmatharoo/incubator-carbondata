@@ -59,7 +59,7 @@ import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.segmentmeta.{SegmentMetaDataInfo, SegmentMetaDataInfoStats}
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
-import org.apache.carbondata.core.transaction.TransactionManager
+import org.apache.carbondata.core.transaction.{TransactionActionType, TransactionManager}
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil, ThreadLocalSessionInfo}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.events.{OperationContext, OperationListenerBus}
@@ -74,7 +74,7 @@ import org.apache.carbondata.processing.util.{CarbonDataProcessorUtil, CarbonLoa
 import org.apache.carbondata.spark.{DataLoadResultImpl, _}
 import org.apache.carbondata.spark.load._
 import org.apache.carbondata.spark.util.{CarbonScalaUtil, CommonUtil, Util}
-import org.apache.carbondata.tranaction.{LoadTransactionActions, SessionTransactionManager}
+import org.apache.carbondata.tranaction.{CompactionTransactionAction, LoadTransactionActions, PrePrimingAction, SessionTransactionManager}
 
 /**
  * This is the factory class which can create different RDD depends on user needs.
@@ -542,16 +542,13 @@ object CarbonDataRDDFactory {
     val uniqueTableStatusId = Option(operationContext.getProperty("uuid")).getOrElse("")
       .asInstanceOf[String]
     val transactionManager = TransactionManager.getInstance()
-    val isTransactionEnabled = transactionManager.getTransactionManager.
-      asInstanceOf[SessionTransactionManager].
-      isTransactionEnabled(sqlContext.sparkSession)
     val transactionId = transactionManager.getTransactionManager.
       asInstanceOf[SessionTransactionManager].
-      getTransactionId(sqlContext.sparkSession)
+      getTransactionId(sqlContext.sparkSession, carbonTable)
     if (loadStatus == SegmentStatus.LOAD_FAILURE) {
       // update the load entry in table status file for changing the status to marked for delete
       CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel, uniqueTableStatusId)
-      if (isTransactionEnabled) {
+      if (null != transactionId) {
         transactionManager.recordTransactionAction(transactionId,
           new LoadTransactionActions(sqlContext.sparkSession,
             carbonLoadModel,
@@ -560,8 +557,8 @@ object CarbonDataRDDFactory {
             uniqueTableStatusId,
             null,
             operationContext,
-            hadoopConf
-          ))
+            hadoopConf),
+          TransactionActionType.COMMIT_SCOPE)
       }
       LOGGER.info("********starting clean up**********")
       if (carbonLoadModel.isCarbonTransactionalTable) {
@@ -580,7 +577,7 @@ object CarbonDataRDDFactory {
           carbonLoadModel.getBadRecordsAction.split(",")(1) == LoggerAction.FAIL.name) {
         // update the load entry in table status file for changing the status to marked for delete
         CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel, uniqueTableStatusId)
-        if(isTransactionEnabled) {
+        if (null != transactionId) {
           transactionManager.recordTransactionAction(transactionId,
             new LoadTransactionActions(sqlContext.sparkSession,
               carbonLoadModel,
@@ -589,8 +586,8 @@ object CarbonDataRDDFactory {
               uniqueTableStatusId,
               null,
               operationContext,
-              hadoopConf
-            ))
+              hadoopConf),
+            TransactionActionType.COMMIT_SCOPE)
         }
         LOGGER.info("********starting clean up**********")
         if (carbonLoadModel.isCarbonTransactionalTable) {
@@ -643,8 +640,8 @@ object CarbonDataRDDFactory {
             overwriteTable,
             segmentFileName,
             uniqueTableStatusId,
-            !isTransactionEnabled)
-      if (isTransactionEnabled) {
+            null == transactionId)
+      if (null != transactionId) {
         transactionManager.recordTransactionAction(transactionId,
           new LoadTransactionActions(sqlContext.sparkSession,
             carbonLoadModel,
@@ -653,8 +650,19 @@ object CarbonDataRDDFactory {
             uniqueTableStatusId,
             segmentFileName,
             operationContext,
-            hadoopConf
-          ))
+            hadoopConf),
+            TransactionActionType.COMMIT_SCOPE)
+        transactionManager.recordTransactionAction(transactionId,
+          new PrePrimingAction(sqlContext.sparkSession,
+            carbonLoadModel,
+            hadoopConf,
+            operationContext),
+          TransactionActionType.PERF_SCOPE)
+        transactionManager.recordTransactionAction(transactionId,
+          new CompactionTransactionAction(sqlContext.sparkSession,
+            carbonLoadModel,
+            operationContext),
+          TransactionActionType.PERF_SCOPE)
       } else {
         handlePostEvent(carbonLoadModel,
           operationContext,
@@ -664,6 +672,8 @@ object CarbonDataRDDFactory {
           sqlContext.sparkSession,
           loadStatus,
           hadoopConf)
+        runPrePriming(sqlContext.sparkSession, carbonLoadModel, hadoopConf, operationContext)
+        runCompaction(sqlContext.sparkSession, carbonLoadModel, operationContext)
       }
      writtenSegment
     }
@@ -713,7 +723,12 @@ object CarbonDataRDDFactory {
       LOGGER.info("Data load is successful for " +
                   s"${ carbonLoadModel.getDatabaseName }.${ carbonLoadModel.getTableName }")
     }
+  }
 
+  def runPrePriming(sparkSession: SparkSession,
+      carbonLoadModel: CarbonLoadModel,
+      hadoopConf: Configuration,
+      operationContext: OperationContext): Unit = {
     // code to handle Pre-Priming cache for loading
 
     if (!StringUtils.isEmpty(carbonLoadModel.getSegmentId)) {
@@ -721,6 +736,11 @@ object CarbonDataRDDFactory {
         carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable, Seq(),
         operationContext, hadoopConf, List(carbonLoadModel.getSegmentId))
     }
+  }
+
+  def runCompaction(sparkSession: SparkSession,
+      carbonLoadModel: CarbonLoadModel,
+      operationContext: OperationContext): Unit = {
     try {
       // compaction handling
       if (carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.isHivePartitionTable) {

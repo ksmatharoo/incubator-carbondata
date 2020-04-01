@@ -33,6 +33,7 @@ import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
+import org.apache.carbondata.core.transaction.TransactionActionType;
 import org.apache.carbondata.core.transaction.TransactionManager;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonSessionInfo;
@@ -128,7 +129,8 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
         CarbonLoaderUtil.updateTableStatusForFailure(loadModel);
         if (null != transactionId) {
           TransactionManager.getInstance().recordTransactionAction(transactionId,
-              new PartitionTransactionAction(loadModel, loadModel.getCurrentLoadMetadataDetail()));
+              new PartitionTransactionAction(loadModel, loadModel.getCurrentLoadMetadataDetail()),
+              TransactionActionType.COMMIT_SCOPE);
         }
         LOGGER.error("commit job failed", e);
         throw new IOException(e.getMessage());
@@ -217,7 +219,7 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
       PartitionTransactionAction partitionTransactionAction =
           new PartitionTransactionAction(loadModel, newMetaEntry, uuid, operationContext,
               context.getConfiguration(), uniqueId, segToUpdated, segToDeleted, segmentLock,
-              false);
+              false, overwriteSet);
       try {
         partitionTransactionAction.commit();
       } catch (Exception e) {
@@ -292,10 +294,11 @@ public class CarbonOutputCommitter extends FileOutputCommitter {
     PartitionTransactionAction partitionTransactionAction =
         new PartitionTransactionAction(loadModel, newMetaEntry, uuid, operationContext,
             context.getConfiguration(), uniqueId, segToUpdated, segToDeleted, segmentLock,
-            null != transactionId);
+            null != transactionId, overwriteSet);
     if (null != transactionId) {
       TransactionManager.getInstance()
-          .recordTransactionAction(transactionId, partitionTransactionAction);
+          .recordTransactionAction(transactionId, partitionTransactionAction,
+              TransactionActionType.COMMIT_SCOPE);
     } else {
       partitionTransactionAction.commit();
     }

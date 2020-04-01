@@ -2440,6 +2440,6 @@ public final class CarbonCommonConstants {
 
   public static final String CARBON_MERGE_WITHIN_SEGMENT = "carbon.merge.with.in.segment";
 
-  public static final String CARBON_MERGE_WITHIN_SEGMENT_DEFAULT = "false";
+  public static final String CARBON_MERGE_WITHIN_SEGMENT_DEFAULT = "true";
 
 }

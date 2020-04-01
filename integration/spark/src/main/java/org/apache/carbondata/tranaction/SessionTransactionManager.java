@@ -18,12 +18,18 @@
 package org.apache.carbondata.tranaction;
 
 import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.transaction.TransactionAction;
+import org.apache.carbondata.core.transaction.TransactionActionType;
 import org.apache.carbondata.core.transaction.TransactionHandler;
 
 import org.apache.spark.sql.SparkSession;
@@ -38,11 +44,17 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
 
   private Map<String, Queue<TransactionAction>> closedTransactionActions;
 
+  private Map<String, Queue<TransactionAction>> perfTransactionAction;
+
+  private Map<SparkSession, Set<String>> transactionalTableNames;
+
   public SessionTransactionManager() {
     this.transactionIdToSessionMap = new ConcurrentHashMap<>();
     this.sessionToTransactionIdMap = new ConcurrentHashMap<>();
     this.openTransactionActions = new ConcurrentHashMap<>();
     this.closedTransactionActions = new ConcurrentHashMap<>();
+    this.perfTransactionAction = new ConcurrentHashMap<>();
+    this.transactionalTableNames = new HashMap<>();
   }
 
   @Override
@@ -79,6 +91,17 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
         throw new RuntimeException(e);
       }
     }
+    Queue<TransactionAction> perfTransactionActions = perfTransactionAction.get(transactionId);
+    if (null != perfTransactionActions) {
+      while (!perfTransactionActions.isEmpty()) {
+        TransactionAction poll = perfTransactionActions.poll();
+        try {
+          poll.commit();
+        } catch (Exception e) {
+          //IGNORE
+        }
+      }
+    }
     openTransactionActions.remove(transactionId);
     closedTransactionActions.remove(transactionId);
     sessionToTransactionIdMap.remove(transactionIdToSessionMap.remove(transactionId));
@@ -91,48 +114,82 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
     }
     Queue<TransactionAction> openTransactions = openTransactionActions.get(transactionId);
     Queue<TransactionAction> closeTransactions = closedTransactionActions.get(transactionId);
-    while (!closeTransactions.isEmpty()) {
-      try {
-        closeTransactions.poll().rollback();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
+    if (null != closeTransactions) {
+      while (!closeTransactions.isEmpty()) {
+        try {
+          closeTransactions.poll().rollback();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
       }
     }
-    while (!openTransactions.isEmpty()) {
-      try {
-        openTransactions.poll().rollback();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
+    if (openTransactions != null) {
+      while (!openTransactions.isEmpty()) {
+        try {
+          openTransactions.poll().rollback();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
       }
     }
     openTransactionActions.remove(transactionId);
     closedTransactionActions.remove(transactionId);
+    perfTransactionAction.remove(transactionId);
     sessionToTransactionIdMap.remove(transactionIdToSessionMap.remove(transactionId));
   }
 
   @Override
-  public void recordTransactionAction(String transactionId, TransactionAction transactionAction) {
+  public void recordTransactionAction(String transactionId, TransactionAction transactionAction,
+      TransactionActionType transactionActionType) {
     if (null == this.transactionIdToSessionMap.get(transactionId)) {
       throw new RuntimeException("No current transaction is running on this session");
     }
-    Queue<TransactionAction> transactionActions = openTransactionActions.get(transactionId);
-    if (null == transactionActions) {
-      transactionActions = new ArrayDeque<>();
+    if (transactionActionType == TransactionActionType.COMMIT_SCOPE) {
+      Queue<TransactionAction> transactionActions = openTransactionActions.get(transactionId);
+      if (null == transactionActions) {
+        transactionActions = new ArrayDeque<>();
+        openTransactionActions.put(transactionId, transactionActions);
+      }
+      transactionActions.add(transactionAction);
+    } else {
+      Queue<TransactionAction> transactionActions = perfTransactionAction.get(transactionId);
+      if (null == transactionActions) {
+        transactionActions = new ArrayDeque<>();
+        perfTransactionAction.put(transactionId, transactionActions);
+      }
+      transactionActions.add(transactionAction);
     }
-    transactionActions.add(transactionAction);
-    openTransactionActions.put(transactionId, transactionActions);
   }
 
-  public boolean isTransactionEnabled(SparkSession session) {
-    return sessionToTransactionIdMap.containsKey(session);
-  }
-
-  public String getTransactionId(SparkSession session) {
+  @Override
+  public String getTransactionId(SparkSession session, CarbonTable carbonTable) {
+    if (!transactionalTableNames.get(session).isEmpty() && !transactionalTableNames.get(session)
+        .contains(carbonTable.getDatabaseName() + "." + carbonTable.getTableName()
+            .toLowerCase(Locale.getDefault()))) {
+      return null;
+    }
     return sessionToTransactionIdMap.get(session);
   }
 
   @Override
   public TransactionHandler getTransactionManager() {
     return this;
+  }
+
+  @Override
+  public void registerTableForTransaction(SparkSession sparkSession, String tableListString) {
+    String transactionId = sessionToTransactionIdMap.get(sparkSession);
+    if (null == transactionId) {
+      throw new RuntimeException("No current transaction is running on this session");
+    }
+    Set<String> tableNames = transactionalTableNames.get(sparkSession);
+    if (null == tableNames) {
+      tableNames = new HashSet<>();
+      transactionalTableNames.put(sparkSession, tableNames);
+    }
+    String[] split = tableListString.split(",");
+    for (String str : split) {
+      tableNames.add(str.trim().toLowerCase(Locale.getDefault()));
+    }
   }
 }

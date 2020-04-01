@@ -22,9 +22,11 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.carbondata.core.datamap.DataMapStoreManager;
 import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datamap.status.DataMapStatusManager;
 import org.apache.carbondata.core.locks.ICarbonLock;
+import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
@@ -62,10 +64,17 @@ public class PartitionTransactionAction implements TransactionAction {
 
   private boolean isTransactionFlow;
 
+  private boolean isOverwriteTable;
+
+  private CarbonTable table;
+
+  private boolean isCleanupDone;
+
   public PartitionTransactionAction(CarbonLoadModel carbonLoadModel,
       LoadMetadataDetails loadMetadataDetails, String uuid, OperationContext operationContext,
       Configuration configuration, String updatedTimeStamp, List<Segment> updatedSegments,
-      List<Segment> deletedSegments, ICarbonLock segmentLock, boolean isTransactionFlow) {
+      List<Segment> deletedSegments, ICarbonLock segmentLock, boolean isTransactionFlow,
+      boolean isOverwriteTable) {
     this.carbonLoadModel = carbonLoadModel;
     this.loadMetadataDetails = loadMetadataDetails;
     this.uuid = uuid;
@@ -76,6 +85,8 @@ public class PartitionTransactionAction implements TransactionAction {
     this.deletedSegments = deletedSegments;
     this.segmentLock = segmentLock;
     this.isTransactionFlow = isTransactionFlow;
+    this.isOverwriteTable = isOverwriteTable;
+    table = carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable();
   }
 
   public PartitionTransactionAction(CarbonLoadModel carbonLoadModel,
@@ -99,6 +110,12 @@ public class PartitionTransactionAction implements TransactionAction {
       }
       commitJobFinal();
     } finally {
+      if (!isCleanupDone && isOverwriteTable) {
+        DataMapStoreManager.getInstance().clearDataMaps(table.getAbsoluteTableIdentifier());
+        // Clean the overwriting segments if any.
+        SegmentFileStore.cleanSegments(table, null, false);
+        isCleanupDone = true;
+      }
       if (isTransactionFlow && null != segmentLock) {
         segmentLock.unlock();
       }
@@ -135,11 +152,20 @@ public class PartitionTransactionAction implements TransactionAction {
 
   @Override
   public void rollback() throws Exception {
-    if (loadMetadataDetails.getSegmentStatus() == SegmentStatus.MARKED_FOR_DELETE
-        || loadMetadataDetails.getSegmentStatus() == SegmentStatus.LOAD_FAILURE) {
-      return;
+    try {
+      if (loadMetadataDetails.getSegmentStatus() == SegmentStatus.MARKED_FOR_DELETE
+          || loadMetadataDetails.getSegmentStatus() == SegmentStatus.LOAD_FAILURE) {
+        return;
+      }
+      CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel);
+      CarbonLoaderUtil.runCleanupForPartition(carbonLoadModel);
+    } finally {
+      if (!isCleanupDone && isOverwriteTable) {
+        DataMapStoreManager.getInstance().clearDataMaps(table.getAbsoluteTableIdentifier());
+        // Clean the overwriting segments if any.
+        SegmentFileStore.cleanSegments(table, null, false);
+        isCleanupDone = true;
+      }
     }
-    CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel);
-    CarbonLoaderUtil.runCleanupForPartition(carbonLoadModel);
   }
 }

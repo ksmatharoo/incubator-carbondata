@@ -34,7 +34,7 @@ import org.apache.spark.sql.execution.command.management._
 import org.apache.spark.sql.execution.command.schema.CarbonAlterTableDropColumnCommand
 import org.apache.spark.sql.execution.command.stream.{CarbonCreateStreamCommand, CarbonDropStreamCommand, CarbonShowStreamsCommand}
 import org.apache.spark.sql.execution.command.table.CarbonCreateTableCommand
-import org.apache.spark.sql.execution.command.transaction.{CommitTransactionCommand, RollbackTransactionCommand, StartTransactionCommand}
+import org.apache.spark.sql.execution.command.transaction.{CommitTransactionCommand, RegisterTransactionTableCommand, RollbackTransactionCommand, StartTransactionCommand}
 import org.apache.spark.sql.secondaryindex.command._
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.util.CarbonException
@@ -91,7 +91,7 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
 
   protected lazy val datamapManagement: Parser[LogicalPlan] =
     createDataMap | dropDataMap | showDataMap | refreshDataMap | startTransaction |
-    commitTransaction | rollBackTransaction
+    commitTransaction | rollBackTransaction | registerTransactionTable
 
   protected lazy val stream: Parser[LogicalPlan] =
     createStream | dropStream | showStreams
@@ -503,6 +503,12 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
               options.getOrElse(List[(String, String)]()).toMap[String, String])
     }
 
+  protected lazy val registerTransactionTable: Parser[LogicalPlan] =
+    REGISTER ~> TRANSACTION ~> TABLE ~> stringLit <~ opt(";") ^^ {
+      case tablename =>
+        RegisterTransactionTableCommand(tablename)
+    }
+
   /**
    * ALTER TABLE [dbName.]tableName ADD SEGMENT
    * OPTIONS('path'='path','format'='format', ['partition'='schema list'])
@@ -575,7 +581,6 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
       case transactionId =>
         RollbackTransactionCommand(transactionId)
     }
-
 
   protected lazy val showCache: Parser[LogicalPlan] =
     (SHOW ~> opt(EXECUTOR) <~ METACACHE) ~ opt(ontable) <~ opt(";") ^^ {

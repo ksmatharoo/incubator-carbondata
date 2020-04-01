@@ -17,12 +17,7 @@
 
 package org.apache.carbondata.core.transaction;
 
-public interface TransactionAction {
-
-  void commit() throws Exception;
-
-  default void rollback() throws Exception {
-
-  }
-
+public enum TransactionActionType {
+  COMMIT_SCOPE,
+  PERF_SCOPE
 }

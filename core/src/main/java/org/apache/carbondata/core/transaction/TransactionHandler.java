@@ -17,41 +17,47 @@
 
 package org.apache.carbondata.core.transaction;
 
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+
 /**
  * Interface for doing any operation based on transaction.
  * so operation will be succeed only if it is committed.
+ *
  * @param <T> transaction can be done on any level
- *           carbonTable, session.
+ *            carbonTable, session.
  */
 public interface TransactionHandler<T> {
 
   /**
    * interface for starting any transaction
-   * @param transactionObj
-   *        object on which transaction is going on.
-   *        it can be a carbontable object, session object or any other
+   *
+   * @param transactionObj object on which transaction is going on.
+   *                       it can be a carbontable object, session object or any other
    * @return transaction id
    */
   String startTransaction(T transactionObj);
 
   /**
    * used for committing the transaction for committing id
+   *
    * @param transactionId
    */
   void commitTransaction(String transactionId);
 
   /**
    * rollback if any failures while committing the transaction
+   *
    * @param transactionId
    */
   void rollbackTransaction(String transactionId);
 
-  void recordTransactionAction(String transactionId, TransactionAction transactionAction);
+  void recordTransactionAction(String transactionId, TransactionAction transactionAction,
+      TransactionActionType transactionActionType);
 
-  boolean isTransactionEnabled(T transactionObj);
-
-  String getTransactionId(T transactionObj);
+  String getTransactionId(T transactionObj, CarbonTable carbonTable);
 
   TransactionHandler getTransactionManager();
+
+  void registerTableForTransaction(T transactionId, String tableNameString);
 
 }

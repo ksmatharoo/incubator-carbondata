@@ -14,15 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.spark.sql.execution.command.transaction
 
-package org.apache.carbondata.core.transaction;
+import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.execution.command.MetadataCommand
 
-public interface TransactionAction {
+import org.apache.carbondata.core.transaction.TransactionManager
+import org.apache.carbondata.tranaction.SessionTransactionManager
 
-  void commit() throws Exception;
+case class RegisterTransactionTableCommand(tableListString: String)
+  extends MetadataCommand {
+  override protected def opName: String = "Register Transaction Table"
 
-  default void rollback() throws Exception {
-
+  override def processMetadata(sparkSession: SparkSession): Seq[Row] = {
+    TransactionManager.getInstance()
+      .getTransactionManager
+      .asInstanceOf[SessionTransactionManager]
+      .registerTableForTransaction(sparkSession, tableListString)
+    Seq.empty
   }
-
 }

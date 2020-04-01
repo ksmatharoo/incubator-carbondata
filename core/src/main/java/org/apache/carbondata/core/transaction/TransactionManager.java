@@ -17,6 +17,8 @@
 
 package org.apache.carbondata.core.transaction;
 
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+
 public class TransactionManager implements TransactionHandler<Object> {
 
   private static final TransactionManager INSTANCE = new TransactionManager();
@@ -56,22 +58,24 @@ public class TransactionManager implements TransactionHandler<Object> {
   }
 
   @Override
-  public void recordTransactionAction(String transactionId, TransactionAction transactionAction) {
-    this.transactionHandler.recordTransactionAction(transactionId, transactionAction);
+  public void recordTransactionAction(String transactionId, TransactionAction transactionAction,
+      TransactionActionType transactionActionType) {
+    this.transactionHandler
+        .recordTransactionAction(transactionId, transactionAction, transactionActionType);
   }
 
   @Override
-  public boolean isTransactionEnabled(Object transactionObj) {
-    return this.transactionHandler.isTransactionEnabled(transactionObj);
-  }
-
-  @Override
-  public String getTransactionId(Object transactionObj) {
-    return this.transactionHandler.getTransactionId(transactionObj);
+  public String getTransactionId(Object transactionObj, CarbonTable carbonTable) {
+    return this.transactionHandler.getTransactionId(transactionObj, carbonTable);
   }
 
   @Override
   public TransactionHandler getTransactionManager() {
     return this.transactionHandler;
+  }
+
+  @Override
+  public void registerTableForTransaction(Object transactionObj, String tableNameString) {
+    this.transactionHandler.registerTableForTransaction(transactionObj, tableNameString);
   }
 }
