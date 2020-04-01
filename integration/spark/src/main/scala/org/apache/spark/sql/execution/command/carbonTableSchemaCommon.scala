@@ -127,7 +127,8 @@ case class CompactionModel(compactionSize: Long,
     carbonTable: CarbonTable,
     isDDLTrigger: Boolean,
     currentPartitions: Option[Seq[PartitionSpec]],
-    customSegmentIds: Option[List[String]])
+    customSegmentIds: Option[List[String]],
+    compactWithInSegment : Boolean = false)
 
 case class CompactionCallableModel(carbonLoadModel: CarbonLoadModel,
     carbonTable: CarbonTable,
@@ -135,7 +136,8 @@ case class CompactionCallableModel(carbonLoadModel: CarbonLoadModel,
     sqlContext: SQLContext,
     compactionType: CompactionType,
     currentPartitions: Option[Seq[PartitionSpec]],
-    compactedSegments: java.util.List[String])
+    compactedSegments: java.util.List[String],
+    compactWithInSegment: Boolean = false)
 
 case class AlterPartitionModel(carbonLoadModel: CarbonLoadModel,
     segmentId: String,

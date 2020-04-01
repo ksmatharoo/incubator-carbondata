@@ -2432,4 +2432,14 @@ public final class CarbonCommonConstants {
    * Make this false, to load index for the matched segments from filter expression
    */
   public static final String CARBON_LOAD_ALL_SEGMENT_INDEXES_TO_CACHE_DEFAULT = "true";
+
+  public static final String CARBON_MIN_THREASHOLD_FOR_SEGMENT_MERGER =
+      "carbon.min.threashold.for.segment.merger";
+
+  public static final String CARBON_MIN_THREASHOLD_FOR_SEGMENT_MERGER_DEFAULT = "80";
+
+  public static final String CARBON_MERGE_WITHIN_SEGMENT = "carbon.merge.with.in.segment";
+
+  public static final String CARBON_MERGE_WITHIN_SEGMENT_DEFAULT = "false";
+
 }

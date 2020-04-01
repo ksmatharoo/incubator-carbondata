@@ -34,6 +34,7 @@ import org.apache.spark.sql.execution.command.management._
 import org.apache.spark.sql.execution.command.schema.CarbonAlterTableDropColumnCommand
 import org.apache.spark.sql.execution.command.stream.{CarbonCreateStreamCommand, CarbonDropStreamCommand, CarbonShowStreamsCommand}
 import org.apache.spark.sql.execution.command.table.CarbonCreateTableCommand
+import org.apache.spark.sql.execution.command.transaction.{CommitTransactionCommand, RollbackTransactionCommand, StartTransactionCommand}
 import org.apache.spark.sql.secondaryindex.command._
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.util.CarbonException
@@ -89,7 +90,8 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
   protected lazy val restructure: Parser[LogicalPlan] = alterTableDropColumn
 
   protected lazy val datamapManagement: Parser[LogicalPlan] =
-    createDataMap | dropDataMap | showDataMap | refreshDataMap
+    createDataMap | dropDataMap | showDataMap | refreshDataMap | startTransaction |
+    commitTransaction | rollBackTransaction
 
   protected lazy val stream: Parser[LogicalPlan] =
     createStream | dropStream | showStreams
@@ -555,6 +557,25 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
           limit,
           showHistory.isDefined)
     }
+
+  protected lazy val startTransaction: Parser[LogicalPlan] =
+    START ~> TRANSACTION ^^ {
+      case _ =>
+        StartTransactionCommand()
+    }
+
+  protected lazy val commitTransaction: Parser[LogicalPlan] =
+    COMMIT ~> TRANSACTION ~> stringLit <~ opt(";") ^^ {
+      case transactionId =>
+        CommitTransactionCommand(transactionId)
+    }
+
+  protected lazy val rollBackTransaction: Parser[LogicalPlan] =
+    ROLLBACK ~> TRANSACTION ~> stringLit <~ opt(";") ^^ {
+      case transactionId =>
+        RollbackTransactionCommand(transactionId)
+    }
+
 
   protected lazy val showCache: Parser[LogicalPlan] =
     (SHOW ~> opt(EXECUTOR) <~ METACACHE) ~ opt(ontable) <~ opt(";") ^^ {

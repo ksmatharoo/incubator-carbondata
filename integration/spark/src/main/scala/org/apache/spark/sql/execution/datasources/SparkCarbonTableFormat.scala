@@ -144,6 +144,10 @@ with Serializable {
     if (staticPartition != null) {
       conf.set("carbon.staticpartition", staticPartition)
     }
+    val transactionId = options.getOrElse("transactionId", null)
+    if(null != transactionId) {
+      conf.set("carbon.transactionId", transactionId)
+    }
     // In case of update query there is chance to remove the older segments, so here we can set
     // the to be deleted segments to mark as delete while updating tablestatus
     val segemntsTobeDeleted = options.get("segmentsToBeDeleted")

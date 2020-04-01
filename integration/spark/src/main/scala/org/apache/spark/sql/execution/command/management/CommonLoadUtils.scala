@@ -58,6 +58,7 @@ import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema
 import org.apache.carbondata.core.mutate.{CarbonUpdateUtil, TupleIdEnum}
 import org.apache.carbondata.core.segmentmeta.{SegmentMetaDataInfo, SegmentMetaDataInfoStats}
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
+import org.apache.carbondata.core.transaction.TransactionManager
 import org.apache.carbondata.core.util._
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.events.{BuildDataMapPostExecutionEvent, BuildDataMapPreExecutionEvent, OperationContext, OperationListenerBus}
@@ -70,6 +71,7 @@ import org.apache.carbondata.processing.util.{CarbonBadRecordUtil, CarbonDataPro
 import org.apache.carbondata.spark.load.{CsvRDDHelper, DataLoadProcessorStepOnSpark, GlobalSortHelper}
 import org.apache.carbondata.spark.rdd.CarbonDataRDDFactory
 import org.apache.carbondata.spark.util.CarbonScalaUtil
+import org.apache.carbondata.tranaction.SessionTransactionManager
 
 object CommonLoadUtils {
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
@@ -704,6 +706,13 @@ object CommonLoadUtils {
       val currLoadEntry =
         ObjectSerializationUtil.convertObjectToString(loadModel.getCurrentLoadMetadataDetail)
       options += (("currentloadentry", currLoadEntry))
+    }
+    val transactionId = TransactionManager.getInstance()
+      .getTransactionManager
+      .asInstanceOf[SessionTransactionManager]
+      .getTransactionId(sparkSession)
+    if(null != transactionId) {
+      options += (("transactionId", transactionId))
     }
     val hdfsRelation = HadoopFsRelation(
       location = catalog,

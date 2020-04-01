@@ -36,6 +36,7 @@ import org.apache.carbondata.core.indexstore.PartitionSpec
 import org.apache.carbondata.core.metadata.encoder.Encoding
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
+import org.apache.carbondata.core.transaction.TransactionManager
 import org.apache.carbondata.core.util._
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.events.OperationContext
@@ -45,6 +46,7 @@ import org.apache.carbondata.processing.loading.exception.NoRetryException
 import org.apache.carbondata.processing.loading.model.CarbonLoadModel
 import org.apache.carbondata.processing.util.{CarbonDataProcessorUtil, CarbonLoaderUtil}
 import org.apache.carbondata.spark.rdd.CarbonDataRDDFactory
+import org.apache.carbondata.tranaction.SessionTransactionManager
 
 case class CarbonLoadDataCommand(databaseNameOp: Option[String],
     tableName: String,
@@ -181,7 +183,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
           CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel, uuid)
         }
         LOGGER.error(s"Dataload failure for $dbName.$tableName", ex)
-        throw new RuntimeException(s"Dataload failure for $dbName.$tableName, ${ex.getMessage}")
+        throw new RuntimeException(s"Dataload failure for $dbName.$tableName, ${ ex.getMessage }")
       // In case of event related exception
       case preEventEx: PreEventException =>
         LOGGER.error(s"Dataload failure for $dbName.$tableName", preEventEx)
@@ -200,7 +202,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
   def loadData(loadParams: CarbonLoadParams): (Seq[Row], LoadMetadataDetails) = {
     var rows = Seq.empty[Row]
     val table = loadParams.carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
-    var loadResult : LoadMetadataDetails = null
+    var loadResult: LoadMetadataDetails = null
     if (table.isHivePartitionTable) {
       rows = CommonLoadUtils.loadDataWithPartition(loadParams)
     } else {
@@ -273,6 +275,12 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
       val currLoadEntry =
         ObjectSerializationUtil.convertObjectToString(loadModel.getCurrentLoadMetadataDetail)
       options += (("currentloadentry", currLoadEntry))
+    }
+    val transactionId = TransactionManager.getInstance()
+      .asInstanceOf[SessionTransactionManager]
+      .getTransactionId(sparkSession)
+    if(null != transactionId) {
+      options += (("transactionId", transactionId))
     }
     val hdfsRelation = HadoopFsRelation(
       location = catalog,

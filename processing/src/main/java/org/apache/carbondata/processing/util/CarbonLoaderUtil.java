@@ -28,11 +28,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.constants.CarbonLoadOptionConstants;
+import org.apache.carbondata.core.datamap.DataMapStoreManager;
 import org.apache.carbondata.core.datamap.Segment;
+import org.apache.carbondata.core.datamap.status.DataMapStatusManager;
 import org.apache.carbondata.core.datastore.block.Distributable;
 import org.apache.carbondata.core.datastore.block.TableBlockInfo;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
@@ -44,6 +47,7 @@ import org.apache.carbondata.core.locks.LockUsage;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+import org.apache.carbondata.core.metadata.schema.table.DataMapSchema;
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatus;
@@ -197,6 +201,35 @@ public final class CarbonLoaderUtil {
     }
 
     deleteFiles(filesToBeDeleted);
+  }
+
+  public static boolean writeTableStatus(CarbonLoadModel carbonLoadModel,
+      LoadMetadataDetails metadataDetails, boolean overwriteTable, String uuid) throws Exception {
+    if (!carbonLoadModel.isCarbonTransactionalTable() && overwriteTable) {
+      deleteNonTransactionalTableForInsertOverwrite(carbonLoadModel);
+    }
+    boolean done = CarbonLoaderUtil.recordNewLoadMetadata(
+        metadataDetails, carbonLoadModel, false, overwriteTable, uuid);
+    if (!done) {
+      String errorMessage = "Dataload failed due to failure in table status updation for" +
+          " ${carbonLoadModel.getTableName}";
+      LOGGER.error(errorMessage);
+      throw new Exception(errorMessage);
+    } else {
+      DataMapStatusManager.disableAllLazyDataMaps(
+          carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable());
+      if (overwriteTable) {
+        List<DataMapSchema> allDataMapSchemas = DataMapStoreManager.getInstance()
+            .getDataMapSchemasOfTable(carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable())
+            .stream().filter(
+                dataMapSchema -> null != dataMapSchema.getRelationIdentifier() && !dataMapSchema
+                    .isIndexDataMap()).collect(Collectors.toList());
+        if (!allDataMapSchemas.isEmpty()) {
+          DataMapStatusManager.truncateDataMap(allDataMapSchemas);
+        }
+      }
+    }
+    return done;
   }
 
   /**
@@ -1267,6 +1300,43 @@ public final class CarbonLoaderUtil {
         LOGGER.error("Unable to unlock Table lock for table" + databaseName + "." + tableName
             + " during table status updation");
       }
+    }
+  }
+
+  public static void runCleanupForPartition(CarbonLoadModel loadModel) throws IOException {
+    CarbonLoaderUtil.updateTableStatusForFailure(loadModel);
+    String segmentFileName = loadModel.getSegmentId() + "_" + loadModel.getFactTimeStamp();
+    LoadMetadataDetails metadataDetail = loadModel.getCurrentLoadMetadataDetail();
+    if (metadataDetail != null) {
+      // In case the segment file is already created for this job then just link it so that it
+      // will be used while cleaning.
+      if (!metadataDetail.getSegmentStatus().equals(SegmentStatus.SUCCESS)) {
+        String readPath = CarbonTablePath.getSegmentFilesLocation(loadModel.getTablePath())
+            + CarbonCommonConstants.FILE_SEPARATOR + segmentFileName
+            + CarbonTablePath.SEGMENT_EXT;
+        if (FileFactory.getCarbonFile(readPath).exists()) {
+          metadataDetail.setSegmentFile(segmentFileName + CarbonTablePath.SEGMENT_EXT);
+        }
+      }
+    }
+    // Clean the temp files
+    CarbonFile segTmpFolder = FileFactory.getCarbonFile(
+        CarbonTablePath.getSegmentFilesLocation(loadModel.getTablePath())
+            + CarbonCommonConstants.FILE_SEPARATOR + segmentFileName + ".tmp");
+    // delete temp segment folder
+    if (segTmpFolder.exists()) {
+      FileFactory.deleteAllCarbonFilesOfDir(segTmpFolder);
+    }
+    CarbonFile segmentFilePath = FileFactory.getCarbonFile(
+        CarbonTablePath.getSegmentFilesLocation(loadModel.getTablePath())
+            + CarbonCommonConstants.FILE_SEPARATOR + segmentFileName
+            + CarbonTablePath.SEGMENT_EXT);
+    // Delete the temp data folders of this job if exists
+    if (segmentFilePath.exists()) {
+      SegmentFileStore fileStore = new SegmentFileStore(loadModel.getTablePath(),
+          segmentFileName + CarbonTablePath.SEGMENT_EXT);
+      SegmentFileStore.removeTempFolder(fileStore.getLocationMap(), segmentFileName + ".tmp",
+          loadModel.getTablePath());
     }
   }
 }
