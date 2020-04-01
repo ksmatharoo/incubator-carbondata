@@ -241,8 +241,7 @@ class CarbonMergerRDD[K, V](
           rawResultIteratorMap.get(CarbonCompactionUtil.UNSORTED_IDX).size() == 0) {
 
           LOGGER.info("RowResultMergerProcessor flow is selected")
-          processor = new RowResultMergerProcessor(
-            databaseName,
+          processor = new NoSortMergerProcessor(
             factTableName,
             segmentProperties,
             tempStoreLoc,

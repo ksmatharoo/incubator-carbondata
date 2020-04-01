@@ -38,6 +38,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.TaskContext
+import org.apache.spark.sql.carbondata.execution.datasources.tasklisteners.CarbonLoadTaskCompletionListenerImpl
 import org.apache.spark.sql.execution.command.management.CommonLoadUtils
 
 import org.apache.carbondata.core.constants.{CarbonCommonConstants, CarbonLoadOptionConstants}
@@ -513,6 +514,10 @@ private class CarbonOutputWriter(path: String,
         new Path(tmpPath)
       }
     }.getRecordWriter(context).asInstanceOf[CarbonRecordWriter]
+  }
+
+  Option(TaskContext.get()).foreach {c =>
+    c.addTaskCompletionListener(CarbonLoadTaskCompletionListenerImpl(recordWriter, context))
   }
 
   // TODO Implement writesupport interface to support writing Row directly to recordwriter

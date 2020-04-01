@@ -157,6 +157,18 @@ object CarbonDataRDDFactory {
       // update the updated table status. For the case of Update Delta Compaction the Metadata
       // is filled in LoadModel, no need to refresh.
       carbonLoadModel.readAndSetLoadMetadataDetails()
+      if (compactionModel.compactWithInSegment &&
+          compactionModel.compactionType == CompactionType.CUSTOM) {
+        val currentLoadMetadata = carbonLoadModel
+          .getLoadMetadataDetails
+          .asScala
+          .filter(_.getLoadName.equals(carbonLoadModel.getCurrentLoadMetadataDetail.getLoadName))
+          .asJava
+        if (currentLoadMetadata.get(0).getSegmentStatus == SegmentStatus.MARKED_FOR_DELETE ||
+            currentLoadMetadata.get(0).getSegmentStatus == SegmentStatus.LOAD_FAILURE) {
+          return
+        }
+      }
     }
 
     val compactionThread = new Thread {
@@ -760,6 +772,10 @@ object CarbonDataRDDFactory {
           "Auto-Compaction has failed. Ignoring this exception because the" +
           " load is passed.", e)
     }
+    CommonUtil.cleanGarbageData(sparkSession,
+      carbonLoadModel.getDatabaseName,
+      carbonLoadModel.getTableName,
+      carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
   }
   /**
    * clear datamap files for segment

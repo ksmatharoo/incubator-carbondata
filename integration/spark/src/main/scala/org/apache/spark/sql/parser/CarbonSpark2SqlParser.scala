@@ -504,7 +504,7 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
     }
 
   protected lazy val registerTransactionTable: Parser[LogicalPlan] =
-    REGISTER ~> TRANSACTION ~> TABLE ~> stringLit <~ opt(";") ^^ {
+    UNREGISTER ~> TRANSACTION ~> TABLE ~> stringLit <~ opt(";") ^^ {
       case tablename =>
         RegisterTransactionTableCommand(tablename)
     }

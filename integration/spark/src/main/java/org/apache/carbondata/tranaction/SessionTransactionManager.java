@@ -81,14 +81,16 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
       closeTransactions = new ArrayDeque<>();
       closedTransactionActions.put(transactionId, closeTransactions);
     }
-    while (!openTransactions.isEmpty()) {
-      TransactionAction poll = openTransactions.poll();
-      try {
-        poll.commit();
-        closeTransactions.add(poll);
-      } catch (Exception e) {
-        closeTransactions.add(poll);
-        throw new RuntimeException(e);
+    if (null != openTransactions) {
+      while (!openTransactions.isEmpty()) {
+        TransactionAction poll = openTransactions.poll();
+        try {
+          poll.commit();
+          closeTransactions.add(poll);
+        } catch (Exception e) {
+          closeTransactions.add(poll);
+          throw new RuntimeException(e);
+        }
       }
     }
     Queue<TransactionAction> perfTransactionActions = perfTransactionAction.get(transactionId);
@@ -163,8 +165,12 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
 
   @Override
   public String getTransactionId(SparkSession session, CarbonTable carbonTable) {
-    if (!transactionalTableNames.get(session).isEmpty() && !transactionalTableNames.get(session)
-        .contains(carbonTable.getDatabaseName() + "." + carbonTable.getTableName()
+    if (null == this.sessionToTransactionIdMap.get(session)) {
+      return null;
+    }
+    Set<String> tableList = transactionalTableNames.get(session);
+    if (null != tableList && tableList.contains(
+        carbonTable.getDatabaseName() + "." + carbonTable.getTableName()
             .toLowerCase(Locale.getDefault()))) {
       return null;
     }
