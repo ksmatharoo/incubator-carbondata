@@ -710,7 +710,7 @@ object CommonLoadUtils {
     val transactionId = TransactionManager.getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
-      .getTransactionId(sparkSession, table)
+      .getTransactionId(sparkSession, table.getDatabaseName + "." + table.getTableName)
     if(null != transactionId) {
       options += (("transactionId", transactionId))
     }
@@ -857,7 +857,8 @@ object CommonLoadUtils {
       .getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
-    val transactionId = transactionManager.getTransactionId(loadParams.sparkSession, table)
+    val transactionId = transactionManager.getTransactionId(loadParams.sparkSession,
+      table.getDatabaseName + table.getTableName)
     val partitionValues = if (loadParams.finalPartition.nonEmpty) {
       loadParams.finalPartition.filter(_._2.nonEmpty).map { case (col, value) =>
         catalogTable.schema.find(_.name.equalsIgnoreCase(col)) match {

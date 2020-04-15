@@ -560,7 +560,8 @@ object CarbonDataRDDFactory {
     val transactionManager = TransactionManager.getInstance()
     val transactionId = transactionManager.getTransactionManager.
       asInstanceOf[SessionTransactionManager].
-      getTransactionId(sqlContext.sparkSession, carbonTable)
+      getTransactionId(sqlContext.sparkSession,
+        carbonTable.getDatabaseName + "." + carbonTable.getTableName)
     if (loadStatus == SegmentStatus.LOAD_FAILURE) {
       // update the load entry in table status file for changing the status to marked for delete
       CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel, uniqueTableStatusId)

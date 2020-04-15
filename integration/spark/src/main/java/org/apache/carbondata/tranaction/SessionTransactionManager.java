@@ -164,14 +164,12 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
   }
 
   @Override
-  public String getTransactionId(SparkSession session, CarbonTable carbonTable) {
+  public String getTransactionId(SparkSession session, String tableUniqueName) {
     if (null == this.sessionToTransactionIdMap.get(session)) {
       return null;
     }
     Set<String> tableList = transactionalTableNames.get(session);
-    if (null != tableList && tableList.contains(
-        carbonTable.getDatabaseName() + "." + carbonTable.getTableName()
-            .toLowerCase(Locale.getDefault()))) {
+    if (null != tableList && tableList.contains(tableUniqueName.toLowerCase(Locale.getDefault()))) {
       return null;
     }
     return sessionToTransactionIdMap.get(session);

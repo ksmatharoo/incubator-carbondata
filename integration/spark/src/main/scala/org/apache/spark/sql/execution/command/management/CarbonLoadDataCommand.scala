@@ -278,7 +278,7 @@ case class CarbonLoadDataCommand(databaseNameOp: Option[String],
     }
     val transactionId = TransactionManager.getInstance()
       .asInstanceOf[SessionTransactionManager]
-      .getTransactionId(sparkSession, table)
+      .getTransactionId(sparkSession, table.getDatabaseName + "." + table.getTableName)
     if(null != transactionId) {
       options += (("transactionId", transactionId))
     }

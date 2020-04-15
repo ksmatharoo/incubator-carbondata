@@ -17,8 +17,6 @@
 
 package org.apache.carbondata.core.transaction;
 
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
-
 public class TransactionManager implements TransactionHandler<Object> {
 
   private static final TransactionManager INSTANCE = new TransactionManager();
@@ -65,8 +63,8 @@ public class TransactionManager implements TransactionHandler<Object> {
   }
 
   @Override
-  public String getTransactionId(Object transactionObj, CarbonTable carbonTable) {
-    return this.transactionHandler.getTransactionId(transactionObj, carbonTable);
+  public String getTransactionId(Object transactionObj, String tableUniqueName) {
+    return this.transactionHandler.getTransactionId(transactionObj, tableUniqueName);
   }
 
   @Override

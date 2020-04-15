@@ -54,7 +54,7 @@ public interface TransactionHandler<T> {
   void recordTransactionAction(String transactionId, TransactionAction transactionAction,
       TransactionActionType transactionActionType);
 
-  String getTransactionId(T transactionObj, CarbonTable carbonTable);
+  String getTransactionId(T transactionObj, String tableUniqueName);
 
   TransactionHandler getTransactionManager();
 

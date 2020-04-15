@@ -192,8 +192,8 @@ public class CarbonCompactionExecutor {
             Collections.singletonList(tableBlockInfoList.get(0).getDataFileFooter()));
       }
       return new RawResultIterator(
-          executeBlockList(tableBlockInfoList, segmentId, task, configuration),
-          sourceSegmentProperties, destinationSegProperties, true);
+          executeQuery(tableBlockInfoList, segmentId, task, configuration),
+          sourceSegmentProperties, destinationSegProperties, queryModel);
     }
   }
 
@@ -261,6 +261,25 @@ public class CarbonCompactionExecutor {
     QueryExecutor queryExecutor = QueryExecutorFactory.getQueryExecutor(queryModel, configuration);
     queryExecutorList.add(queryExecutor);
     return queryExecutor.execute(queryModel);
+  }
+
+  /**
+   * get executor and execute the query model.
+   *
+   * @param blockList
+   * @return
+   */
+  private QueryExecutor executeQuery(List<TableBlockInfo> blockList,
+      String segmentId, String taskId, Configuration configuration)
+      throws IOException {
+    queryModel.setTableBlockInfos(blockList);
+    QueryStatisticsRecorder executorRecorder = CarbonTimeStatisticsFactory
+        .createExecutorRecorder(queryModel.getQueryId() + "_" + segmentId + "_" + taskId);
+    queryStatisticsRecorders.add(executorRecorder);
+    queryModel.setStatisticsRecorder(executorRecorder);
+    QueryExecutor queryExecutor = QueryExecutorFactory.getQueryExecutor(queryModel, configuration);
+    queryExecutorList.add(queryExecutor);
+    return queryExecutor;
   }
 
   /**
