@@ -38,6 +38,9 @@ public class Utils {
 
   public static List<CarbonSparkPartition> mergeSplit(List<CarbonSparkPartition> allPartition,
       CarbonTable carbonTable) {
+    if (allPartition.isEmpty()) {
+      return allPartition;
+    }
     long configuredSize = carbonTable.getBlockSizeInMB() * 1024L * 1024L;
     int minThreashold;
     try {
@@ -77,22 +80,23 @@ public class Utils {
         selectedList.add(carbonSparkPartitions);
       }
     }
-    int rejectedPercentage = (rejectedList.size() / totalNumberOfPartition) * 100;
-    if (rejectedPercentage > minThreashold) {
-      return new ArrayList<>();
-    } else {
-      List<CarbonSparkPartition> collect =
-          selectedList.stream().flatMap(List::stream).collect(Collectors.toList());
-      List<CarbonSparkPartition> result = new ArrayList<>();
-      int rddId = allPartition.get(0).rddId();
-      int counter = 0;
-      for (CarbonSparkPartition carbonSparkPartition : collect) {
-        result.add(
-            new CarbonSparkPartition(rddId, counter++, carbonSparkPartition.multiBlockSplit(),
-                carbonSparkPartition.partitionSpec()));
+    boolean isRejectPresent = rejectedList.size() > 0;
+    if (isRejectPresent) {
+      int rejectedPercentage = (rejectedList.size() / totalNumberOfPartition) * 100;
+      if (rejectedPercentage > minThreashold) {
+        return new ArrayList<>();
       }
-      return result;
     }
+    List<CarbonSparkPartition> collect =
+        selectedList.stream().flatMap(List::stream).collect(Collectors.toList());
+    List<CarbonSparkPartition> result = new ArrayList<>();
+    int rddId = allPartition.get(0).rddId();
+    int counter = 0;
+    for (CarbonSparkPartition carbonSparkPartition : collect) {
+      result.add(new CarbonSparkPartition(rddId, counter++, carbonSparkPartition.multiBlockSplit(),
+          carbonSparkPartition.partitionSpec()));
+    }
+    return result;
   }
 
   private static List<CarbonSparkPartition> mergeSplitBasedOnSize(

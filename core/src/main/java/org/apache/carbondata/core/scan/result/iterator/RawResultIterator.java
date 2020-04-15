@@ -103,7 +103,7 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
   }
 
   protected void init() {
-    if(!isExecuted) {
+    if (!isExecuted) {
       try {
         this.detailRawQueryResultIterator = queryExecutor.execute(queryModel);
       } catch (IOException e) {
@@ -201,7 +201,7 @@ public class RawResultIterator extends CarbonIterator<Object[]> {
 
   @Override
   public boolean hasNext() {
-    if(!isExecuted) {
+    if (!isExecuted) {
       init();
       isExecuted = true;
     }

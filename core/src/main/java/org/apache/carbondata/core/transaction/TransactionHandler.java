@@ -17,8 +17,6 @@
 
 package org.apache.carbondata.core.transaction;
 
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
-
 /**
  * Interface for doing any operation based on transaction.
  * so operation will be succeed only if it is committed.

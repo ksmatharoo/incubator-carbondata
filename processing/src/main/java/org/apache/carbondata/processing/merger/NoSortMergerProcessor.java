@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.carbondata.processing.merger;
 
 import java.io.IOException;
@@ -38,7 +39,7 @@ import org.apache.carbondata.processing.util.CarbonDataProcessorUtil;
 
 import org.apache.log4j.Logger;
 
-public class NoSortMergerProcessor extends AbstractResultProcessor{
+public class NoSortMergerProcessor extends AbstractResultProcessor {
 
   private CarbonFactHandler dataHandler;
   private SegmentProperties segprop;

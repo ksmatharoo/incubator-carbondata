@@ -72,6 +72,7 @@ public class CarbonCompactionExecutor {
       new ArrayList<>(CarbonCommonConstants.DEFAULT_COLLECTION_SIZE);
   private CarbonTable carbonTable;
   private QueryModel queryModel;
+  private boolean isNoSortBasedMerger;
 
   /**
    * flag to check whether any restructured block exists in the blocks selected for compaction.
@@ -191,6 +192,7 @@ public class CarbonCompactionExecutor {
         sourceSegmentProperties = getSourceSegmentProperties(
             Collections.singletonList(tableBlockInfoList.get(0).getDataFileFooter()));
       }
+      isNoSortBasedMerger = true;
       return new RawResultIterator(
           executeQuery(tableBlockInfoList, segmentId, task, configuration),
           sourceSegmentProperties, destinationSegProperties, queryModel);
@@ -288,15 +290,17 @@ public class CarbonCompactionExecutor {
    */
   public void close(List<RawResultIterator> rawResultIteratorList, long queryStartTime) {
     try {
-      // close all the iterators. Iterators might not closed in case of compaction failure
-      // or if process is killed
-      if (null != rawResultIteratorList) {
-        for (RawResultIterator rawResultIterator : rawResultIteratorList) {
-          rawResultIterator.close();
+      if (!isNoSortBasedMerger) {
+        // close all the iterators. Iterators might not closed in case of compaction failure
+        // or if process is killed
+        if (null != rawResultIteratorList) {
+          for (RawResultIterator rawResultIterator : rawResultIteratorList) {
+            rawResultIterator.close();
+          }
         }
-      }
-      for (QueryExecutor queryExecutor : queryExecutorList) {
-        queryExecutor.finish();
+        for (QueryExecutor queryExecutor : queryExecutorList) {
+          queryExecutor.finish();
+        }
       }
       logStatistics(queryStartTime);
     } catch (QueryExecutionException e) {

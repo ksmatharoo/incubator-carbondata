@@ -29,7 +29,6 @@ import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.hdfs.DistributedFileSystem;
 import org.apache.log4j.Logger;
 
 public class AlluxioCarbonFile extends HDFSCarbonFile {
