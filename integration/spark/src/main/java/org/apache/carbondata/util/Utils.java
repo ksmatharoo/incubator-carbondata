@@ -21,11 +21,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
@@ -33,6 +36,8 @@ import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.hadoop.CarbonInputSplit;
 import org.apache.carbondata.hadoop.CarbonMultiBlockSplit;
 import org.apache.carbondata.spark.rdd.CarbonSparkPartition;
+
+import org.apache.log4j.Logger;
 
 public class Utils {
 
@@ -42,17 +47,17 @@ public class Utils {
       return allPartition;
     }
     long configuredSize = carbonTable.getBlockSizeInMB() * 1024L * 1024L;
-    int minThreashold;
+    int minThreshold;
     try {
-      minThreashold = Integer.parseInt(CarbonProperties.getInstance()
+      minThreshold = Integer.parseInt(CarbonProperties.getInstance()
           .getProperty(CarbonCommonConstants.CARBON_MIN_THREASHOLD_FOR_SEGMENT_MERGER,
               CarbonCommonConstants.CARBON_MIN_THREASHOLD_FOR_SEGMENT_MERGER_DEFAULT));
     } catch (NumberFormatException exp) {
-      minThreashold =
+      minThreshold =
           Integer.parseInt(CarbonCommonConstants.CARBON_MIN_THREASHOLD_FOR_SEGMENT_MERGER_DEFAULT);
     }
     if (!carbonTable.isHivePartitionTable()) {
-      return mergeSplitBasedOnSize(allPartition, configuredSize, minThreashold);
+      return mergeSplitBasedOnSize(allPartition, configuredSize, minThreshold);
     }
     Map<PartitionSpec, List<CarbonSparkPartition>> partitionSpecToParitionMap = new HashMap<>();
     for (CarbonSparkPartition carbonSparkPartition : allPartition) {
@@ -73,7 +78,7 @@ public class Utils {
     while (iterator.hasNext()) {
       Map.Entry<PartitionSpec, List<CarbonSparkPartition>> entry = iterator.next();
       List<CarbonSparkPartition> carbonSparkPartitions =
-          mergeSplitBasedOnSize(entry.getValue(), configuredSize, minThreashold);
+          mergeSplitBasedOnSize(entry.getValue(), configuredSize, minThreshold);
       if (carbonSparkPartitions.isEmpty()) {
         rejectedList.add(carbonSparkPartitions);
       } else {
@@ -83,7 +88,7 @@ public class Utils {
     boolean isRejectPresent = rejectedList.size() > 0;
     if (isRejectPresent) {
       int rejectedPercentage = (rejectedList.size() / totalNumberOfPartition) * 100;
-      if (rejectedPercentage > minThreashold) {
+      if (rejectedPercentage > minThreshold) {
         return new ArrayList<>();
       }
     }
@@ -100,7 +105,7 @@ public class Utils {
   }
 
   private static List<CarbonSparkPartition> mergeSplitBasedOnSize(
-      List<CarbonSparkPartition> allPartition, long configuredSize, int minThreashold) {
+      List<CarbonSparkPartition> allPartition, long configuredSize, int minThreshold) {
     List<CarbonSparkPartition> result = new ArrayList<>();
     List<CarbonInputSplit> allSplits = new ArrayList<>();
     for (CarbonSparkPartition sparkPartition : allPartition) {
@@ -108,11 +113,11 @@ public class Utils {
     }
     long totalSize = 0;
     long minSizeToConsider = (configuredSize * 80) / 100;
-    long fileExceedingThreashold = 0;
+    long fileExceedingThreshold = 0;
     for (CarbonInputSplit split : allSplits) {
       totalSize += split.getLength();
       if (split.getLength() >= minSizeToConsider) {
-        fileExceedingThreashold++;
+        fileExceedingThreshold++;
       }
     }
     if (configuredSize > totalSize) {
@@ -129,20 +134,21 @@ public class Utils {
           allPartition.get(0).partitionSpec()));
       return result;
     }
-    int actualMinThreashold = (allSplits.size() * minThreashold) / 100;
-    if (fileExceedingThreashold >= actualMinThreashold) {
+    int actualMinThreshold = (allSplits.size() * minThreshold) / 100;
+    if (fileExceedingThreshold >= actualMinThreshold) {
       return new ArrayList<>();
     }
     long noOfGroup = totalSize / configuredSize;
     long leftOver = totalSize % configuredSize;
+    long newConfiguredSize = configuredSize + (long) (configuredSize * .20);
     int runningIndex = 0;
     long currentSize;
     List<List<CarbonInputSplit>> splitsGroup = new ArrayList<>();
-    List<List<String>> splitLocations = new ArrayList<>();
+    List<Set<String>> splitLocations = new ArrayList<>();
     for (int i = 0; i < noOfGroup; i++) {
       currentSize = 0;
       List<CarbonInputSplit> splits = new ArrayList<>();
-      List<String> locations = new ArrayList<>();
+      Set<String> locations = new HashSet<>();
       for (int j = runningIndex; j < allSplits.size(); j++) {
         splits.add(allSplits.get(j));
         currentSize += allSplits.get(j).getLength();
@@ -152,22 +158,29 @@ public class Utils {
           throw new RuntimeException(e);
         }
         runningIndex++;
-        if (currentSize >= configuredSize) {
+        if (currentSize >= newConfiguredSize) {
           break;
         }
+      }
+      if (runningIndex > allSplits.size()) {
+        break;
       }
       splitsGroup.add(splits);
       splitLocations.add(locations);
     }
-    if (leftOver > 0) {
-      splitsGroup.get(0).add(allSplits.get(allSplits.size() - 1));
-      try {
-        splitLocations.get(0)
-            .addAll(Arrays.asList(allSplits.get(allSplits.size() - 1).getLocations()));
-      } catch (IOException e) {
-        throw new RuntimeException(e);
+    if (leftOver > 0 && runningIndex < allSplits.size()) {
+      int startIndex = 0;
+      for (int i = runningIndex; i < allSplits.size(); i++) {
+        splitsGroup.get(startIndex).add(allSplits.get(i));
+        try {
+          splitLocations.get(startIndex).addAll(Arrays.asList(allSplits.get(i).getLocations()));
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+        startIndex++;
       }
     }
+
     int counter = 0;
     for (List<CarbonInputSplit> splits : splitsGroup) {
       String[] loc =

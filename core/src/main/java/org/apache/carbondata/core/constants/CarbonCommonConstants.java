@@ -437,12 +437,12 @@ public final class CarbonCommonConstants {
   /**
    * default value for local dictionary
    */
-  public static final String LOCAL_DICTIONARY_THRESHOLD_DEFAULT = "10000";
+  public static final String LOCAL_DICTIONARY_THRESHOLD_DEFAULT = "32000";
 
   /**
    * max dictionary threshold
    */
-  public static final int LOCAL_DICTIONARY_MAX = 100000;
+  public static final int LOCAL_DICTIONARY_MAX = 32000;
 
   /**
    * min dictionary threshold
@@ -2069,7 +2069,7 @@ public final class CarbonCommonConstants {
   public static final int MAX_CHARS_PER_COLUMN_DEFAULT = 32000;
   // todo: use infinity first, will switch later
   public static final int MAX_CHARS_PER_COLUMN_INFINITY = -1;
-  public static final short LOCAL_DICT_ENCODED_BYTEARRAY_SIZE = 3;
+  public static final short LOCAL_DICT_ENCODED_BYTEARRAY_SIZE = 2;
   public static final int CARBON_MINMAX_ALLOWED_BYTE_COUNT_MIN = 10;
   public static final int CARBON_MINMAX_ALLOWED_BYTE_COUNT_MAX = 1000;
 

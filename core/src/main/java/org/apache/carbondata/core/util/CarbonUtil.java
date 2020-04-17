@@ -3016,6 +3016,11 @@ public final class CarbonUtil {
       for (ColumnSchema columnSchema : wrapperColumnSchema) {
         // check whether the column is local dictionary column or not
         if (columnSchema.isLocalDictColumn()) {
+          if (columnSchema.getColumnName().equalsIgnoreCase("rowid") || columnSchema.getColumnName()
+              .equalsIgnoreCase("rowkey") || columnSchema.getColumnName()
+              .equalsIgnoreCase("rowmd5")) {
+            continue;
+          }
           columnLocalDictGenMap.put(columnSchema.getColumnName(),
               new ColumnLocalDictionaryGenerator(localDictionaryThreshold,
                   columnSchema.getDataType() == DataTypes.VARCHAR ?
@@ -3043,6 +3048,7 @@ public final class CarbonUtil {
                 + " table %s", stringBuilder.toString(), carbonTable.getTableUniqueName()));
       }
     }
+    columnLocalDictGenMap.remove("rowid");
     return columnLocalDictGenMap;
   }
 
