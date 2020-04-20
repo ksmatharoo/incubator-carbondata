@@ -784,10 +784,16 @@ object CarbonDataRDDFactory {
           "Auto-Compaction has failed. Ignoring this exception because the" +
           " load is passed.", e)
     }
-    CommonUtil.cleanGarbageData(sparkSession,
-      carbonLoadModel.getDatabaseName,
-      carbonLoadModel.getTableName,
-      carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
+    try {
+      CommonUtil.cleanGarbageData(sparkSession,
+        carbonLoadModel.getDatabaseName,
+        carbonLoadModel.getTableName,
+        carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
+    } catch {
+      case e: Exception =>
+        LOGGER.error(
+          "Clean Files failes after compaction", e)
+    }
   }
   /**
    * clear datamap files for segment

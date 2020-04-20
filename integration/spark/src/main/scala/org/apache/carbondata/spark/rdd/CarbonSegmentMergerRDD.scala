@@ -42,6 +42,9 @@ class CarbonSegmentMergerRDD[K, V](
 
   override def internalGetPartitions: Array[Partition] = {
     val partitions = super.internalGetPartitions
+    if (partitions.length == 1) {
+      return new Array[Partition](0);
+    }
     val mergedPartition = Utils.mergeSplit(partitions
       .toList
       .asInstanceOf[List[CarbonSparkPartition]]

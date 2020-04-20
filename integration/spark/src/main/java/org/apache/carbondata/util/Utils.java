@@ -178,6 +178,9 @@ public class Utils {
           throw new RuntimeException(e);
         }
         startIndex++;
+        if (startIndex >= splitsGroup.size()) {
+          startIndex++;
+        }
       }
     }
 

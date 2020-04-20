@@ -956,7 +956,7 @@ public final class CarbonCommonConstants {
   /**
    * to enable offheap sort
    */
-  public static final String ENABLE_OFFHEAP_SORT_DEFAULT = "true";
+  public static final String ENABLE_OFFHEAP_SORT_DEFAULT = "false";
 
   @CarbonProperty
   public static final String ENABLE_INMEMORY_MERGE_SORT = "enable.inmemory.merge.sort";

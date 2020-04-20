@@ -182,7 +182,7 @@ case class CarbonAlterTableDropHivePartitionCommand(
       val preStatusEvent = AlterTableDropPartitionPreStatusEvent(table)
       OperationListenerBus.getInstance().fireEvent(preStatusEvent, operationContext)
 
-      SegmentFileStore.commitDropPartitions(table, uniqueId, tobeUpdatedSegs, tobeDeletedSegs, uuid)
+//      SegmentFileStore.commitDropPartitions(table, uniqueId, tobeUpdatedSegs, tobeDeletedSegs, uuid)
 
       val postStatusEvent = AlterTableDropPartitionPostStatusEvent(table)
       OperationListenerBus.getInstance().fireEvent(postStatusEvent, operationContext)
