@@ -334,7 +334,7 @@
       <groupId>io.airlift</groupId>
       <artifactId>units</artifactId>
       <version>1.0</version>
-      <scope>provided</scope>
+<!--      <scope>provided</scope>-->
       <exclusions>
         <exclusion>
           <groupId>org.slf4j</groupId>

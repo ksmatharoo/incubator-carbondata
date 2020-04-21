@@ -55,6 +55,7 @@ import io.prestosql.plugin.hive.HiveSplitManager;
 import io.prestosql.plugin.hive.HiveTableHandle;
 import io.prestosql.plugin.hive.HiveTransactionHandle;
 import io.prestosql.plugin.hive.NamenodeStats;
+import io.prestosql.plugin.hive.authentication.HiveIdentity;
 import io.prestosql.plugin.hive.metastore.SemiTransactionalHiveMetastore;
 import io.prestosql.plugin.hive.metastore.Table;
 import io.prestosql.spi.HostAddress;
@@ -113,7 +114,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
     SemiTransactionalHiveMetastore metastore =
         metastoreProvider.apply((HiveTransactionHandle) transactionHandle);
     Table table =
-        metastore.getTable(schemaTableName.getSchemaName(), schemaTableName.getTableName())
+        metastore.getTable(new HiveIdentity(session), schemaTableName.getSchemaName(), schemaTableName.getTableName())
             .orElseThrow(() -> new TableNotFoundException(schemaTableName));
     if (!table.getStorage().getStorageFormat().getInputFormat().contains("carbon")) {
       return super.getSplits(transactionHandle, session, tableHandle, splitSchedulingStrategy);
@@ -158,7 +159,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
         properties.setProperty("index", String.valueOf(index));
         cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
             schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0,
-            properties, new ArrayList(), getHostAddresses(split.getLocations()),
+            0, properties, new ArrayList(), getHostAddresses(split.getLocations()),
             OptionalInt.empty(), false, new HashMap<>(),
             Optional.empty(), false));
       }
