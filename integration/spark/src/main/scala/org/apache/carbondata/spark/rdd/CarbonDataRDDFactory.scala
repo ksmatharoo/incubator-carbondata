@@ -555,8 +555,6 @@ object CarbonDataRDDFactory {
     val uniqueTableStatusId = Option(operationContext.getProperty("uuid")).getOrElse("")
       .asInstanceOf[String]
     val loadAsNewSeg = updateModel.isDefined && updateModel.get.loadAsNewSegment
-    val delSegs =
-      if (loadAsNewSeg) updateModel.get.deletedSegments.asJava else new util.ArrayList[Segment]()
     val transactionManager = TransactionManager.getInstance()
     val transactionId = transactionManager.getTransactionManager.
       asInstanceOf[SessionTransactionManager].
@@ -572,8 +570,7 @@ object CarbonDataRDDFactory {
             carbonLoadModel.getCurrentLoadMetadataDetail,
             overwriteTable,
             uniqueTableStatusId,
-            loadAsNewSeg,
-            delSegs,
+            updateModel match {case Some(x)=>x; case _ => null},
             null,
             operationContext,
             hadoopConf),
@@ -603,8 +600,7 @@ object CarbonDataRDDFactory {
               carbonLoadModel.getCurrentLoadMetadataDetail,
               overwriteTable,
               uniqueTableStatusId,
-              loadAsNewSeg,
-              delSegs,
+              updateModel match {case Some(x)=>x; case _ => null},
               null,
               operationContext,
               hadoopConf),
@@ -670,8 +666,7 @@ object CarbonDataRDDFactory {
             writtenSegment,
             overwriteTable,
             uniqueTableStatusId,
-            loadAsNewSeg,
-            delSegs,
+            updateModel match {case Some(x)=>x; case _ => null},
             segmentFileName,
             operationContext,
             hadoopConf),
@@ -1152,7 +1147,7 @@ object CarbonDataRDDFactory {
     if (writeToFile) {
       val loadAsNewSeg = updateModel.isDefined && updateModel.get.loadAsNewSegment
       val delSegs =
-        if (loadAsNewSeg) updateModel.get.deletedSegments.asJava else new util.ArrayList[Segment]()
+        if (loadAsNewSeg) updateModel.get.deletedSegments.toList.asJava else new util.ArrayList[Segment]()
       val done = CarbonLoaderUtil.writeTableStatus(carbonLoadModel, metadataDetails,
         overwriteTable, loadAsNewSeg, delSegs,  uuid)
       (done, metadataDetails)

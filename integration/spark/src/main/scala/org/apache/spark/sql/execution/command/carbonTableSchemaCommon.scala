@@ -116,12 +116,20 @@ case class AlterTableModel(
     var alterSql: String,
     customSegmentIds: Option[List[String]] = None)
 
-case class UpdateTableModel(
-    isUpdate: Boolean,
-    updatedTimeStamp: Long,
+class UpdateTableModel(
+    var isUpdate: Boolean,
+    var updatedTimeStamp: Long,
     var executorErrors: ExecutionErrors,
-    deletedSegments: Seq[Segment],
-    loadAsNewSegment: Boolean = false)
+    var deletedSegments: Array[Segment],
+    var loadAsNewSegment: Boolean = false) {
+  def copyFrom(updateTableModel: UpdateTableModel): UpdateTableModel = {
+    updatedTimeStamp = updateTableModel.updatedTimeStamp
+    executorErrors = updateTableModel.executorErrors
+    deletedSegments = updateTableModel.deletedSegments
+    loadAsNewSegment = updateTableModel.loadAsNewSegment
+    this
+  }
+}
 
 case class CompactionModel(compactionSize: Long,
     compactionType: CompactionType,

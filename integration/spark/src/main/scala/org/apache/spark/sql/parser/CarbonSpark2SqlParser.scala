@@ -567,7 +567,7 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
   protected lazy val startTransaction: Parser[LogicalPlan] =
     START ~> TRANSACTION ^^ {
       case _ =>
-        StartTransactionCommand()
+        StartTransactionCommand("")
     }
 
   protected lazy val commitTransaction: Parser[LogicalPlan] =

@@ -17,6 +17,8 @@
 
 package org.apache.carbondata.tranaction;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.carbondata.core.datamap.Segment;
@@ -32,6 +34,7 @@ import org.apache.carbondata.spark.rdd.CarbonDataRDDFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.execution.command.UpdateTableModel;
 
 public class LoadTransactionActions implements TransactionAction {
 
@@ -51,13 +54,11 @@ public class LoadTransactionActions implements TransactionAction {
 
   private Configuration configuration;
 
-  private boolean loadAsNewSegment;
-
-  private List<Segment> segmentsToBeDeleted;
+  private UpdateTableModel tableModel;
 
   public LoadTransactionActions(SparkSession sparkSession, CarbonLoadModel carbonLoadModel,
       LoadMetadataDetails loadMetadataDetails, boolean overwriteTable, String uuid,
-      boolean loadAsNewSegment, List<Segment> segmentsToBeDeleted,
+      UpdateTableModel tableModel,
       String segmentFileName, OperationContext operationContext, Configuration configuration) {
     this.sparkSession = sparkSession;
     this.carbonLoadModel = carbonLoadModel;
@@ -67,8 +68,7 @@ public class LoadTransactionActions implements TransactionAction {
     this.segmentFileName = segmentFileName;
     this.operationContext = operationContext;
     this.configuration = configuration;
-    this.loadAsNewSegment = loadAsNewSegment;
-    this.segmentsToBeDeleted = segmentsToBeDeleted;
+    this.tableModel = tableModel;
   }
 
   public void commit() throws Exception {
@@ -77,8 +77,13 @@ public class LoadTransactionActions implements TransactionAction {
         || segmentStatus == SegmentStatus.LOAD_FAILURE) {
       throw new Exception("Failed to commit transaction:");
     }
-    CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable,
-        loadAsNewSegment, segmentsToBeDeleted, uuid);
+    if (tableModel != null) {
+      CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable,
+          tableModel.loadAsNewSegment(), Arrays.asList(tableModel.deletedSegments()), uuid);
+    } else {
+      CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable,
+          false, new ArrayList<>(), uuid);
+    }
     CarbonDataRDDFactory
         .handlePostEvent(carbonLoadModel, operationContext, uuid, true, segmentFileName,
             sparkSession, loadMetadataDetails.getSegmentStatus(), configuration);

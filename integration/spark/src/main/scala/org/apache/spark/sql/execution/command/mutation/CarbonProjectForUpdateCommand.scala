@@ -312,7 +312,7 @@ private[sql] case class CarbonProjectForUpdateCommand(
       case _ => sys.error("")
     }
 
-    val updateTableModel = UpdateTableModel(true, currentTime, executorErrors, deletedSegments)
+    val updateTableModel = new UpdateTableModel(true, currentTime, executorErrors, deletedSegments.toArray)
 
     val header = getHeader(carbonRelation, plan)
 
