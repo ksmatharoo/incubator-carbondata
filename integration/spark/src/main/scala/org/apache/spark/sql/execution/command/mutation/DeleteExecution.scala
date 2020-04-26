@@ -146,7 +146,7 @@ object DeleteExecution {
     // if no loads are present then no need to do anything.
     if (keyRdd.partitions.length == 0) {
       return (Array.empty[List[(SegmentStatus,
-        (SegmentUpdateDetails, ExecutionErrors, Long))]], null)
+        (SegmentUpdateDetails, ExecutionErrors, Long))]], new BlockMappingVO())
     }
     val blockMappingVO =
       carbonInputFormat.getBlockRowCount(

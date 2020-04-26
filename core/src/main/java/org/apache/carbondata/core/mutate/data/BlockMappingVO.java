@@ -17,6 +17,7 @@
 
 package org.apache.carbondata.core.mutate.data;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -50,5 +51,9 @@ public class BlockMappingVO {
       Map<String, Long> segmentNumberOfBlockMapping) {
     this.blockRowCountMapping = blockRowCountMapping;
     this.segmentNumberOfBlockMapping = segmentNumberOfBlockMapping;
+  }
+
+  public BlockMappingVO() {
+    this(new HashMap<>(), new HashMap<>());
   }
 }

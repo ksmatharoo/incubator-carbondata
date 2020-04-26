@@ -259,7 +259,7 @@ case class CarbonMergeDataSetCommand(
     job.setOutputValueClass(classOf[InternalRow])
     val uuid = UUID.randomUUID.toString
     job.setJobID(new JobID(uuid, 0))
-    val path = carbonTable.getTablePath + "/" + job.getJobID
+    val path = carbonTable.getTablePath + "/_temporary/" + job.getJobID
     FileOutputFormat.setOutputPath(job, new Path(path))
     val schema =
       org.apache.spark.sql.types.StructType(Seq(

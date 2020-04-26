@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.carbondata.execution.datasources
 
+import java.io.IOException
 import java.net.URI
 
 import scala.collection.JavaConverters._
@@ -96,23 +97,33 @@ class SparkCarbonFileFormat extends FileFormat
     if (options.get(CarbonCommonConstants.SORT_COLUMNS).isDefined) {
       throw new UnsupportedOperationException("Cannot use sort columns during infer schema")
     }
-    val tableInfo = SchemaReader.inferSchema(AbsoluteTableIdentifier.from(tablePath, "", ""),
-      false, conf)
-    val table = CarbonTable.buildFromTableInfo(tableInfo)
-    var schema = new StructType
-    val fields = tableInfo.getFactTable.getListOfColumns.asScala.map { col =>
-      // TODO find better way to know its a child
-      if (!col.getColumnName.contains(".")) {
-        Some((col.getSchemaOrdinal,
-          StructField(col.getColumnName,
-            SparkTypeConverter.convertCarbonToSparkDataType(col, table))))
-      } else {
-        None
-      }
-    }.filter(_.nonEmpty).map(_.get)
-    // Maintain the schema order.
-    fields.sortBy(_._1).foreach(f => schema = schema.add(f._2))
-    Some(schema)
+    try {
+      val tableInfo = SchemaReader.inferSchema(AbsoluteTableIdentifier.from(tablePath, "", ""),
+        false, conf)
+      val table = CarbonTable.buildFromTableInfo(tableInfo)
+      var schema = new StructType
+      val fields = tableInfo.getFactTable.getListOfColumns.asScala.map { col =>
+        // TODO find better way to know its a child
+        if (!col.getColumnName.contains(".")) {
+          Some((col.getSchemaOrdinal,
+            StructField(col.getColumnName,
+              SparkTypeConverter.convertCarbonToSparkDataType(col, table))))
+        } else {
+          None
+        }
+      }.filter(_.nonEmpty).map(_.get)
+      // Maintain the schema order.
+      fields.sortBy(_._1).foreach(f => schema = schema.add(f._2))
+      Some(schema)
+    } catch {
+      case e: IOException =>
+        if (e.getMessage.contains("file is not present")) {
+          Some(StructType(Seq(StructField("empty", StringType))))
+        } else {
+          throw e
+        }
+      case e => throw e
+    }
   }
 
   /**
