@@ -246,8 +246,8 @@ case class CarbonMergeDataSetCommand(
       executorErrors: ExecutionErrors,
       trxMgr: TranxManager,
       mutationAction: MutationAction) = {
-    val updateTableModel = if (FileFactory.isFileExist(deltaPath)) {
-      val deltaRdd = sparkSession.read.format("carbon").load(deltaPath).rdd
+    val deltaRdd = sparkSession.read.format("carbon").load(deltaPath).rdd
+    val updateTableModel = if (deltaRdd.partitions.length > 0) {
       val tuple = mutationAction.handleAction(deltaRdd, executorErrors, trxMgr)
       FileFactory.deleteAllCarbonFilesOfDir(FileFactory.getCarbonFile(deltaPath))
       if (!CarbonUpdateUtil.updateSegmentStatus(tuple._1.asScala.asJava,
