@@ -258,7 +258,8 @@ object DeleteExecution {
           val alreadyDeletedRows: Long = rowCountDetailsVO.getDeletedRowsInBlock
           val totalDeletedRows: Long = alreadyDeletedRows + countOfRows
           segmentUpdateDetails.setDeletedRowsInBlock(totalDeletedRows.toString)
-          if (totalDeletedRows == rowCountDetailsVO.getTotalNumberOfRows) {
+          // TODO handle properly for merge command in case of history table
+          if (false && totalDeletedRows == rowCountDetailsVO.getTotalNumberOfRows) {
             segmentUpdateDetails.setSegmentStatus(SegmentStatus.MARKED_FOR_DELETE)
           }
           else {

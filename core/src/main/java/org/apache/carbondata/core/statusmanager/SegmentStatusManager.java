@@ -139,6 +139,10 @@ public class SegmentStatusManager {
             CarbonTablePath.getTableStatusFilePath(identifier.getTablePath()));
       }
 
+      if (loadMetadataDetails == null) {
+        return null;
+      }
+
       if (readCommittedScope == null) {
         readCommittedScope = new TableStatusReadCommittedScope(identifier, loadMetadataDetails,
             configuration);

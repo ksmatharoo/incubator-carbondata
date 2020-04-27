@@ -2139,6 +2139,11 @@ public final class CarbonUtil {
       LOGGER.error("CarbonData file is not present in the table location");
       throw new IOException("CarbonData file is not present in the table location");
     }
+    return getTableInfo(tableName, configuration, fistFilePath);
+  }
+
+  public static org.apache.carbondata.format.TableInfo getTableInfo(String tableName,
+      Configuration configuration, String fistFilePath) throws IOException {
     CarbonHeaderReader carbonHeaderReader = new CarbonHeaderReader(fistFilePath, configuration);
     List<ColumnSchema> columnSchemaList = carbonHeaderReader.readSchema();
     // only columnSchema is the valid entry, reset all dummy entries.

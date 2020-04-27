@@ -20,6 +20,7 @@ import java.util
 
 import scala.collection.JavaConverters._
 
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.{AnalysisException, Column, Dataset, Row, SparkSession}
 import org.apache.spark.sql.functions.expr
 
@@ -90,6 +91,12 @@ class MergeDataSetBuilder(existingDsOri: Dataset[Row], currDs: Dataset[Row],
   def insertExpr(expression: Map[Any, Any]): MergeDataSetBuilder = {
     checkBuilder
     matchList.get(matchList.size() - 1).addAction(InsertAction(convertMap(expression)))
+    this
+  }
+
+  def insertHistoryExpr(expression: Map[Any, Any], identifier: TableIdentifier): MergeDataSetBuilder = {
+    checkBuilder
+    matchList.get(matchList.size() - 1).addAction(InsertInHistoryTableAction(convertMap(expression), identifier))
     this
   }
 
