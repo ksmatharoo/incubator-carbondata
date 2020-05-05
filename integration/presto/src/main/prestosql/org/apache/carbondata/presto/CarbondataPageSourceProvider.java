@@ -17,12 +17,15 @@
 
 package org.apache.carbondata.presto;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
 
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+import org.apache.carbondata.core.metadata.schema.table.TableInfo;
+import org.apache.carbondata.hadoop.api.CarbonInputFormat;
 import org.apache.carbondata.presto.impl.CarbonTableCacheModel;
 import org.apache.carbondata.presto.impl.CarbonTableReader;
 
@@ -96,9 +99,17 @@ public class CarbondataPageSourceProvider extends HivePageSourceProvider {
    * @return
    */
   private CarbonTable getCarbonTable(HiveSplit carbonSplit, Configuration configuration) {
+    try {
+      TableInfo tableInfo = CarbonInputFormat.getTableInfo(configuration);
+      if (tableInfo != null) {
+        return CarbonTable.buildFromTableInfo(tableInfo);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     CarbonTableCacheModel tableCacheModel = carbonTableReader
         .getCarbonCache(new SchemaTableName(carbonSplit.getDatabase(), carbonSplit.getTable()),
-            carbonSplit.getSchema().getProperty("tablePath"), configuration);
+            carbonSplit.getSchema().getProperty("tablePath"), configuration, null);
     checkNotNull(tableCacheModel, "tableCacheModel should not be null");
     checkNotNull(tableCacheModel.getCarbonTable(),
         "tableCacheModel.carbonTable should not be null");

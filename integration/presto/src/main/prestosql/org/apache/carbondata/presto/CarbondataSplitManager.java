@@ -49,6 +49,7 @@ import io.prestosql.plugin.hive.ForHive;
 import io.prestosql.plugin.hive.HdfsEnvironment;
 import io.prestosql.plugin.hive.HiveColumnHandle;
 import io.prestosql.plugin.hive.HiveConfig;
+import io.prestosql.plugin.hive.HivePartition;
 import io.prestosql.plugin.hive.HivePartitionManager;
 import io.prestosql.plugin.hive.HiveSplit;
 import io.prestosql.plugin.hive.HiveSplitManager;
@@ -83,6 +84,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
   private final CarbonTableReader carbonTableReader;
   private final Function<HiveTransactionHandle, SemiTransactionalHiveMetastore> metastoreProvider;
   private final HdfsEnvironment hdfsEnvironment;
+  private final HivePartitionManager partitionManager;
 
   @Inject public CarbondataSplitManager(
       HiveConfig hiveConfig,
@@ -100,6 +102,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
     this.carbonTableReader = requireNonNull(reader, "client is null");
     this.metastoreProvider = requireNonNull(metastoreProvider, "metastore is null");
     this.hdfsEnvironment = requireNonNull(hdfsEnvironment, "hdfsEnvironment is null");
+    this.partitionManager = requireNonNull(partitionManager, "hdfsEnvironment is null");
   }
 
   @Override
@@ -120,7 +123,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
       return super.getSplits(transactionHandle, session, tableHandle, splitSchedulingStrategy);
     }
     String location = table.getStorage().getLocation();
-
+    List<HivePartition> partitions = this.partitionManager.getOrLoadPartitions(metastore, new HiveIdentity(session), hiveTable);
     String queryId = System.nanoTime() + "";
     QueryStatistic statistic = new QueryStatistic();
     QueryStatisticsRecorder statisticRecorder = CarbonTimeStatisticsFactory.createDriverRecorder();
@@ -138,12 +141,12 @@ public class CarbondataSplitManager extends HiveSplitManager {
     // set the hadoop configuration to thread local, so that FileFactory can use it.
     ThreadLocalSessionInfo.setConfigurationToCurrentThread(configuration);
     CarbonTableCacheModel cache =
-        carbonTableReader.getCarbonCache(schemaTableName, location, configuration);
+        carbonTableReader.getCarbonCache(schemaTableName, location, configuration, table);
     Expression filters = PrestoFilterUtil.parseFilterExpression(predicate);
     try {
 
       List<CarbonLocalMultiBlockSplit> splits =
-          carbonTableReader.getInputSplits(cache, filters, predicate, configuration);
+          carbonTableReader.getInputSplits(cache, filters, predicate, configuration, partitions);
 
       ImmutableList.Builder<ConnectorSplit> cSplits = ImmutableList.builder();
       long index = 0;

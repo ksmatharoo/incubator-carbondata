@@ -20,15 +20,19 @@ package org.apache.carbondata.presto.impl;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import org.apache.carbondata.common.exceptions.sql.InvalidLoadOptionException;
 import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.DataMapFilter;
@@ -41,10 +45,14 @@ import org.apache.carbondata.core.metadata.CarbonMetadata;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.converter.SchemaConverter;
 import org.apache.carbondata.core.metadata.converter.ThriftWrapperSchemaConverterImpl;
+import org.apache.carbondata.core.metadata.datatype.DataType;
+import org.apache.carbondata.core.metadata.datatype.DataTypes;
+import org.apache.carbondata.core.metadata.datatype.Field;
 import org.apache.carbondata.core.metadata.schema.PartitionInfo;
 import org.apache.carbondata.core.metadata.schema.partition.PartitionType;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.TableInfo;
+import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
 import org.apache.carbondata.core.reader.ThriftReader;
 import org.apache.carbondata.core.scan.expression.Expression;
 import org.apache.carbondata.core.statusmanager.FileFormat;
@@ -57,14 +65,22 @@ import org.apache.carbondata.hadoop.CarbonInputSplit;
 import org.apache.carbondata.hadoop.api.CarbonInputFormat;
 import org.apache.carbondata.hadoop.api.CarbonTableInputFormat;
 import org.apache.carbondata.presto.PrestoFilterUtil;
+import org.apache.carbondata.sdk.file.CarbonWriterBuilder;
+import org.apache.carbondata.sdk.file.Schema;
 
 import com.google.gson.Gson;
 import com.google.inject.Inject;
 import io.prestosql.plugin.hive.HiveColumnHandle;
+import io.prestosql.plugin.hive.HivePartition;
+import io.prestosql.plugin.hive.HiveType;
+import io.prestosql.plugin.hive.metastore.Column;
+import io.prestosql.plugin.hive.metastore.Table;
 import io.prestosql.spi.connector.SchemaTableName;
 import io.prestosql.spi.predicate.TupleDomain;
-import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections.CollectionUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
+import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.Job;
@@ -124,13 +140,82 @@ public class CarbonTableReader {
    * @return
    */
   public CarbonTableCacheModel getCarbonCache(SchemaTableName table, String location,
-      Configuration config) {
+      Configuration config, Table hiveTable) {
+    if (hiveTable != null) {
+      return new CarbonTableCacheModel(System.currentTimeMillis(), getCarbonTable(hiveTable));
+    }
     updateSchemaTables(table, config);
     CarbonTableCacheModel carbonTableCacheModel = carbonCache.get().get(table);
     if (carbonTableCacheModel == null || !carbonTableCacheModel.isValid()) {
       return parseCarbonMetadata(table, location, config);
     }
     return carbonTableCacheModel;
+  }
+
+  private CarbonTable getCarbonTable(Table table) {
+    LinkedHashSet<Column> set = new LinkedHashSet();
+    set.addAll(table.getDataColumns());
+    set.addAll(table.getPartitionColumns());
+    Field[] fields = new Field[set.size()];
+    int i = 0;
+    for (Column col : set) {
+      fields[i] = new Field(getCarbonColumn(col, i));
+      i++;
+    }
+    Schema schema = new Schema(fields, new HashMap<>(table.getStorage().getSerdeParameters()));
+    CarbonWriterBuilder builder = new CarbonWriterBuilder();
+    builder.outputPath(table.getStorage().getLocation());
+    builder.withTableProperties(table.getStorage().getSerdeParameters());
+    CarbonTable carbonTable = null;
+    try {
+      carbonTable = builder.buildLoadModel(schema).getCarbonDataLoadSchema().getCarbonTable();
+      String isTransactional = table.getStorage().getSerdeParameters().get("isTransactional");
+      carbonTable.setTransactionalTable(isTransactional != null?Boolean.parseBoolean(isTransactional): false);
+      List<ColumnSchema> partCols =
+          carbonTable.getTableInfo().getFactTable().getListOfColumns().stream().filter(
+              f -> table.getPartitionColumns().stream()
+                  .anyMatch(f1 -> f.getColumnName().equalsIgnoreCase(f1.getName())))
+              .collect(Collectors.toList());
+      if (!partCols.isEmpty()) {
+        carbonTable.getTableInfo().getFactTable().setPartitionInfo(new PartitionInfo(partCols, PartitionType.NATIVE_HIVE));
+        CarbonTable.updateTableByTableInfo(carbonTable, carbonTable.getTableInfo());
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return carbonTable;
+  }
+
+  private ColumnSchema getCarbonColumn(Column column, int ordinal) {
+    HiveType hiveType = column.getType();
+    if (hiveType.equals(HiveType.HIVE_DATE)) {
+      return new ColumnSchema(column.getName(), DataTypes.DATE, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_TIMESTAMP)) {
+      return new ColumnSchema(column.getName(), DataTypes.TIMESTAMP, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_BOOLEAN)) {
+      return new ColumnSchema(column.getName(), DataTypes.BOOLEAN, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_INT)) {
+      return new ColumnSchema(column.getName(), DataTypes.INT, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_LONG)) {
+      return new ColumnSchema(column.getName(), DataTypes.LONG, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_SHORT)) {
+      return new ColumnSchema(column.getName(), DataTypes.SHORT, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_STRING)) {
+      return new ColumnSchema(column.getName(), DataTypes.STRING, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_DOUBLE)) {
+      return new ColumnSchema(column.getName(), DataTypes.DOUBLE, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_BINARY)) {
+      return new ColumnSchema(column.getName(), DataTypes.BINARY, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_BYTE)) {
+      return new ColumnSchema(column.getName(), DataTypes.BYTE, ordinal);
+    } else if (hiveType.equals(HiveType.HIVE_FLOAT)) {
+      return new ColumnSchema(column.getName(), DataTypes.FLOAT, ordinal);
+    } else if (hiveType.getTypeInfo() instanceof DecimalTypeInfo) {
+      DecimalTypeInfo typeInfo = (DecimalTypeInfo) hiveType.getTypeInfo();
+      return new ColumnSchema(column.getName(), DataTypes.createDecimalType(typeInfo.precision(), typeInfo.scale()), ordinal);
+    } else {
+      throw new UnsupportedOperationException("Datatype not supported : " + hiveType);
+    }
   }
 
   /**
@@ -249,7 +334,8 @@ public class CarbonTableReader {
       CarbonTableCacheModel tableCacheModel,
       Expression filters,
       TupleDomain<HiveColumnHandle> constraints,
-      Configuration config) throws IOException {
+      Configuration config,
+      List<HivePartition> partitions) throws IOException {
     List<CarbonLocalInputSplit> result = new ArrayList<>();
     List<CarbonLocalMultiBlockSplit> multiBlockSplitList = new ArrayList<>();
     CarbonTable carbonTable = tableCacheModel.getCarbonTable();
@@ -267,11 +353,8 @@ public class CarbonTableReader {
     List<PartitionSpec> filteredPartitions = new ArrayList<>();
 
     PartitionInfo partitionInfo = carbonTable.getPartitionInfo();
-    LoadMetadataDetails[] loadMetadataDetails = null;
     if (partitionInfo != null && partitionInfo.getPartitionType() == PartitionType.NATIVE_HIVE) {
-      loadMetadataDetails = SegmentStatusManager.readTableStatusFile(
-          CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath()));
-      filteredPartitions = findRequiredPartitions(constraints, carbonTable, loadMetadataDetails);
+      filteredPartitions = findRequiredPartitions(constraints, carbonTable, partitions);
     }
     try {
       CarbonTableInputFormat.setTableInfo(config, tableInfo);
@@ -323,14 +406,10 @@ public class CarbonTableReader {
    * @throws IOException
    */
   private List<PartitionSpec> findRequiredPartitions(TupleDomain<HiveColumnHandle> constraints,
-      CarbonTable carbonTable, LoadMetadataDetails[] loadMetadataDetails) throws IOException {
-    Set<PartitionSpec> partitionSpecs = new HashSet<>();
-    for (LoadMetadataDetails loadMetadataDetail : loadMetadataDetails) {
-      SegmentFileStore segmentFileStore = null;
-      segmentFileStore =
-          new SegmentFileStore(carbonTable.getTablePath(), loadMetadataDetail.getSegmentFile());
-      partitionSpecs.addAll(segmentFileStore.getPartitionSpecs());
-    }
+      CarbonTable carbonTable, List<HivePartition> partitions) throws IOException {
+    Set<PartitionSpec> partitionSpecs = partitions.stream().map(
+        f -> new PartitionSpec(Arrays.asList(f.getPartitionId().split("/")),
+            carbonTable.getTablePath()+"/"+f.getPartitionId())).collect(Collectors.toSet());
     List<String> partitionValuesFromExpression =
         PrestoFilterUtil.getPartitionFilters(carbonTable, constraints);
     return partitionSpecs.stream().filter(partitionSpec -> CollectionUtils
