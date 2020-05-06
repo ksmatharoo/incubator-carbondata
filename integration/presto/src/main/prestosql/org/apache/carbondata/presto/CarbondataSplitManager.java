@@ -38,6 +38,8 @@ import org.apache.carbondata.core.stats.QueryStatisticsConstants;
 import org.apache.carbondata.core.stats.QueryStatisticsRecorder;
 import org.apache.carbondata.core.util.CarbonTimeStatisticsFactory;
 import org.apache.carbondata.core.util.ThreadLocalSessionInfo;
+import org.apache.carbondata.hadoop.api.CarbonInputFormat;
+import org.apache.carbondata.hadoop.api.CarbonTableInputFormat;
 import org.apache.carbondata.presto.impl.CarbonLocalMultiBlockSplit;
 import org.apache.carbondata.presto.impl.CarbonTableCacheModel;
 import org.apache.carbondata.presto.impl.CarbonTableReader;
@@ -59,6 +61,7 @@ import io.prestosql.plugin.hive.NamenodeStats;
 import io.prestosql.plugin.hive.authentication.HiveIdentity;
 import io.prestosql.plugin.hive.metastore.SemiTransactionalHiveMetastore;
 import io.prestosql.plugin.hive.metastore.Table;
+import io.prestosql.plugin.hive.util.ConfigurationUtils;
 import io.prestosql.spi.HostAddress;
 import io.prestosql.spi.VersionEmbedder;
 import io.prestosql.spi.connector.ConnectorSession;
@@ -137,6 +140,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
     Configuration configuration = this.hdfsEnvironment.getConfiguration(
         new HdfsEnvironment.HdfsContext(session, schemaTableName.getSchemaName(),
             schemaTableName.getTableName()), new Path(location));
+    configuration = ConfigurationUtils.copy(configuration);
     configuration = carbonTableReader.updateS3Properties(configuration);
     // set the hadoop configuration to thread local, so that FileFactory can use it.
     ThreadLocalSessionInfo.setConfigurationToCurrentThread(configuration);
@@ -160,6 +164,8 @@ public class CarbondataSplitManager extends HiveSplitManager {
         properties.setProperty("carbonSplit", split.getJsonString());
         properties.setProperty("queryId", queryId);
         properties.setProperty("index", String.valueOf(index));
+        properties.setProperty(CarbonInputFormat.TABLE_INFO, configuration.get(CarbonInputFormat.TABLE_INFO));
+        properties.setProperty(CarbonTableInputFormat.INPUT_SEGMENT_NUMBERS, "");
         cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
             schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0,
             0, properties, new ArrayList(), getHostAddresses(split.getLocations()),

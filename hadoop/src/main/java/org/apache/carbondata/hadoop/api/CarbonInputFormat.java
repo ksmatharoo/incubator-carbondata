@@ -108,7 +108,7 @@ public abstract class CarbonInputFormat<T> extends FileInputFormat<Void, T> {
   private static final String FILTER_PREDICATE =
       "mapreduce.input.carboninputformat.filter.predicate";
   private static final String COLUMN_PROJECTION = "mapreduce.input.carboninputformat.projection";
-  private static final String TABLE_INFO = "mapreduce.input.carboninputformat.tableinfo";
+  public static final String TABLE_INFO = "mapreduce.input.carboninputformat.tableinfo";
   private static final String CARBON_TRANSACTIONAL_TABLE =
       "mapreduce.input.carboninputformat.transactional";
   private static final String CARBON_READ_SUPPORT = "mapreduce.input.carboninputformat.readsupport";

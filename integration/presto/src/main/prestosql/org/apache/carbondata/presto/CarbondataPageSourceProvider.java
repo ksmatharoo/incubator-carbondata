@@ -100,6 +100,8 @@ public class CarbondataPageSourceProvider extends HivePageSourceProvider {
    */
   private CarbonTable getCarbonTable(HiveSplit carbonSplit, Configuration configuration) {
     try {
+      configuration.set(CarbonInputFormat.TABLE_INFO,
+          carbonSplit.getSchema().getProperty(CarbonInputFormat.TABLE_INFO));
       TableInfo tableInfo = CarbonInputFormat.getTableInfo(configuration);
       if (tableInfo != null) {
         return CarbonTable.buildFromTableInfo(tableInfo);

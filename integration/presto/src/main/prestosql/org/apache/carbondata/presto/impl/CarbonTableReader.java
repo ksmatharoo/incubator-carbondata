@@ -347,8 +347,7 @@ public class CarbonTableReader {
     config.set(CarbonTableInputFormat.TABLE_NAME, carbonTable.getTableName());
     config.set("query.id", queryId);
     CarbonInputFormat.setTransactionalTable(config, carbonTable.isTransactionalTable());
-    CarbonInputFormat.setTableInfo(config, carbonTable.getTableInfo());
-
+    CarbonTableInputFormat.setTableInfo(config, tableInfo);
     JobConf jobConf = new JobConf(config);
     List<PartitionSpec> filteredPartitions = new ArrayList<>();
 
@@ -357,7 +356,6 @@ public class CarbonTableReader {
       filteredPartitions = findRequiredPartitions(constraints, carbonTable, partitions);
     }
     try {
-      CarbonTableInputFormat.setTableInfo(config, tableInfo);
       CarbonTableInputFormat<Object> carbonTableInputFormat =
           createInputFormat(jobConf, carbonTable.getAbsoluteTableIdentifier(),
               new DataMapFilter(carbonTable, filters, true), filteredPartitions);
