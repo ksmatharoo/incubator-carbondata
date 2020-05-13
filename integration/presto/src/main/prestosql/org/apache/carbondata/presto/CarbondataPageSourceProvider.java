@@ -32,6 +32,7 @@ import org.apache.carbondata.presto.impl.CarbonTableReader;
 import static org.apache.carbondata.presto.Types.checkType;
 
 import com.google.inject.Inject;
+import io.prestosql.plugin.hive.GenericHiveRecordCursorProvider;
 import io.prestosql.plugin.hive.HdfsEnvironment;
 import io.prestosql.plugin.hive.HiveConfig;
 import io.prestosql.plugin.hive.HivePageSourceFactory;
@@ -45,6 +46,7 @@ import io.prestosql.spi.connector.ConnectorSplit;
 import io.prestosql.spi.connector.ConnectorTableHandle;
 import io.prestosql.spi.connector.ConnectorTransactionHandle;
 import io.prestosql.spi.connector.SchemaTableName;
+import io.prestosql.spi.predicate.TupleDomain;
 import io.prestosql.spi.type.TypeManager;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
@@ -61,13 +63,14 @@ public class CarbondataPageSourceProvider extends HivePageSourceProvider {
   private HdfsEnvironment hdfsEnvironment;
 
   @Inject public CarbondataPageSourceProvider(
+      TypeManager typeManager,
       HiveConfig hiveConfig,
       HdfsEnvironment hdfsEnvironment,
-      Set<HiveRecordCursorProvider> cursorProviders,
       Set<HivePageSourceFactory> pageSourceFactories,
-      TypeManager typeManager,
+      Set<HiveRecordCursorProvider> cursorProviders,
+      GenericHiveRecordCursorProvider genericCursorProvider,
       CarbonTableReader carbonTableReader) {
-    super(hiveConfig, hdfsEnvironment, cursorProviders, pageSourceFactories, typeManager);
+    super(typeManager, hiveConfig, hdfsEnvironment, pageSourceFactories, cursorProviders, genericCursorProvider);
     this.carbonTableReader = requireNonNull(carbonTableReader, "carbonTableReader is null");
     this.hdfsEnvironment = hdfsEnvironment;
   }
@@ -75,13 +78,13 @@ public class CarbondataPageSourceProvider extends HivePageSourceProvider {
   @Override
   public ConnectorPageSource createPageSource(ConnectorTransactionHandle transactionHandle,
       ConnectorSession session, ConnectorSplit split, ConnectorTableHandle table,
-      List<ColumnHandle> columns) {
+      List<ColumnHandle> columns, TupleDomain<ColumnHandle> dynamicFilter) {
     HiveSplit carbonSplit =
         checkType(split, HiveSplit.class, "split is not class HiveSplit");
     this.queryId = carbonSplit.getSchema().getProperty("queryId");
     if (this.queryId == null) {
       // Fall back to hive pagesource.
-      return super.createPageSource(transactionHandle, session, split, table, columns);
+      return super.createPageSource(transactionHandle, session, split, table, columns, dynamicFilter);
     }
     Configuration configuration = this.hdfsEnvironment.getConfiguration(
         new HdfsEnvironment.HdfsContext(session, carbonSplit.getDatabase(), carbonSplit.getTable()),

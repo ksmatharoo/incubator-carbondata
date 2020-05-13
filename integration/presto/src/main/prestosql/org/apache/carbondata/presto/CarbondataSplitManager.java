@@ -47,7 +47,6 @@ import org.apache.carbondata.presto.impl.CarbonTableReader;
 import com.google.common.collect.ImmutableList;
 import io.prestosql.plugin.hive.CoercionPolicy;
 import io.prestosql.plugin.hive.DirectoryLister;
-import io.prestosql.plugin.hive.ForHive;
 import io.prestosql.plugin.hive.HdfsEnvironment;
 import io.prestosql.plugin.hive.HiveColumnHandle;
 import io.prestosql.plugin.hive.HiveConfig;
@@ -58,6 +57,7 @@ import io.prestosql.plugin.hive.HiveSplitManager;
 import io.prestosql.plugin.hive.HiveTableHandle;
 import io.prestosql.plugin.hive.HiveTransactionHandle;
 import io.prestosql.plugin.hive.NamenodeStats;
+import io.prestosql.plugin.hive.TableToPartitionMapping;
 import io.prestosql.plugin.hive.authentication.HiveIdentity;
 import io.prestosql.plugin.hive.metastore.SemiTransactionalHiveMetastore;
 import io.prestosql.plugin.hive.metastore.Table;
@@ -96,7 +96,7 @@ public class CarbondataSplitManager extends HiveSplitManager {
       NamenodeStats namenodeStats,
       HdfsEnvironment hdfsEnvironment,
       DirectoryLister directoryLister,
-      @ForHive ExecutorService executorService,
+      ExecutorService executorService,
       VersionEmbedder versionEmbedder,
       CoercionPolicy coercionPolicy,
       CarbonTableReader reader) {
@@ -169,8 +169,8 @@ public class CarbondataSplitManager extends HiveSplitManager {
         cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
             schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0,
             0, properties, new ArrayList(), getHostAddresses(split.getLocations()),
-            OptionalInt.empty(), false, new HashMap<>(),
-            Optional.empty(), false));
+            OptionalInt.empty(), false, new TableToPartitionMapping(Optional.empty(), new HashMap<>()),
+            Optional.empty(), false, Optional.empty()));
       }
 
       statisticRecorder.logStatisticsAsTableDriver();

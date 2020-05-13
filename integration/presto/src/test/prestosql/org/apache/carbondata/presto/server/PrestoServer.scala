@@ -30,7 +30,7 @@ import io.prestosql.jdbc.PrestoStatement
 import io.prestosql.metadata.SessionPropertyManager
 import io.prestosql.spi.`type`.TimeZoneKey.UTC_KEY
 import io.prestosql.spi.security.Identity
-import io.prestosql.tests.DistributedQueryRunner
+import io.prestosql.testing.DistributedQueryRunner
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.carbondata.presto.CarbondataPlugin
@@ -45,8 +45,7 @@ class PrestoServer {
 
   val prestoProperties: util.Map[String, String] = Map(("http-server.http.port", "8086")).asJava
   val carbonProperties: util.Map[String, String] = new util.HashMap[String, String]()
-  createSession
-  lazy val queryRunner = new DistributedQueryRunner(createSession, 4, prestoProperties)
+  lazy val queryRunner = DistributedQueryRunner.builder(createSession).setNodeCount(4).setExtraProperties(prestoProperties).build()
   var dbName : String = null
   var statement : PrestoStatement = _
 
@@ -193,7 +192,7 @@ class PrestoServer {
     LOGGER.info("\n Creating The Presto Server Session")
     Session.builder(new SessionPropertyManager)
       .setQueryId(new QueryIdGenerator().createNextQueryId)
-      .setIdentity(new Identity("user", Optional.empty()))
+      .setIdentity(Identity.forUser("user").build())
       .setSource(CARBONDATA_SOURCE).setCatalog(CARBONDATA_CATALOG)
       .setTimeZoneKey(UTC_KEY).setLocale(Locale.ENGLISH)
       .setRemoteUserAddress("address")
