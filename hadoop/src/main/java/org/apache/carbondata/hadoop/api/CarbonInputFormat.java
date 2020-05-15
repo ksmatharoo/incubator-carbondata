@@ -493,8 +493,8 @@ m filterExpression
     QueryStatistic statistic = new QueryStatistic();
 
     // get tokens for all the required FileSystem for table path
-    TokenCache.obtainTokensForNamenodes(job.getCredentials(),
-        new Path[] { new Path(carbonTable.getTablePath()) }, job.getConfiguration());
+//    TokenCache.obtainTokensForNamenodes(job.getCredentials(),
+//        new Path[] { new Path(carbonTable.getTablePath()) }, job.getConfiguration());
     List<ExtendedBlocklet> prunedBlocklets =
         getPrunedBlocklets(job, carbonTable, expression, segmentIds, invalidSegments,
             segmentsToBeRefreshed);

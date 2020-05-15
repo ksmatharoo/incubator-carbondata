@@ -189,6 +189,7 @@ public class DiskBasedDMSchemaStorageProvider implements DataMapSchemaStoragePro
   }
 
   private void checkAndReloadDataMapSchemas(boolean touchFile) throws IOException {
+    if (true) return;;
     if (FileFactory.isFileExist(mdtFilePath)) {
       long lastModifiedTime = FileFactory.getCarbonFile(mdtFilePath).getLastModifiedTime();
       if (this.lastModifiedTime != lastModifiedTime) {
