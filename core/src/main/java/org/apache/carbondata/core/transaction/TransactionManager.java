@@ -17,6 +17,8 @@
 
 package org.apache.carbondata.core.transaction;
 
+import org.apache.carbondata.core.datamap.Segment;
+
 public class TransactionManager implements TransactionHandler<Object> {
 
   private static final TransactionManager INSTANCE = new TransactionManager();
@@ -68,6 +70,11 @@ public class TransactionManager implements TransactionHandler<Object> {
   }
 
   @Override
+  public String getTransactionId(Object transactionObj) {
+    return this.transactionHandler.getTransactionId(transactionObj);
+  }
+
+  @Override
   public TransactionHandler getTransactionManager() {
     return this.transactionHandler;
   }
@@ -75,5 +82,24 @@ public class TransactionManager implements TransactionHandler<Object> {
   @Override
   public void registerTableForTransaction(Object transactionObj, String tableNameString) {
     this.transactionHandler.registerTableForTransaction(transactionObj, tableNameString);
+  }
+
+  @Override
+  public String getAndSetCurrentTransactionSegment(String transactionId, String tableNameString) {
+    return this.transactionHandler
+        .getAndSetCurrentTransactionSegment(transactionId, tableNameString);
+  }
+
+  @Override
+  public String getCurrentTransactionSegment(String transactionId, String tableNameString) {
+    return this.transactionHandler.getCurrentTransactionSegment(transactionId, tableNameString);
+  }
+
+  @Override
+  public void recordUpdateDetails(String transactionId, String fullTableName, long updateTime,
+      Segment[] deletedSegments, boolean loadAsANewSegment) {
+    this.transactionHandler
+        .recordUpdateDetails(transactionId, fullTableName, updateTime, deletedSegments,
+            loadAsANewSegment);
   }
 }

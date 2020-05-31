@@ -88,7 +88,7 @@ public class AlluxioCarbonFile extends HDFSCarbonFile {
     if (append) {
       // append to a file only if file already exists else file not found
       // exception will be thrown by hdfs
-      if (CarbonUtil.isFileExists(getAbsolutePath())) {
+      if (CarbonUtil.isFileExists(getFormattedPath(path.toString()))) {
         DataInputStream dataInputStream = fileSystem.open(path);
         int count = dataInputStream.available();
         // create buffer

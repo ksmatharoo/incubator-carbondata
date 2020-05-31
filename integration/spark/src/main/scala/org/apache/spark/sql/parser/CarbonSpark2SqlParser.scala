@@ -34,7 +34,7 @@ import org.apache.spark.sql.execution.command.management._
 import org.apache.spark.sql.execution.command.schema.CarbonAlterTableDropColumnCommand
 import org.apache.spark.sql.execution.command.stream.{CarbonCreateStreamCommand, CarbonDropStreamCommand, CarbonShowStreamsCommand}
 import org.apache.spark.sql.execution.command.table.CarbonCreateTableCommand
-import org.apache.spark.sql.execution.command.transaction.{CommitTransactionCommand, RegisterTransactionTableCommand, RollbackTransactionCommand, StartTransactionCommand}
+import org.apache.spark.sql.execution.command.transaction.{CarbonGetCurrentTransactionSegmentCommand, CommitTransactionCommand, RegisterTransactionTableCommand, RollbackTransactionCommand, StartTransactionCommand}
 import org.apache.spark.sql.secondaryindex.command._
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.util.CarbonException
@@ -85,7 +85,9 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
     cacheManagement | alterDataMap | insertStageData | indexCommands
 
   protected lazy val loadManagement: Parser[LogicalPlan] =
-    deleteLoadsByID | deleteLoadsByLoadDate | deleteStage | cleanFiles | addLoad
+    deleteLoadsByID | deleteLoadsByLoadDate | deleteStage | cleanFiles | addLoad |
+    getCurrentTransactionSegment
+
 
   protected lazy val restructure: Parser[LogicalPlan] = alterTableDropColumn
 
@@ -567,19 +569,25 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
   protected lazy val startTransaction: Parser[LogicalPlan] =
     START ~> TRANSACTION ^^ {
       case _ =>
-        StartTransactionCommand("")
+        StartTransactionCommand()
     }
 
   protected lazy val commitTransaction: Parser[LogicalPlan] =
-    COMMIT ~> TRANSACTION ~> stringLit <~ opt(";") ^^ {
-      case transactionId =>
-        CommitTransactionCommand(transactionId)
+    COMMIT ~> TRANSACTION ^^ {
+      case _ =>
+        CommitTransactionCommand()
     }
 
   protected lazy val rollBackTransaction: Parser[LogicalPlan] =
-    ROLLBACK ~> TRANSACTION ~> stringLit <~ opt(";") ^^ {
-      case transactionId =>
-        RollbackTransactionCommand(transactionId)
+    ROLLBACK ~> TRANSACTION ^^ {
+      case _ =>
+        RollbackTransactionCommand()
+    }
+
+  protected lazy val getCurrentTransactionSegment: Parser[LogicalPlan] =
+    GET ~> CURRENT ~> TRANSACTION ~> SEGMENT ~> FOR ~> TABLE ~> stringLit <~ opt(";") ^^ {
+      case tableName =>
+        CarbonGetCurrentTransactionSegmentCommand(tableName)
     }
 
   protected lazy val showCache: Parser[LogicalPlan] =

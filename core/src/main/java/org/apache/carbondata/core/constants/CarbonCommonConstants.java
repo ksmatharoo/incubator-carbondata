@@ -1317,7 +1317,7 @@ public final class CarbonCommonConstants {
   @CarbonProperty(dynamicConfigurable = true)
   public static final String ENABLE_TABLE_STATUS_BACKUP = "carbon.enable.tablestatus.backup";
 
-  public static final String ENABLE_TABLE_STATUS_BACKUP_DEFAULT = "false";
+  public static final String ENABLE_TABLE_STATUS_BACKUP_DEFAULT = "true";
 
   /**
    * property to set is IS_DRIVER_INSTANCE

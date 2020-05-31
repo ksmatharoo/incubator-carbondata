@@ -39,6 +39,7 @@ import org.apache.carbondata.datamap.{TextMatchMaxDocUDF, TextMatchUDF}
 import org.apache.carbondata.events._
 import org.apache.carbondata.geo.InPolygonUDF
 import org.apache.carbondata.processing.loading.events.LoadEvents.{LoadTablePostExecutionEvent, LoadTablePostStatusUpdateEvent, LoadTablePreExecutionEvent, LoadTablePreStatusUpdateEvent}
+import org.apache.carbondata.segment.SegmentIdUDF
 import org.apache.carbondata.spark.rdd.SparkReadSupport
 import org.apache.carbondata.spark.readsupport.SparkRowReadSupportImpl
 
@@ -80,6 +81,7 @@ class CarbonEnv {
     sparkSession.udf.register("text_match", new TextMatchUDF)
     sparkSession.udf.register("text_match_with_limit", new TextMatchMaxDocUDF)
     sparkSession.udf.register("in_polygon", new InPolygonUDF)
+    sparkSession.udf.register("segmentId", new SegmentIdUDF)
 
     // acquiring global level lock so global configuration will be updated by only one thread
     CarbonEnv.carbonEnvMap.synchronized {

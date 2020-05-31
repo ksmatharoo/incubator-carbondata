@@ -37,6 +37,10 @@ class MergeDataSetBuilder(existingDsOri: Dataset[Row], currDs: Dataset[Row],
 
   val matchList: util.List[MergeMatch] = new util.ArrayList[MergeMatch]()
 
+  var partitionInfo: Map[String, Option[String]] = Map.empty
+
+  var isOverwrite: Boolean = false
+
   def whenMatched(): MergeDataSetBuilder = {
     matchList.add(WhenMatched())
     this
@@ -106,10 +110,20 @@ class MergeDataSetBuilder(existingDsOri: Dataset[Row], currDs: Dataset[Row],
     this
   }
 
+  def overwrite(): MergeDataSetBuilder = {
+    this.isOverwrite = true
+    this
+  }
+
+  def partition(partitionInfo: Map[String, Option[String]]) : MergeDataSetBuilder = {
+    this.partitionInfo = partitionInfo
+    this
+  }
+
   def build(): CarbonMergeDataSetCommand = {
     checkBuilder
     CarbonMergeDataSetCommand(existingDsOri, currDs,
-      MergeDataSetMatches(joinExpr, matchList.asScala.toList))
+      MergeDataSetMatches(joinExpr, matchList.asScala.toList), partitionInfo, isOverwrite)
   }
 
   def execute(): Unit = {

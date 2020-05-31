@@ -26,7 +26,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.CarbonExpressions.{MatchCast => Cast}
 import org.apache.spark.sql.carbondata.execution.datasources.{CarbonFileIndex, CarbonSparkDataSourceUtil}
-import org.apache.spark.sql.catalyst.{expressions, InternalRow}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, _}
 import org.apache.spark.sql.catalyst.planning.{ExtractEquiJoinKeys, PhysicalOperation}
 import org.apache.spark.sql.catalyst.plans.{Inner, LeftSemi}
@@ -47,6 +47,7 @@ import org.apache.spark.util.CarbonReflectionUtils
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
+import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.indexstore.PartitionSpec
 import org.apache.carbondata.core.metadata.schema.BucketingInfo
@@ -56,6 +57,7 @@ import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.datamap.{TextMatch, TextMatchLimit, TextMatchMaxDocUDF, TextMatchUDF}
 import org.apache.carbondata.geo.{InPolygon, InPolygonUDF}
+import org.apache.carbondata.segment.SegmentIdUDF
 import org.apache.carbondata.spark.rdd.CarbonScanRDD
 
 /**
@@ -68,6 +70,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
   val READ_SCHEMA = "ReadSchema"
 
   val LOGGER: Logger = LogServiceFactory.getLogService(this.getClass.getName)
+
+  var segmentIdString: String =_
 
   /*
   Spark 2.3.1 plan there can be case of multiple projections like below
@@ -338,7 +342,19 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       rdd: RDD[InternalRow]): RDD[InternalRow] = {
     rdd.asInstanceOf[CarbonScanRDD[InternalRow]]
       .setVectorReaderSupport(supportBatchedDataSource(relation.relation.sqlContext, output))
+    setSegmentToAccess(rdd)
     rdd
+  }
+
+  def setSegmentToAccess(rdd: RDD[InternalRow]) : Unit = {
+    val segmentToAccess = if(null == segmentIdString) {
+      null
+    } else {
+      val segment: Array[Segment] = new Array[Segment](1)
+      segment(0) = Segment.toSegment(segmentIdString)
+      segment
+    }
+    rdd.asInstanceOf[CarbonScanRDD[InternalRow]].setSegmentsToAccess(segmentToAccess)
   }
 
   protected def pruneFilterProjectRaw(
@@ -748,6 +764,12 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         }
         Some(InPolygon(u.children.head.toString()))
 
+      case u: ScalaUDF if u.function.isInstanceOf[SegmentIdUDF] =>
+        if (u.children.size > 1) {
+          throw new MalformedCarbonCommandException("Expect one string in segment id")
+        }
+        segmentIdString = u.children.head.toString()
+        None
       case or@Or(left, right) =>
 
         val leftFilter = translateFilter(left, true)

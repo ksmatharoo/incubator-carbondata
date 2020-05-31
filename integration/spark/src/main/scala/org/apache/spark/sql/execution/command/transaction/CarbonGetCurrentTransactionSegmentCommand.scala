@@ -16,21 +16,29 @@
  */
 package org.apache.spark.sql.execution.command.transaction
 
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.execution.command.MetadataCommand
+import org.apache.spark.sql.types.StringType
 
 import org.apache.carbondata.core.transaction.TransactionManager
 import org.apache.carbondata.tranaction.SessionTransactionManager
 
-case class RollbackTransactionCommand(transaction: Option[String] = None) extends MetadataCommand{
-  override protected def opName: String = "RollBack Transaction Command"
+case class CarbonGetCurrentTransactionSegmentCommand(tableName: String) extends MetadataCommand {
+  override protected def opName: String = "Get Current Transaction Segment"
+
+  override def output: Seq[Attribute] = {
+    Seq(
+      AttributeReference("SegmentId", StringType, nullable = false)())
+  }
 
   override def processMetadata(sparkSession: SparkSession): Seq[Row] = {
     val transactionId = TransactionManager.getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
       .getTransactionId(sparkSession)
-    TransactionManager.getInstance().rollbackTransaction(transactionId);
-    Seq.empty
+    Seq(Row(TransactionManager.getInstance()
+      .getTransactionManager
+      .getAndSetCurrentTransactionSegment(transactionId, tableName)))
   }
 }

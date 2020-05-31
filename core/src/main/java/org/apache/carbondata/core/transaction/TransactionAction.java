@@ -17,6 +17,8 @@
 
 package org.apache.carbondata.core.transaction;
 
+import org.apache.carbondata.core.datamap.Segment;
+
 public interface TransactionAction {
 
   void commit() throws Exception;
@@ -25,4 +27,16 @@ public interface TransactionAction {
 
   }
 
+  default void recordUpdateDetails(long updateTime, Segment[] segments,
+      boolean loadAsANewSegment) {
+
+  }
+
+  default String getTransactionSegment() {
+    return "*";
+  }
+
+  default String getTransactionTableName() {
+    return "";
+  }
 }

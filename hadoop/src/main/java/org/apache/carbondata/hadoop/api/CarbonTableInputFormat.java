@@ -166,6 +166,12 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
       }
       List<Segment> filteredSegmentToAccess =
           getFilteredSegment(job, segments.getValidSegments(), true, readCommittedScope);
+      Segment[] segmentsToAccess = getSegmentsToAccess(job, readCommittedScope);
+      if (segmentsToAccess.length > 0) {
+        filteredSegmentToAccess.addAll(
+            getFilteredSegment(job, segments.getListOfInProgressSegments(), true,
+                readCommittedScope));
+      }
       if (filteredSegmentToAccess.size() == 0) {
         splits.addAll(getSplitsOfStreaming(job, streamSegments, carbonTable));
         return splits;

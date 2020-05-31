@@ -25,7 +25,7 @@ import org.apache.spark.sql.types.StringType
 import org.apache.carbondata.core.transaction.TransactionManager
 import org.apache.carbondata.tranaction.SessionTransactionManager
 
-case class StartTransactionCommand(transaction: String) extends MetadataCommand {
+case class StartTransactionCommand(transaction: Option[String] = None) extends MetadataCommand {
   override protected def opName: String = "Start Transaction"
 
   override def output: Seq[Attribute] = {

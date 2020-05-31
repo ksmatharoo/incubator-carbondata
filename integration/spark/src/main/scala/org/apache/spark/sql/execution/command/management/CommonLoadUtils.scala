@@ -131,8 +131,8 @@ object CommonLoadUtils {
           catalogTable = l.catalogTable.get
           sizeInBytes = l.relation.sizeInBytes
         case h: HiveTableRelation => catalogTable = h.tableMeta
-          finalPartition = getCompletePartitionValues(partition, table)
       }
+      finalPartition = getCompletePartitionValues(partition, table)
     }
     (sizeInBytes, table, dbName, catalogTable, finalPartition)
   }
@@ -858,7 +858,7 @@ object CommonLoadUtils {
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
     val transactionId = transactionManager.getTransactionId(loadParams.sparkSession,
-      table.getDatabaseName + table.getTableName)
+      table.getDatabaseName + "." + table.getTableName)
     val partitionValues = if (loadParams.finalPartition.nonEmpty) {
       loadParams.finalPartition.filter(_._2.nonEmpty).map { case (col, value) =>
         catalogTable.schema.find(_.name.equalsIgnoreCase(col)) match {
@@ -1090,10 +1090,12 @@ object CommonLoadUtils {
           loadParams.carbonLoadModel,
           loadParams.hadoopConf,
           loadParams.operationContext), TransactionActionType.PERF_SCOPE)
-      transactionManager.recordTransactionAction(transactionId,
-        new CompactionTransactionAction(loadParams.sparkSession,
-          loadParams.carbonLoadModel,
-          loadParams.operationContext), TransactionActionType.PERF_SCOPE)
+      if(!(table.getDatabaseName + "." + table.getTableName).endsWith("_ctrl")) {
+        transactionManager.recordTransactionAction(transactionId,
+          new CompactionTransactionAction(loadParams.sparkSession,
+            loadParams.carbonLoadModel,
+            loadParams.operationContext), TransactionActionType.PERF_SCOPE)
+      }
     }
     val returnVal = if (null == transactionId) {
       val specs =

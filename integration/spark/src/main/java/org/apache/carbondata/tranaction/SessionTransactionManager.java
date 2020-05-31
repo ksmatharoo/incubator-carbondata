@@ -22,11 +22,13 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.transaction.TransactionAction;
 import org.apache.carbondata.core.transaction.TransactionActionType;
 import org.apache.carbondata.core.transaction.TransactionHandler;
@@ -47,6 +49,8 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
 
   private Map<SparkSession, Set<String>> transactionalTableNames;
 
+  private Map<String, Map<String, String>> transactionSegmentMap;
+
   public SessionTransactionManager() {
     this.transactionIdToSessionMap = new ConcurrentHashMap<>();
     this.sessionToTransactionIdMap = new ConcurrentHashMap<>();
@@ -54,6 +58,7 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
     this.closedTransactionActions = new ConcurrentHashMap<>();
     this.perfTransactionAction = new ConcurrentHashMap<>();
     this.transactionalTableNames = new HashMap<>();
+    this.transactionSegmentMap = new HashMap<>();
   }
 
   @Override
@@ -106,6 +111,7 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
     openTransactionActions.remove(transactionId);
     closedTransactionActions.remove(transactionId);
     sessionToTransactionIdMap.remove(transactionIdToSessionMap.remove(transactionId));
+    transactionSegmentMap.remove(transactionId);
   }
 
   @Override
@@ -137,6 +143,7 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
     closedTransactionActions.remove(transactionId);
     perfTransactionAction.remove(transactionId);
     sessionToTransactionIdMap.remove(transactionIdToSessionMap.remove(transactionId));
+    transactionSegmentMap.remove(transactionId);
   }
 
   @Override
@@ -144,6 +151,9 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
       TransactionActionType transactionActionType) {
     if (null == this.transactionIdToSessionMap.get(transactionId)) {
       throw new RuntimeException("No current transaction is running on this session");
+    }
+    if (transactionAction instanceof PrePrimingAction) {
+      return;
     }
     if (transactionActionType == TransactionActionType.COMMIT_SCOPE) {
       Queue<TransactionAction> transactionActions = openTransactionActions.get(transactionId);
@@ -175,6 +185,11 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
   }
 
   @Override
+  public String getTransactionId(SparkSession session) {
+    return sessionToTransactionIdMap.get(session);
+  }
+
+  @Override
   public TransactionHandler getTransactionManager() {
     return this;
   }
@@ -185,14 +200,60 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
     if (null == transactionId) {
       throw new RuntimeException("No current transaction is running on this session");
     }
-    Set<String> tableNames = transactionalTableNames.get(sparkSession);
-    if (null == tableNames) {
-      tableNames = new HashSet<>();
-      transactionalTableNames.put(sparkSession, tableNames);
-    }
+    Set<String> tableNames =
+        transactionalTableNames.computeIfAbsent(sparkSession, k -> new HashSet<>());
     String[] split = tableListString.split(",");
     for (String str : split) {
       tableNames.add(str.trim().toLowerCase(Locale.getDefault()));
+    }
+  }
+
+  @Override
+  public String getAndSetCurrentTransactionSegment(String transactionId, String tableNameString) {
+    if (null == this.transactionIdToSessionMap.get(transactionId)) {
+      throw new RuntimeException("No current transaction is running on this session");
+    }
+    Map<String, String> transactionSegment =
+        this.transactionSegmentMap.computeIfAbsent(transactionId, k -> new HashMap<>());
+    String currentTransactionSegment = transactionSegment.get(tableNameString);
+    if (null == currentTransactionSegment) {
+      Queue<TransactionAction> transactionActions = openTransactionActions.get(transactionId);
+      if (null != transactionActions) {
+        for (TransactionAction transactionAction : transactionActions) {
+          if (transactionAction instanceof LoadTransactionActions) {
+            if (transactionAction.getTransactionTableName().equalsIgnoreCase(tableNameString)) {
+              transactionSegment.put(tableNameString, transactionAction.getTransactionSegment());
+              return transactionAction.getTransactionSegment();
+            }
+          }
+        }
+      }
+    }
+    return currentTransactionSegment;
+  }
+
+  @Override
+  public String getCurrentTransactionSegment(String transactionId, String tableNameString) {
+    Map<String, String> tableToCurrentSegment = transactionSegmentMap.get(transactionId);
+    if (null != tableToCurrentSegment) {
+      return tableToCurrentSegment.get(tableNameString);
+    }
+    return "*";
+  }
+
+  @Override
+  public void recordUpdateDetails(String transactionId, String fullTableName, long updateTime,
+      Segment[] deletedSegments, boolean loadAsANewSegment) {
+    if (Objects.isNull(this.transactionIdToSessionMap.get(transactionId))) {
+      throw new RuntimeException("No current transaction is running on this session");
+    }
+    Queue<TransactionAction> transactionActions = openTransactionActions.get(transactionId);
+    if (null != transactionActions) {
+      for (TransactionAction transactionAction : transactionActions) {
+        if (transactionAction.getTransactionTableName().equals(fullTableName)) {
+          transactionAction.recordUpdateDetails(updateTime, deletedSegments, loadAsANewSegment);
+        }
+      }
     }
   }
 }

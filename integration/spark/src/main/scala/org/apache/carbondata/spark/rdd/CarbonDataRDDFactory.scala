@@ -556,10 +556,10 @@ object CarbonDataRDDFactory {
       .asInstanceOf[String]
     val loadAsNewSeg = updateModel.isDefined && updateModel.get.loadAsNewSegment
     val transactionManager = TransactionManager.getInstance()
+    val transactionTableName = carbonTable.getDatabaseName + "." + carbonTable.getTableName
     val transactionId = transactionManager.getTransactionManager.
       asInstanceOf[SessionTransactionManager].
-      getTransactionId(sqlContext.sparkSession,
-        carbonTable.getDatabaseName + "." + carbonTable.getTableName)
+      getTransactionId(sqlContext.sparkSession, transactionTableName)
     if (loadStatus == SegmentStatus.LOAD_FAILURE) {
       // update the load entry in table status file for changing the status to marked for delete
       CarbonLoaderUtil.updateTableStatusForFailure(carbonLoadModel, uniqueTableStatusId)
@@ -573,7 +573,8 @@ object CarbonDataRDDFactory {
             updateModel match {case Some(x)=>x; case _ => null},
             null,
             operationContext,
-            hadoopConf),
+            hadoopConf,
+            true),
           TransactionActionType.COMMIT_SCOPE)
       }
       LOGGER.info("********starting clean up**********")
@@ -603,7 +604,8 @@ object CarbonDataRDDFactory {
               updateModel match {case Some(x)=>x; case _ => null},
               null,
               operationContext,
-              hadoopConf),
+              hadoopConf,
+              true),
             TransactionActionType.COMMIT_SCOPE)
         }
         LOGGER.info("********starting clean up**********")
@@ -616,11 +618,13 @@ object CarbonDataRDDFactory {
         throw new Exception(status(0)._2._2.errorMsg)
       }
       // as no record loaded in new segment, new segment should be deleted
+      var isValidSegment = true
       val newEntryLoadStatus =
         if (carbonLoadModel.isCarbonTransactionalTable &&
             !carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.isChildTableForMV &&
-            !CarbonLoaderUtil.isValidSegment(carbonLoadModel, carbonLoadModel.getSegmentId.toInt)) {
+            !CarbonLoaderUtil.isValidSegment(carbonLoadModel, carbonLoadModel.getSegmentId)) {
           LOGGER.warn("Cannot write load metadata file as there is no data to load")
+          isValidSegment = true
           SegmentStatus.MARKED_FOR_DELETE
         } else {
           loadStatus
@@ -669,19 +673,24 @@ object CarbonDataRDDFactory {
             updateModel match {case Some(x)=>x; case _ => null},
             segmentFileName,
             operationContext,
-            hadoopConf),
-            TransactionActionType.COMMIT_SCOPE)
-        transactionManager.recordTransactionAction(transactionId,
-          new PrePrimingAction(sqlContext.sparkSession,
-            carbonLoadModel,
             hadoopConf,
-            operationContext),
-          TransactionActionType.PERF_SCOPE)
-        transactionManager.recordTransactionAction(transactionId,
-          new CompactionTransactionAction(sqlContext.sparkSession,
-            carbonLoadModel,
-            operationContext),
-          TransactionActionType.PERF_SCOPE)
+            isValidSegment),
+            TransactionActionType.COMMIT_SCOPE)
+        if (isValidSegment) {
+          transactionManager.recordTransactionAction(transactionId,
+            new PrePrimingAction(sqlContext.sparkSession,
+              carbonLoadModel,
+              hadoopConf,
+              operationContext),
+            TransactionActionType.PERF_SCOPE)
+          if (!transactionTableName.endsWith("_ctrl")) {
+            transactionManager.recordTransactionAction(transactionId,
+              new CompactionTransactionAction(sqlContext.sparkSession,
+                carbonLoadModel,
+                operationContext),
+              TransactionActionType.PERF_SCOPE)
+          }
+        }
       } else {
         handlePostEvent(carbonLoadModel,
           operationContext,
@@ -760,6 +769,7 @@ object CarbonDataRDDFactory {
   def runCompaction(sparkSession: SparkSession,
       carbonLoadModel: CarbonLoadModel,
       operationContext: OperationContext): Unit = {
+    LOGGER.info("***************************************** Starting compaction")
     try {
       // compaction handling
       if (carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.isHivePartitionTable) {
@@ -773,17 +783,20 @@ object CarbonDataRDDFactory {
         compactedSegments,
         operationContext)
       carbonLoadModel.setMergedSegmentIds(compactedSegments)
+      LOGGER.info("***************************************** Finish compaction")
     } catch {
       case e: Exception =>
         LOGGER.error(
           "Auto-Compaction has failed. Ignoring this exception because the" +
           " load is passed.", e)
     }
-    try {
+    LOGGER.info("***************************************** Starting clean files")
+      try {
       CommonUtil.cleanGarbageData(sparkSession,
         carbonLoadModel.getDatabaseName,
         carbonLoadModel.getTableName,
         carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
+      LOGGER.info("***************************************** finish clean files")
     } catch {
       case e: Exception =>
         LOGGER.error(

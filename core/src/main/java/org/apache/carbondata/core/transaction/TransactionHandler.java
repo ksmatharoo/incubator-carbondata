@@ -17,6 +17,8 @@
 
 package org.apache.carbondata.core.transaction;
 
+import org.apache.carbondata.core.datamap.Segment;
+
 /**
  * Interface for doing any operation based on transaction.
  * so operation will be succeed only if it is committed.
@@ -54,8 +56,16 @@ public interface TransactionHandler<T> {
 
   String getTransactionId(T transactionObj, String tableUniqueName);
 
+  String getTransactionId(T transactionObj);
+
   TransactionHandler getTransactionManager();
 
-  void registerTableForTransaction(T transactionId, String tableNameString);
+  void registerTableForTransaction(T transactionObj, String tableNameString);
 
+  String getAndSetCurrentTransactionSegment(String transactionId, String tableNameString);
+
+  String getCurrentTransactionSegment(String transactionId, String tableNameString);
+
+  void recordUpdateDetails(String transactionId, String fullTableName, long updateTime,
+      Segment[] deletedSegments, boolean loadAsANewSegment);
 }

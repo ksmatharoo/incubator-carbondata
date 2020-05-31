@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.apache.carbondata.core.datamap.DataMapStoreManager;
 import org.apache.carbondata.core.datamap.Segment;
@@ -167,5 +168,24 @@ public class PartitionTransactionAction implements TransactionAction {
         isCleanupDone = true;
       }
     }
+  }
+
+  public void recordUpdateDetails(long updateTime, Segment[] deletedSegments,
+      boolean loadAsANewSegment) {
+    String currentUpdateTime = configuration.get(CarbonTableOutputFormat.UPADTE_TIMESTAMP, null);
+    if (null != currentUpdateTime) {
+      configuration.set(CarbonTableOutputFormat.UPADTE_TIMESTAMP, String.valueOf(updateTime));
+    }
+    String segmentToBeDeleted =
+        configuration.get(CarbonTableOutputFormat.SEGMENTS_TO_BE_DELETED, null);
+    if (null != segmentToBeDeleted) {
+      String deletedSegmentId = String
+          .join(",", Stream.of(deletedSegments).map(Segment::getSegmentNo).toArray(String[]::new));
+      configuration.get(CarbonTableOutputFormat.SEGMENTS_TO_BE_DELETED, deletedSegmentId);
+    }
+  }
+
+  public String getTransactionTableName() {
+    return carbonLoadModel.getDatabaseName() + "." + carbonLoadModel.getTableName();
   }
 }

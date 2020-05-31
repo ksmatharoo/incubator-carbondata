@@ -29,6 +29,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
+import org.apache.carbondata.core.cache.CarbonLRUCache;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
@@ -40,6 +41,9 @@ import org.apache.carbondata.spark.rdd.CarbonSparkPartition;
 import org.apache.log4j.Logger;
 
 public class Utils {
+
+  private static final Logger LOGGER =
+      LogServiceFactory.getLogService(Utils.class.getName());
 
   public static List<CarbonSparkPartition> mergeSplit(List<CarbonSparkPartition> allPartition,
       CarbonTable carbonTable) {
@@ -59,32 +63,37 @@ public class Utils {
     if (!carbonTable.isHivePartitionTable()) {
       return mergeSplitBasedOnSize(allPartition, configuredSize, minThreshold);
     }
-    Map<PartitionSpec, List<CarbonSparkPartition>> partitionSpecToParitionMap = new HashMap<>();
+
+    Map<PartitionSpec, List<CarbonSparkPartition>> partitionSpecToPartitionMap = new HashMap<>();
     for (CarbonSparkPartition carbonSparkPartition : allPartition) {
       List<CarbonSparkPartition> carbonSparkPartitions =
-          partitionSpecToParitionMap.get(carbonSparkPartition.partitionSpec().get());
+          partitionSpecToPartitionMap.get(carbonSparkPartition.partitionSpec().get());
       if (null == carbonSparkPartitions) {
         carbonSparkPartitions = new ArrayList<>();
-        partitionSpecToParitionMap
+        partitionSpecToPartitionMap
             .put(carbonSparkPartition.partitionSpec().get(), carbonSparkPartitions);
       }
       carbonSparkPartitions.add(carbonSparkPartition);
     }
+
     Iterator<Map.Entry<PartitionSpec, List<CarbonSparkPartition>>> iterator =
-        partitionSpecToParitionMap.entrySet().iterator();
+        partitionSpecToPartitionMap.entrySet().iterator();
+
     List<List<CarbonSparkPartition>> rejectedList = new ArrayList<>();
     List<List<CarbonSparkPartition>> selectedList = new ArrayList<>();
-    int totalNumberOfPartition = partitionSpecToParitionMap.size();
+
+    int totalNumberOfPartition = partitionSpecToPartitionMap.size();
     while (iterator.hasNext()) {
       Map.Entry<PartitionSpec, List<CarbonSparkPartition>> entry = iterator.next();
       List<CarbonSparkPartition> carbonSparkPartitions =
           mergeSplitBasedOnSize(entry.getValue(), configuredSize, minThreshold);
       if (carbonSparkPartitions.isEmpty()) {
-        rejectedList.add(carbonSparkPartitions);
+        rejectedList.add(entry.getValue());
       } else {
         selectedList.add(carbonSparkPartitions);
       }
     }
+
     boolean isRejectPresent = rejectedList.size() > 0;
     if (isRejectPresent) {
       int rejectedPercentage = (rejectedList.size() / totalNumberOfPartition) * 100;
@@ -92,6 +101,8 @@ public class Utils {
         return new ArrayList<>();
       }
     }
+
+    selectedList.addAll(rejectedList);
     List<CarbonSparkPartition> collect =
         selectedList.stream().flatMap(List::stream).collect(Collectors.toList());
     List<CarbonSparkPartition> result = new ArrayList<>();
@@ -121,7 +132,7 @@ public class Utils {
       }
     }
     if (configuredSize > totalSize) {
-      List<String> locations = new ArrayList<>();
+      Set<String> locations = new HashSet<>();
       for (CarbonInputSplit split : allSplits) {
         try {
           locations.addAll(Arrays.asList(split.getLocations()));
@@ -162,11 +173,11 @@ public class Utils {
           break;
         }
       }
-      if (runningIndex > allSplits.size()) {
-        break;
-      }
       splitsGroup.add(splits);
       splitLocations.add(locations);
+      if (runningIndex >= allSplits.size()) {
+        break;
+      }
     }
     if (leftOver > 0 && runningIndex < allSplits.size()) {
       int startIndex = 0;
@@ -179,7 +190,7 @@ public class Utils {
         }
         startIndex++;
         if (startIndex >= splitsGroup.size()) {
-          startIndex++;
+          startIndex = 0;
         }
       }
     }
@@ -188,7 +199,8 @@ public class Utils {
     for (List<CarbonInputSplit> splits : splitsGroup) {
       String[] loc =
           splitLocations.get(counter).toArray(new String[splitLocations.get(counter).size()]);
-      result.add(new CarbonSparkPartition(counter, counter, new CarbonMultiBlockSplit(splits, loc),
+      result.add(new CarbonSparkPartition(allPartition.get(0).rddId(), counter++,
+          new CarbonMultiBlockSplit(splits, loc),
           allPartition.get(0).partitionSpec()));
     }
     return result;

@@ -14,23 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.spark.sql.execution.command.transaction
 
-import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.execution.command.MetadataCommand
+package org.apache.carbondata.segment
 
-import org.apache.carbondata.core.transaction.TransactionManager
-import org.apache.carbondata.tranaction.SessionTransactionManager
+import org.apache.carbondata.common.annotations.InterfaceAudience
 
-case class RollbackTransactionCommand(transaction: Option[String] = None) extends MetadataCommand{
-  override protected def opName: String = "RollBack Transaction Command"
-
-  override def processMetadata(sparkSession: SparkSession): Seq[Row] = {
-    val transactionId = TransactionManager.getInstance()
-      .getTransactionManager
-      .asInstanceOf[SessionTransactionManager]
-      .getTransactionId(sparkSession)
-    TransactionManager.getInstance().rollbackTransaction(transactionId);
-    Seq.empty
+@InterfaceAudience.Internal
+class SegmentIdUDF extends (String => Boolean) with Serializable {
+  override def apply(v1: String): Boolean = {
+    true // Carbon applies the filter. So, Spark do not have to apply filter.
   }
 }

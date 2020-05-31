@@ -19,7 +19,6 @@ package org.apache.carbondata.tranaction;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
@@ -56,10 +55,13 @@ public class LoadTransactionActions implements TransactionAction {
 
   private UpdateTableModel tableModel;
 
+  private boolean isValidSegment;
+
   public LoadTransactionActions(SparkSession sparkSession, CarbonLoadModel carbonLoadModel,
       LoadMetadataDetails loadMetadataDetails, boolean overwriteTable, String uuid,
       UpdateTableModel tableModel,
-      String segmentFileName, OperationContext operationContext, Configuration configuration) {
+      String segmentFileName, OperationContext operationContext, Configuration configuration,
+      boolean isValidSegment) {
     this.sparkSession = sparkSession;
     this.carbonLoadModel = carbonLoadModel;
     this.loadMetadataDetails = loadMetadataDetails;
@@ -69,17 +71,19 @@ public class LoadTransactionActions implements TransactionAction {
     this.operationContext = operationContext;
     this.configuration = configuration;
     this.tableModel = tableModel;
+    this.isValidSegment = isValidSegment;
   }
 
   public void commit() throws Exception {
     SegmentStatus segmentStatus = loadMetadataDetails.getSegmentStatus();
     if (segmentStatus == SegmentStatus.MARKED_FOR_DELETE
-        || segmentStatus == SegmentStatus.LOAD_FAILURE) {
+        || segmentStatus == SegmentStatus.LOAD_FAILURE && isValidSegment) {
       throw new Exception("Failed to commit transaction:");
     }
     if (tableModel != null) {
       CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable,
-          tableModel.loadAsNewSegment(), Arrays.asList(tableModel.deletedSegments()), uuid);
+          tableModel.loadAsNewSegment(), Arrays.asList(tableModel.deletedSegments()), uuid,
+          tableModel.updatedTimeStamp());
     } else {
       CarbonLoaderUtil.writeTableStatus(carbonLoadModel, loadMetadataDetails, overwriteTable,
           false, new ArrayList<>(), uuid);
@@ -103,5 +107,22 @@ public class LoadTransactionActions implements TransactionAction {
         CarbonTablePath.getSegmentFilesLocation(carbonLoadModel.getTablePath()) + "/"
             + segmentFileName;
     FileFactory.deleteFile(segmentFile);
+  }
+
+  public String getTransactionSegment() {
+    return carbonLoadModel.getSegmentId();
+  }
+
+  public String getTransactionTableName() {
+    return carbonLoadModel.getDatabaseName() + "." + carbonLoadModel.getTableName();
+  }
+
+  public void recordUpdateDetails(long updateTime, Segment[] deletedSegments,
+      boolean loadAsANewSegment) {
+    if (tableModel != null) {
+      tableModel.updatedTimeStamp_$eq(updateTime);
+      tableModel.deletedSegments_$eq(deletedSegments);
+      tableModel.loadAsNewSegment_$eq(loadAsANewSegment);
+    }
   }
 }

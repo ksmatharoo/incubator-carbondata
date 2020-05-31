@@ -37,7 +37,6 @@ import org.apache.spark.sql.execution.command.management.CarbonInsertIntoWithDf
 import org.apache.spark.sql.execution.command.mutation.HorizontalCompaction
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.hive.DistributionUtil
 import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
 import org.apache.spark.sql.util.SparkSQLUtil
 import org.apache.spark.unsafe.types.UTF8String
@@ -63,7 +62,9 @@ import org.apache.carbondata.tranaction.SessionTransactionManager
 case class CarbonMergeDataSetCommand(
     targetDsOri: Dataset[Row],
     srcDS: Dataset[Row],
-    var mergeMatches: MergeDataSetMatches)
+    var mergeMatches: MergeDataSetMatches,
+    var partition: Map[String, Option[String]] = Map.empty,
+    overwriteTable: Boolean = false)
   extends DataCommand {
 
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
@@ -85,7 +86,7 @@ case class CarbonMergeDataSetCommand(
         "Carbon table supposed to be present in merge dataset")
     }
     // validate the merge matches and actions.
-    validateMergeActions(mergeMatches, targetDsOri, sparkSession)
+    validateMergeActions(mergeMatches, targetDsOri, sparkSession, partition)
     val carbonTable = rltn.head.carbonRelation.carbonTable
     val hasDelAction = mergeMatches.matchList
       .exists(_.getActions.exists(_.isInstanceOf[DeleteAction]))
@@ -165,13 +166,13 @@ case class CarbonMergeDataSetCommand(
     val loadDF = Dataset.ofRows(sparkSession,
       LogicalRDD(targetSchema.toAttributes,
         processedRDD)(sparkSession))
-
+    val fullTableName = carbonTable.getDatabaseName + "." + carbonTable.getTableName
     val transactionManager = TransactionManager
       .getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
     val transactionId = transactionManager.getTransactionId(sparkSession,
-      carbonTable.getDatabaseName + carbonTable.getTableName)
+      fullTableName)
 
     val updateTableModel = if (transactionId != null){
       CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
@@ -198,6 +199,11 @@ case class CarbonMergeDataSetCommand(
       } else {
         up.loadAsNewSegment = false
       }
+      transactionManager.recordUpdateDetails(transactionId,
+        fullTableName,
+        up.updatedTimeStamp,
+        up.deletedSegments,
+        up.loadAsNewSegment)
       updateTableModel
     } else {
       loadDF.cache()
@@ -210,7 +216,7 @@ case class CarbonMergeDataSetCommand(
         trxMgr,
         mutationAction)
       CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
-        .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "false")
+        .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "true")
 
       CarbonInsertIntoWithDf(
         databaseNameOp = Some(carbonTable.getDatabaseName),
@@ -222,7 +228,8 @@ case class CarbonMergeDataSetCommand(
         tableInfoOp = Some(carbonTable.getTableInfo)).process(sparkSession)
       updateTableModel
     }
-
+    CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
+      .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "false")
     LOGGER.info(s"Total inserted rows: ${stats.insertedRows.sum}")
     LOGGER.info(s"Total updated rows: ${stats.updatedRows.sum}")
     LOGGER.info(s"Total deleted rows: ${stats.deletedRows.sum}")
@@ -232,7 +239,7 @@ case class CarbonMergeDataSetCommand(
     if (updateTableModel.isDefined) {
       // Load the history table if the inserthistorytable action is added by user.
       HistoryTableLoadHelper.loadHistoryTable(sparkSession, rltn.head, carbonTable,
-        trxMgr, mutationAction, mergeMatches)
+        trxMgr, mutationAction, mergeMatches, partition, overwriteTable)
     }
     // Do IUD Compaction.
     HorizontalCompaction.tryHorizontalCompaction(
@@ -316,7 +323,14 @@ case class CarbonMergeDataSetCommand(
     job.setOutputValueClass(classOf[InternalRow])
     val uuid = UUID.randomUUID.toString
     job.setJobID(new JobID(uuid, 0))
-    val path = carbonTable.getTablePath + "/_temporary/" + job.getJobID
+    val path = carbonTable.getTablePath + "/mergeJob" + "/_temporary/" + job.getJobID
+    val file = FileFactory.getCarbonFile(path)
+    if (!file.exists()) {
+      LOGGER.info("Path does not exists creating new one: " + path)
+      if (!file.mkdirs()) {
+        throw new RuntimeException("Problem while creating new file")
+      }
+    }
     FileOutputFormat.setOutputPath(job, new Path(path))
     val schema =
       org.apache.spark.sql.types.StructType(Seq(
@@ -326,10 +340,10 @@ case class CarbonMergeDataSetCommand(
       new SparkCarbonFileFormat().prepareWrite(sparkSession, job,
         carbonTable.getTableInfo.getFactTable.getTableProperties.asScala.toMap, schema)
     val config = SparkSQLUtil.broadCastHadoopConf(sparkSession.sparkContext, job.getConfiguration)
-    (frame.rdd.coalesce(DistributionUtil.getConfiguredExecutors(sparkSession.sparkContext)).
+    (frame.rdd.
       mapPartitionsWithIndex { case (index, iter) =>
         CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
-          .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "true")
+          .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "false")
         val confB = config.value.value
         val task = new TaskID(new JobID(uuid, 0), TaskType.MAP, index)
         val attemptID = new TaskAttemptID(task, index)
@@ -593,7 +607,9 @@ case class CarbonMergeDataSetCommand(
   }
 
   private def validateMergeActions(mergeMatches: MergeDataSetMatches,
-      existingDs: Dataset[Row], sparkSession: SparkSession): Unit = {
+      existingDs: Dataset[Row],
+      sparkSession: SparkSession,
+      partition: Map[String, Option[String]] = Map.empty): Unit = {
     val existAttrs = existingDs.queryExecution.analyzed.output
     if (mergeMatches.matchList.exists(m => m.getActions.exists(_.isInstanceOf[DeleteAction])
                                            && m.getActions.exists(_.isInstanceOf[UpdateAction]))) {
@@ -613,7 +629,7 @@ case class CarbonMergeDataSetCommand(
         val value = f.getActions.find(_.isInstanceOf[InsertInHistoryTableAction]).get.
           asInstanceOf[InsertInHistoryTableAction]
         if (!existAttrs.forall(f => value.insertMap
-          .exists(_._1.toString().equalsIgnoreCase(f.name)))) {
+          .exists(_._1.toString().equalsIgnoreCase(f.name)) || null != partition.get(f.name))) {
           throw new AnalysisException(
             "Not all source columns are mapped for insert action " + value.insertMap)
         }

@@ -20,12 +20,17 @@ import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.execution.command.MetadataCommand
 
 import org.apache.carbondata.core.transaction.TransactionManager
+import org.apache.carbondata.tranaction.SessionTransactionManager
 
-case class CommitTransactionCommand(transactionId: String) extends MetadataCommand {
+case class CommitTransactionCommand(transaction: Option[String] = None) extends MetadataCommand {
   override protected def opName: String = "Commit Transaction Command"
 
   override def processMetadata(sparkSession: SparkSession): Seq[Row] = {
-    TransactionManager.getInstance().commitTransaction(transactionId)
+    val str = TransactionManager.getInstance()
+      .getTransactionManager
+      .asInstanceOf[SessionTransactionManager]
+      .getTransactionId(sparkSession)
+    TransactionManager.getInstance().commitTransaction(str)
     Seq.empty
   }
 }

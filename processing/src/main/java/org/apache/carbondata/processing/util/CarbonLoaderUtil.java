@@ -107,7 +107,7 @@ public final class CarbonLoaderUtil {
    * @return
    */
   public static boolean isValidSegment(CarbonLoadModel loadModel,
-      int currentLoad) {
+      String currentLoad) {
 
     int fileCount = 0;
     String segmentPath = CarbonTablePath.getSegmentPath(
@@ -206,6 +206,12 @@ public final class CarbonLoaderUtil {
   public static boolean writeTableStatus(CarbonLoadModel carbonLoadModel,
       LoadMetadataDetails metadataDetails, boolean overwriteTable, boolean loadAsNewSegment,
       List<Segment> segmentsToBeDeleted,  String uuid) throws Exception {
+    return writeTableStatus(carbonLoadModel, metadataDetails, overwriteTable, loadAsNewSegment,
+        segmentsToBeDeleted, uuid, carbonLoadModel.getFactTimeStamp());
+  }
+  public static boolean writeTableStatus(CarbonLoadModel carbonLoadModel,
+      LoadMetadataDetails metadataDetails, boolean overwriteTable, boolean loadAsNewSegment,
+      List<Segment> segmentsToBeDeleted,  String uuid, long updateTimeStamp) throws Exception {
     if (!carbonLoadModel.isCarbonTransactionalTable() && overwriteTable) {
       deleteNonTransactionalTableForInsertOverwrite(carbonLoadModel);
     }
@@ -217,7 +223,7 @@ public final class CarbonLoaderUtil {
               new Segment(l.getMergedLoadName(),
                   l.getSegmentFile())).collect(Collectors.toSet()),
           carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
-          carbonLoadModel.getFactTimeStamp() + "",
+          updateTimeStamp + "",
           true,
           segmentsToBeDeleted);
     }
@@ -371,8 +377,8 @@ public final class CarbonLoaderUtil {
                 entry.setSegmentStatus(SegmentStatus.MARKED_FOR_DELETE);
                 // For insert overwrite, we will delete the old segment folder immediately
                 // So collect the old segments here
-                addToStaleFolders(identifier, staleFolders, entry);
-                staleLoadMetadataDetails.add(entry);
+//                addToStaleFolders(identifier, staleFolders, entry);
+//                staleLoadMetadataDetails.add(entry);
               }
             }
           }

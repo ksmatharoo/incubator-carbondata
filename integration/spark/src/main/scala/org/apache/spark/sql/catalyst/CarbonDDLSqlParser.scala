@@ -182,6 +182,8 @@ abstract class CarbonDDLSqlParser extends AbstractCarbonSparkSQLParser {
   protected val COMMIT = carbonKeyWord("COMMIT")
   protected val ROLLBACK = carbonKeyWord("ROLLBACK")
   protected val TRANSACTION = carbonKeyWord("TRANSACTION")
+  protected val GET = carbonKeyWord("GET")
+  protected val CURRENT = carbonKeyWord("CURRENT")
 
   protected val newReservedWords =
     this.getClass

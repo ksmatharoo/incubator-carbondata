@@ -165,10 +165,10 @@ public class CarbonCompactionExecutor {
           queryModel.setTableBlockInfos(tableBlockInfoList);
           if (sortingRequired) {
             resultList.get(CarbonCompactionUtil.UNSORTED_IDX).add(
-                getRawResultIterator(configuration, segmentId, task, tableBlockInfoList));
+                getRawResultIterator(configuration, segmentId, task, tableBlockInfoList, builder));
           } else {
             resultList.get(CarbonCompactionUtil.SORTED_IDX).add(
-                getRawResultIterator(configuration, segmentId, task, tableBlockInfoList));
+                getRawResultIterator(configuration, segmentId, task, tableBlockInfoList, builder));
           }
         }
       }
@@ -177,7 +177,7 @@ public class CarbonCompactionExecutor {
   }
 
   private RawResultIterator getRawResultIterator(Configuration configuration, String segmentId,
-      String task, List<TableBlockInfo> tableBlockInfoList)
+      String task, List<TableBlockInfo> tableBlockInfoList, QueryModelBuilder builder)
       throws IOException {
     SegmentProperties sourceSegmentProperties =
         new SegmentProperties(tableBlockInfoList.get(0).getDataFileFooter().getColumnInTable());
@@ -193,9 +193,10 @@ public class CarbonCompactionExecutor {
             Collections.singletonList(tableBlockInfoList.get(0).getDataFileFooter()));
       }
       isNoSortBasedMerger = true;
+      QueryModel build = builder.build();
       return new RawResultIterator(
-          executeQuery(tableBlockInfoList, segmentId, task, configuration),
-          sourceSegmentProperties, destinationSegProperties, queryModel);
+          executeQuery(tableBlockInfoList, segmentId, task, configuration, build),
+          sourceSegmentProperties, destinationSegProperties, build);
     }
   }
 
@@ -272,7 +273,7 @@ public class CarbonCompactionExecutor {
    * @return
    */
   private QueryExecutor executeQuery(List<TableBlockInfo> blockList,
-      String segmentId, String taskId, Configuration configuration)
+      String segmentId, String taskId, Configuration configuration, QueryModel queryModel)
       throws IOException {
     queryModel.setTableBlockInfos(blockList);
     QueryStatisticsRecorder executorRecorder = CarbonTimeStatisticsFactory

@@ -171,7 +171,7 @@ class SparkCarbonFileFormat extends FileFormat
           context.getTaskAttemptID.getJobID.getId
           + 'x' + context.getTaskAttemptID.getTaskID.getId)
         CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
-          .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "true")
+          .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "false")
         new CarbonOutputWriter(path, context, dataSchema.fields)
       }
 

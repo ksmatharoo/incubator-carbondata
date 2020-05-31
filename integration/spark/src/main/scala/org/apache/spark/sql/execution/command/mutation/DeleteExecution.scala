@@ -43,6 +43,7 @@ import org.apache.carbondata.core.mutate.{CarbonUpdateUtil, DeleteDeltaBlockDeta
 import org.apache.carbondata.core.mutate.data.{BlockMappingVO, RowCountDetailsVO}
 import org.apache.carbondata.core.readcommitter.TableStatusReadCommittedScope
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus, SegmentStatusManager, SegmentUpdateStatusManager}
+import org.apache.carbondata.core.transaction.TransactionManager
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil, ThreadLocalSessionInfo}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.core.writer.CarbonDeleteDeltaWriterImpl
@@ -51,6 +52,7 @@ import org.apache.carbondata.hadoop.api.{CarbonInputFormat, CarbonTableInputForm
 import org.apache.carbondata.processing.exception.MultipleMatchingException
 import org.apache.carbondata.processing.loading.FailureCauses
 import org.apache.carbondata.spark.DeleteDelataResultImpl
+import org.apache.carbondata.tranaction.SessionTransactionManager
 
 object DeleteExecution {
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
@@ -125,7 +127,7 @@ object DeleteExecution {
       dataRdd
     }
 
-    val (carbonInputFormat, job) = createCarbonInputFormat(absoluteTableIdentifier)
+    val (carbonInputFormat, job) = createCarbonInputFormat(sparkSession, absoluteTableIdentifier)
     CarbonInputFormat.setTableInfo(job.getConfiguration, carbonTable.getTableInfo)
     val keyRdd = tupleId match {
       case Some(id) =>
@@ -446,12 +448,27 @@ object DeleteExecution {
     }
   }
 
-  private def createCarbonInputFormat(absoluteTableIdentifier: AbsoluteTableIdentifier) :
+  private def createCarbonInputFormat(sparkSession: SparkSession,
+      absoluteTableIdentifier: AbsoluteTableIdentifier) :
   (CarbonTableInputFormat[Array[Object]], Job) = {
     val carbonInputFormat = new CarbonTableInputFormat[Array[Object]]()
     val jobConf: JobConf = new JobConf(FileFactory.getConfiguration)
     val job: Job = new Job(jobConf)
     FileInputFormat.addInputPath(job, new Path(absoluteTableIdentifier.getTablePath))
+    val transactionId = TransactionManager.getInstance()
+      .getTransactionManager
+      .asInstanceOf[SessionTransactionManager]
+      .getTransactionId(sparkSession)
+    val segmentId  = TransactionManager.getInstance()
+      .getTransactionManager
+      .getCurrentTransactionSegment(transactionId,
+        absoluteTableIdentifier.getDatabaseName + "." + absoluteTableIdentifier.getTableName)
+    if (null != segmentId) {
+      val segment: Array[Segment] = new Array[Segment](1)
+      segment(0) = Segment.toSegment(segmentId)
+      CarbonInputFormat
+          .setSegmentsToAccess(job.getConfiguration, segment.toList.asJava)
+    }
     (carbonInputFormat, job)
   }
 }
