@@ -53,7 +53,7 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
   override protected def opName: String = "Add Streaming Segment Command"
 
   val supportedFormats: Seq[String] =
-    Seq("hbase")
+    Seq("HBase")
 
   private def validateFormat(format: String): Boolean = {
     supportedFormats.exists(_.equalsIgnoreCase(format))
@@ -80,12 +80,14 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "delete segment")
     }
 
-    if (validateFormat(options.getOrElse("format", "HBase"))) {
-      throw new MalformedCarbonCommandException("Only HBase Format is Supported")
+    if (!validateFormat(options.getOrElse("format", "HBase"))) {
+      throw new MalformedCarbonCommandException(
+        "Invalid format: " + options.getOrElse("format", "HBase") + " Valid Formats are:" +
+        supportedFormats)
     }
     val schema = options.getOrElse("segmentSchema", "")
     if (schema.isEmpty) {
-      throw new MalformedCarbonCommandException("Input segment schema cannot be empty")
+      throw new MalformedCarbonCommandException("Streaming segment schema cannot be empty")
     }
     writeMetaForSegment(sparkSession, carbonTable)
     writeExternalSchema(carbonTable, schema);

@@ -250,7 +250,7 @@ object MixedFormatHandler {
       format.toString match {
         case "hbase" =>
           CarbonReflectionUtils
-            .createObject("org.apache.spark.sql.execution.strategy.HBaseFormatBasedHandler")
+            .createObject("org.apache.spark.sql.execution.strategy.HBaseFormatBasedHandler")._1
             .asInstanceOf[ExternalFormatHandler]
         case _ =>
           new GenericFormatHandler()
