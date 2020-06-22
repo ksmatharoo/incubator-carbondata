@@ -1,4 +1,4 @@
-package org.apache.spark.carbondata.hbasestreaming
+package org.apache.carbondata.externalstreaming
 
 case class IntKeyRecord(
     col0: Integer,

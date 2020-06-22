@@ -1,4 +1,4 @@
-package org.apache.spark.carbondata.hbasestreaming
+package org.apache.carbondata.externalstreaming
 
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.spark.sql.DataFrame
@@ -54,7 +54,6 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   test("test Full Scan Query") {
     val frame = withCatalog(cat)
-    frame.show()
     checkAnswer(sql("select * from source"), frame)
   }
 
