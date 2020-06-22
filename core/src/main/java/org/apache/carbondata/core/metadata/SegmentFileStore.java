@@ -320,6 +320,57 @@ public class SegmentFileStore {
     return false;
   }
 
+  public static boolean writeSegmentFileForExternalStreaming(
+      CarbonTable carbonTable,
+      Segment segment,
+      PartitionSpec partitionSpec,
+      List<FileStatus> partitionDataFiles,
+      SegmentMetaDataInfo segmentMetaDataInfo,
+      boolean isDataFileValidationRequired)
+      throws IOException {
+    String tablePath = carbonTable.getTablePath();
+    CarbonFile[] dataFiles = new CarbonFile[0];
+    if (isDataFileValidationRequired) {
+      if (partitionDataFiles.isEmpty()) {
+        CarbonFile segmentFolder = FileFactory.getCarbonFile(segment.getSegmentPath());
+        dataFiles = segmentFolder.listFiles(
+            file -> (!file.getName().equals("_SUCCESS") && !file.getName().endsWith(".crc")));
+      } else {
+        dataFiles = partitionDataFiles.stream()
+            .map(fileStatus -> FileFactory.getCarbonFile(fileStatus.getPath().toString()))
+            .toArray(CarbonFile[]::new);
+      }
+    }
+    if (!isDataFileValidationRequired  || (dataFiles != null && dataFiles.length > 0)) {
+      SegmentFile segmentFile = new SegmentFile();
+      segmentFile.setOptions(segment.getOptions());
+      FolderDetails folderDetails = new FolderDetails();
+      folderDetails.setStatus(SegmentStatus.SUCCESS.getMessage());
+      folderDetails.setRelative(false);
+      if (!partitionDataFiles.isEmpty()) {
+        folderDetails.setPartitions(partitionSpec.getPartitions());
+        segmentFile.addPath(partitionSpec.getLocation().toString(), folderDetails);
+      } else {
+        segmentFile.addPath(segment.getSegmentPath(), folderDetails);
+      }
+      for (CarbonFile file : dataFiles) {
+        folderDetails.getFiles().add(file.getName());
+      }
+      String segmentFileFolder = CarbonTablePath.getSegmentFilesLocation(tablePath);
+      CarbonFile carbonFile = FileFactory.getCarbonFile(segmentFileFolder);
+      segmentFile.setSegmentMetaDataInfo(segmentMetaDataInfo);
+      if (!carbonFile.exists()) {
+        carbonFile.mkdirs();
+      }
+      // write segment info to new file.
+      writeSegmentFile(segmentFile,
+          segmentFileFolder + File.separator + segment.getSegmentFileName());
+
+      return true;
+    }
+    return false;
+  }
+
   /**
    * Write segment file to the metadata folder of the table selecting only the current load files
    *

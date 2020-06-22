@@ -3394,4 +3394,19 @@ public final class CarbonUtil {
     }
     return Integer.parseInt(cacheExpirationTime);
   }
+
+
+  public static String getExternalSchemaString(AbsoluteTableIdentifier absoluteTableIdentifier)
+      throws IOException {
+    String externalSchemaPath =
+        CarbonTablePath.getMetadataPath(absoluteTableIdentifier.getTablePath()) + "/"
+            + "externalSchema";
+    CarbonFile carbonFile = FileFactory.getCarbonFile(externalSchemaPath);
+    byte[] data;
+    try (DataInputStream dataInputStream = carbonFile.getDataInputStream(1024)) {
+      data = new byte[(int) carbonFile.getLength()];
+      dataInputStream.readFully(data);
+    }
+    return new String(data, CarbonCommonConstants.DEFAULT_CHARSET);
+  }
 }

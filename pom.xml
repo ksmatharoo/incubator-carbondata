@@ -109,6 +109,7 @@
     <module>geo</module>
     <module>integration/spark</module>
     <module>integration/hive</module>
+    <module>/integration/hbase</module>
 <!--    <module>integration/flink</module>-->
 <!--    <module>integration/flink-build</module>-->
 <!--    <module>integration/flink-proxy</module>-->
@@ -118,6 +119,7 @@
 <!--    <module>examples/spark</module>-->
 <!--    <module>examples/flink</module>-->
     <module>assembly</module>
+
   </modules>
 
   <properties>
@@ -579,6 +581,8 @@
                 <sourceDirectory>${basedir}/integration/spark/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/java</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/sdk/sdk/src/main/java</sourceDirectory>
@@ -624,6 +628,8 @@
                 <sourceDirectory>${basedir}/integration/spark/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/java</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/sdk/sdk/src/main/java</sourceDirectory>
