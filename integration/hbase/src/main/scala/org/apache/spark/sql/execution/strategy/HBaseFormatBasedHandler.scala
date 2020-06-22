@@ -21,7 +21,7 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.CarbonDatasourceHadoopRelation
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow, GenericRow, NamedExpression}
-import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog}
+import org.apache.spark.sql.execution.datasources.hbase.{CarbonHBaseRelation, HBaseRelation, HBaseTableCatalog}
 import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, LogicalRelation}
 
 import org.apache.carbondata.core.readcommitter.ReadCommittedScope
@@ -45,8 +45,7 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       .identifier)
     val projectsString = projects.map(f => f.name)
     val filtersNew = filters.flatMap(DataSourceStrategy.translateFilter)
-    val hBaseRelation = HBaseRelation(Map(HBaseTableCatalog.tableCatalog -> externalSchema),
-      Some(l.relation.schema))(l.relation.sqlContext)
+    val hBaseRelation = new CarbonHBaseRelation(Map(HBaseTableCatalog.tableCatalog -> externalSchema), Option.empty)(l.relation.sqlContext)
     val value = hBaseRelation.buildScan(projectsString.toArray, filtersNew.toArray)
       .map(f => new GenericInternalRow(f.asInstanceOf[GenericRow].values).asInstanceOf[InternalRow])
     (value, false)

@@ -14,21 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.carbondata.externalstreaming
 
-case class IntKeyRecord(
-    col0: Integer,
-    col1: String,
-    col2: Int)
+package org.apache.spark.sql.execution.datasources.hbase
 
-object IntKeyRecord {
-  def apply(i: Int): IntKeyRecord = {
-    IntKeyRecord(if (i % 2 == 0) {
-      i
-    } else {
-      -i
-    },
-      s"String$i extra",
-      i)
+import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.sources.Filter
+import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.types.StructType
+
+class CarbonHBaseRelation(parameters: Map[String, String],
+    userSpecifiedSchema: Option[StructType])
+  (sqlContext: SQLContext) extends HBaseRelation(parameters, userSpecifiedSchema)(sqlContext) {
+
+  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    new CarbonHBaseTableScanRDD(this,
+      requiredColumns.filterNot(f => f.equalsIgnoreCase("rowtimestamp")),
+      filters,
+      requiredColumns)
   }
 }
