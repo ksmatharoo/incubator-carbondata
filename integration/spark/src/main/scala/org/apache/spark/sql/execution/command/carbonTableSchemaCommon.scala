@@ -121,7 +121,7 @@ class UpdateTableModel(
     var updatedTimeStamp: Long,
     var executorErrors: ExecutionErrors,
     var deletedSegments: Array[Segment],
-    var loadAsNewSegment: Boolean = false) {
+    var loadAsNewSegment: Boolean = false) extends Serializable {
   def copyFrom(updateTableModel: UpdateTableModel): UpdateTableModel = {
     updatedTimeStamp = updateTableModel.updatedTimeStamp
     executorErrors = updateTableModel.executorErrors

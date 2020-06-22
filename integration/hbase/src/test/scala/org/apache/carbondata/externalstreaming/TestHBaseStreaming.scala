@@ -22,7 +22,7 @@ import scala.collection.JavaConverters._
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
-import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, SparkHBaseConf}
+import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
@@ -97,8 +97,8 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     loadTimestamp = System.currentTimeMillis()
     val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCat,
       HBaseTableCatalog.newTable -> "5",
-      HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath,
-      HBaseRelation.TIMESTAMP -> (loadTimestamp+""))
+      HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath
+    )
 
     sqlContext.sparkContext.parallelize(data).toDF.write.options(shcExampleTable1Option)
       .format("org.apache.spark.sql.execution.datasources.hbase")
@@ -129,11 +129,18 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   test("test Full Scan Query with timestamp") {
     val rows = sql("select * from sourceWithTimestamp").collectAsList().asScala
-    assert(!rows.exists(row => row.get(3) != loadTimestamp))
+    assert(rows.exists(row => row.get(3).isInstanceOf[Long]))
+  }
+
+  test("test handoff segment") {
+    val prevRows = sql("select * from sourceWithTimestamp").collect()
+    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", 0).run(sqlContext.sparkSession)
+    checkAnswer(sql("select * from sourceWithTimestamp"), prevRows)
   }
 
   override def afterAll(): Unit = {
     sql("DROP TABLE IF EXISTS source")
+    sql("DROP TABLE IF EXISTS sourceWithTimestamp")
     htu.shutdownMiniCluster()
   }
 }
