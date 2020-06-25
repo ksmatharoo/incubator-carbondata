@@ -25,6 +25,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.carbondata.execution.datasources.SparkCarbonFileFormat
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.{FileFormat, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
@@ -38,6 +39,7 @@ import org.apache.spark.util.CarbonReflectionUtils
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datastore.impl.FileFactory
+import org.apache.carbondata.core.indexstore.PrunedSegmentInfo
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier
 import org.apache.carbondata.core.readcommitter.ReadCommittedScope
 import org.apache.carbondata.core.statusmanager.{SegmentStatus, SegmentStatusManager, FileFormat => FileFormatName}
@@ -135,28 +137,19 @@ object MixedFormatHandler {
    * If multiple segments are with different formats like parquet , orc etc then it creates RDD for
    * each format segments and union them.
    */
-  def extraRDD(
+  def extraRDD(plan:LogicalPlan,
       l: LogicalRelation,
       projects: Seq[NamedExpression],
       filters: Seq[Expression],
-      readCommittedScope: ReadCommittedScope,
-      identier: AbsoluteTableIdentifier,
+      prunedSegmentInfo:List[PrunedSegmentInfo],
       supportBatch: Boolean = true): Option[(RDD[InternalRow], Boolean)] = {
-    val loadMetadataDetails = readCommittedScope.getSegmentList
-    val segsToAccess = getSegmentsToAccess(identier)
-    val rdds = loadMetadataDetails.filter(metaDetail =>
-      (metaDetail.getSegmentStatus.equals(SegmentStatus.SUCCESS) ||
-       metaDetail.getSegmentStatus.equals(SegmentStatus.LOAD_PARTIAL_SUCCESS)))
-      .filterNot(currLoad =>
-        currLoad.getFileFormat.equals(FileFormatName.COLUMNAR_V3) ||
-        currLoad.getFileFormat.equals(FileFormatName.ROW_V1))
-      .filter(l => segsToAccess.isEmpty || segsToAccess.contains(l.getLoadName))
-      .groupBy(_.getFileFormat)
-      .map { case (format, detailses) =>
+    val rdds = prunedSegmentInfo.filter(p => !p.getSegment.isCarbonSegment)
+      .groupBy(_.getSegment.getLoadMetadataDetails.getFileFormat)
+      .map { case (format, prunedSegmentInfo) =>
         MixedFormatHandlerFactory.createFormatBasedHandler(format)
-          .getRDDForExternalSegments(format,
-            detailses,
-            readCommittedScope,
+          .getRDDForExternalSegments(plan,
+            format,
+            prunedSegmentInfo,
             l,
             projects,
             filters,
@@ -167,7 +160,7 @@ object MixedFormatHandler {
         Some(rdds.head)
       } else {
         if (supportBatch && rdds.exists(!_._2)) {
-          extraRDD(l, projects, filters, readCommittedScope, identier, false)
+          extraRDD(plan, l, projects, filters, prunedSegmentInfo, false)
         } else {
           var rdd: RDD[InternalRow] = null
           rdds.foreach { r =>

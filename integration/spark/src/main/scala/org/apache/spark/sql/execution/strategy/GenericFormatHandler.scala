@@ -24,9 +24,10 @@ import org.apache.hadoop.fs.Path
 
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, FileFormat => FileFormatName}
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.{SparkSqlAdapter}
+import org.apache.spark.sql.SparkSqlAdapter
 import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, AttributeSet, Expression, ExpressionSet, NamedExpression}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.{FilterExec, ProjectExec}
 import org.apache.spark.sql.execution.datasources.{FileFormat, HadoopFsRelation, InMemoryFileIndex, LogicalRelation}
 import org.apache.spark.sql.execution.strategy.MixedFormatHandler.getFileFormat
@@ -34,9 +35,7 @@ import org.apache.spark.sql.types.StructType
 
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
-import org.apache.carbondata.core.metadata.SegmentFileStore
-import org.apache.carbondata.core.readcommitter.ReadCommittedScope
-import org.apache.carbondata.core.util.path.CarbonTablePath
+import org.apache.carbondata.core.indexstore.PrunedSegmentInfo
 
 
 class GenericFormatHandler extends ExternalFormatHandler {
@@ -44,17 +43,15 @@ class GenericFormatHandler extends ExternalFormatHandler {
   /**
    * Generates the RDD using the spark fileformat.
    */
-  override def getRDDForExternalSegments(
+  override def getRDDForExternalSegments(plan: LogicalPlan,
       format: FileFormatName,
-      loadMetadataDetails: Array[LoadMetadataDetails],
-      readCommittedScope: ReadCommittedScope,
+      prunedSegmentInfo: List[PrunedSegmentInfo],
       l: LogicalRelation,
       projects: Seq[NamedExpression],
       filters: Seq[Expression],
       supportBatch: Boolean = true): (RDD[InternalRow], Boolean) = {
-    val paths = loadMetadataDetails. flatMap { d =>
-      val segmentFile = SegmentFileStore.readSegmentFile(
-        CarbonTablePath.getSegmentFilePath(readCommittedScope.getFilePath, d.getSegmentFile))
+    val paths = prunedSegmentInfo. flatMap { d =>
+      val segmentFile = d.getSegmentFile
 
       // If it is a partition table, the path to create RDD should be the root path of the
       // partition folder (excluding the partition subfolder).

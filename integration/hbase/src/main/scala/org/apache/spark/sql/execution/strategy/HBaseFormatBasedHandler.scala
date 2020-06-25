@@ -20,21 +20,24 @@ package org.apache.spark.sql.execution.strategy
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.CarbonDatasourceHadoopRelation
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, GenericInternalRow, GenericRow, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.planning.PhysicalOperation
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.hbase.{CarbonHBaseRelation, HBaseRelation, HBaseTableCatalog}
 import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, LogicalRelation}
 
-import org.apache.carbondata.core.readcommitter.ReadCommittedScope
-import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails}
+import org.apache.carbondata.core.indexstore.PrunedSegmentInfo
+import org.apache.carbondata.core.statusmanager.FileFormat
 import org.apache.carbondata.core.util.CarbonUtil
 
 class HBaseFormatBasedHandler extends ExternalFormatHandler {
+
   /**
    * Generates the RDD using the spark file format.
    */
-  override def getRDDForExternalSegments(format: FileFormat,
-      loadMetadataDetails: Array[LoadMetadataDetails],
-      readCommittedScope: ReadCommittedScope,
+  override def getRDDForExternalSegments(plan: LogicalPlan,
+      format: FileFormat,
+      prunedSegmentInfo: List[PrunedSegmentInfo],
       l: LogicalRelation,
       projects: Seq[NamedExpression],
       filters: Seq[Expression],
@@ -43,11 +46,23 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       .relation
       .asInstanceOf[CarbonDatasourceHadoopRelation]
       .identifier)
-    val projectsString = projects.map(f => f.name)
-    val filtersNew = filters.flatMap(DataSourceStrategy.translateFilter)
-    val hBaseRelation = new CarbonHBaseRelation(Map(HBaseTableCatalog.tableCatalog -> externalSchema), Option.empty)(l.relation.sqlContext)
-    val value = hBaseRelation.buildScan(projectsString.toArray, filtersNew.toArray)
-      .map(f => new GenericInternalRow(f.asInstanceOf[GenericRow].values).asInstanceOf[InternalRow])
-    (value, false)
+    var params = Map(
+      HBaseTableCatalog.tableCatalog -> externalSchema)
+    val segmentFile = prunedSegmentInfo.head.getSegmentFile
+    if (!segmentFile.getSegmentMetaDataInfo.getSegmentColumnMetaDataInfoMap.isEmpty) {
+      val info = segmentFile.getSegmentMetaDataInfo
+        .getSegmentColumnMetaDataInfoMap
+        .get("rowtimestamp").getColumnMaxValue
+      params = params + (HBaseRelation.MIN_STAMP -> segmentFile.getOptions.get("minTime"),
+        HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
+    }
+    val hBaseRelation = new CarbonHBaseRelation(params, Option.empty)(l.relation.sqlContext)
+    val hbasePlan = plan transform {
+      case PhysicalOperation(_,_, relation: LogicalRelation) if relation.relation
+        .isInstanceOf[CarbonDatasourceHadoopRelation] =>
+        LogicalRelation(hBaseRelation)
+    }
+    val hbaseRdd = DataSourceStrategy(l.relation.sqlContext.conf).apply(hbasePlan).head.execute()
+    (hbaseRdd, false)
   }
 }

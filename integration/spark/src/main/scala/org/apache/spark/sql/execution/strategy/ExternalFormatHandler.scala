@@ -19,19 +19,19 @@ package org.apache.spark.sql.execution.strategy
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.{Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 
-import org.apache.carbondata.core.readcommitter.ReadCommittedScope
-import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, FileFormat => FileFormatName}
+import org.apache.carbondata.core.indexstore.PrunedSegmentInfo
+import org.apache.carbondata.core.statusmanager.{FileFormat => FileFormatName}
 
 trait ExternalFormatHandler {
   /**
    * Generates the RDD using the spark fileformat.
    */
-  def getRDDForExternalSegments(
+  def getRDDForExternalSegments(plan: LogicalPlan,
       format: FileFormatName,
-      loadMetadataDetails: Array[LoadMetadataDetails],
-      readCommittedScope: ReadCommittedScope,
+      prunedSegmentInfo: List[PrunedSegmentInfo],
       l: LogicalRelation,
       projects: Seq[NamedExpression],
       filters: Seq[Expression],

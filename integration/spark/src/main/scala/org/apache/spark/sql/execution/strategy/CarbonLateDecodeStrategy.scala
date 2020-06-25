@@ -22,6 +22,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.log4j.Logger
+import org.apache.spark.SegmentPrunerFactory
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.CarbonExpressions.{MatchCast => Cast}
@@ -44,6 +45,8 @@ import org.apache.spark.sql.sources.{BaseRelation, Filter}
 import org.apache.spark.sql.types._
 import org.apache.spark.util.CarbonReflectionUtils
 
+import org.apache.carbondata.core.scan.expression.{Expression => CarbonExpression}
+import org.apache.carbondata.core.scan.expression.logical.{AndExpression => CarbonAndExpression}
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
@@ -73,6 +76,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
 
   var segmentIdString: String =_
 
+  var carbonSegmentToAccess: Array[Segment] =_
+
   /*
   Spark 2.3.1 plan there can be case of multiple projections like below
   Project [substring(name, 1, 2)#124, name#123, tupleId#117, cast(rand(-6778822102499951904)#125
@@ -92,6 +97,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         // if 1 projection is failed then need to continue to other
         try {
           pruneFilterProject(
+            plan,
             l,
             projects.filterNot(_.name.equalsIgnoreCase(CarbonCommonConstants.POSITION_ID)),
             filters,
@@ -291,6 +297,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
    * @return
    */
   def pruneFilterProject(
+      plan:LogicalPlan,
       relation: LogicalRelation,
       projects: Seq[NamedExpression],
       filterPredicates: Seq[Expression],
@@ -327,6 +334,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
           relation.catalogTable.get.identifier).orNull
     }
     pruneFilterProjectRaw(
+      plan,
       relation,
       projects,
       filterPredicates,
@@ -347,17 +355,10 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
   }
 
   def setSegmentToAccess(rdd: RDD[InternalRow]) : Unit = {
-    val segmentToAccess = if(null == segmentIdString) {
-      null
-    } else {
-      val segment: Array[Segment] = new Array[Segment](1)
-      segment(0) = Segment.toSegment(segmentIdString)
-      segment
-    }
-    rdd.asInstanceOf[CarbonScanRDD[InternalRow]].setSegmentsToAccess(segmentToAccess)
+    rdd.asInstanceOf[CarbonScanRDD[InternalRow]].setSegmentsToAccess(carbonSegmentToAccess)
   }
 
-  protected def pruneFilterProjectRaw(
+  protected def pruneFilterProjectRaw(plan:LogicalPlan,
       relation: LogicalRelation,
       rawProjects: Seq[NamedExpression],
       filterPredicates: Seq[Expression],
@@ -365,9 +366,6 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       scanBuilder: (Seq[Attribute], Seq[Expression], Seq[Filter], Seq[PartitionSpec])
         => RDD[InternalRow]): CodegenSupport = {
     val table = relation.relation.asInstanceOf[CarbonDatasourceHadoopRelation]
-    val extraRdd = MixedFormatHandler.extraRDD(relation, rawProjects, filterPredicates,
-      new TableStatusReadCommittedScope(table.identifier, FileFactory.getConfiguration),
-      table.identifier)
     val projects = rawProjects.map {p =>
       p.transform {
         case CustomDeterministicExpression(exp) => exp
@@ -387,6 +385,30 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
 
     val (unhandledPredicates, pushedFilters, handledFilters ) =
       selectFilters(relation.relation, candidatePredicates)
+
+    val filterExpression: Option[CarbonExpression] = pushedFilters.flatMap { filter =>
+      CarbonFilters.createCarbonFilter(table.schema, filter,
+        table.carbonTable.getTableInfo.getFactTable.getTableProperties.asScala)
+    }.reduceOption(new CarbonAndExpression(_, _))
+    var inputSegments = MixedFormatHandler.getSegmentsToAccess(table.identifier)
+    if (null != segmentIdString) {
+      inputSegments = inputSegments :+ segmentIdString
+    }
+    val carbonFilterExp = if(filterExpression.isDefined) {
+      filterExpression.get
+    } else {
+      null
+    }
+    val validSegments = SegmentPrunerFactory.getSegmentPruner(table.carbonTable)
+      .pruneSegment(table.carbonTable,
+        carbonFilterExp,
+        MixedFormatHandler.getSegmentsToAccess(table.identifier).toArray).asScala.toList
+    carbonSegmentToAccess = validSegments.filter(p => p
+      .getSegment
+      .getLoadMetadataDetails
+      .isCarbonFormat).map(carbonSeg=>carbonSeg.getSegment).toArray
+    val extraRdd = MixedFormatHandler.extraRDD(plan, relation, rawProjects, filterPredicates,
+      validSegments)
 
     // A set of column attributes that are only referenced by pushed down filters.  We can eliminate
     // them from requested columns.

@@ -20,7 +20,7 @@ package org.apache.carbondata.externalstreaming
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.hbase.HBaseTestingUtility
-import org.apache.spark.sql.{DataFrame, Row}
+import org.apache.spark.sql.{DataFrame}
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
 import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
@@ -136,6 +136,11 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     val prevRows = sql("select * from sourceWithTimestamp").collect()
     HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", 0).run(sqlContext.sparkSession)
     checkAnswer(sql("select * from sourceWithTimestamp"), prevRows)
+  }
+
+  test("test Full Scan Query with Hbase and carbon segment") {
+    sql("insert into table source values(1,'vishal',10)")
+    assert(sql("select * from source where col1='vishal'").collectAsList().size()==1)
   }
 
   override def afterAll(): Unit = {

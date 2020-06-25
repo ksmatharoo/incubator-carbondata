@@ -142,7 +142,7 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
       SegmentFileStore.genSegmentFileName(
         model.getSegmentId,
         System.nanoTime().toString) + CarbonTablePath.SEGMENT_EXT,
-      "",
+      null,
       new util.HashMap[String, String](updatedOptions.asJava))
 
     val writeSegment =
