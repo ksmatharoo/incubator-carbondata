@@ -103,6 +103,9 @@ public abstract class CarbonInputFormat<T> extends FileInputFormat<Void, T> {
   // comma separated list of input segment numbers
   public static final String INPUT_SEGMENT_NUMBERS =
       "mapreduce.input.carboninputformat.segmentnumbers";
+  // comma separated list of input segment numbers
+  public static final String PRUNED_SEGMENT_NUMBERS =
+      "mapreduce.input.carboninputformat.prunedsegmentnumbers";
   private static final String VALIDATE_INPUT_SEGMENT_IDs =
       "mapreduce.input.carboninputformat.validsegments";
   private static final String FILTER_PREDICATE =
@@ -293,6 +296,14 @@ m filterExpression
    */
   public static void setSegmentsToAccess(Configuration configuration, List<Segment> validSegments) {
     configuration.set(INPUT_SEGMENT_NUMBERS, CarbonUtil.convertToString(validSegments));
+  }
+
+  public static void setPrunedSegments(Configuration configuration, List<Segment> prunedSegments) {
+    if (!prunedSegments.isEmpty()) {
+      configuration.set(PRUNED_SEGMENT_NUMBERS, CarbonUtil.convertToString(prunedSegments));
+    } else {
+      configuration.set(PRUNED_SEGMENT_NUMBERS, "None");
+    }
   }
 
   /**

@@ -51,11 +51,9 @@ import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandExcepti
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
-import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.indexstore.PartitionSpec
 import org.apache.carbondata.core.metadata.schema.BucketingInfo
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
-import org.apache.carbondata.core.readcommitter.TableStatusReadCommittedScope
 import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.datamap.{TextMatch, TextMatchLimit, TextMatchMaxDocUDF, TextMatchUDF}
@@ -350,12 +348,12 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       rdd: RDD[InternalRow]): RDD[InternalRow] = {
     rdd.asInstanceOf[CarbonScanRDD[InternalRow]]
       .setVectorReaderSupport(supportBatchedDataSource(relation.relation.sqlContext, output))
-    setSegmentToAccess(rdd)
+    setPrunedSegment(rdd)
     rdd
   }
 
-  def setSegmentToAccess(rdd: RDD[InternalRow]) : Unit = {
-    rdd.asInstanceOf[CarbonScanRDD[InternalRow]].setSegmentsToAccess(carbonSegmentToAccess)
+  def setPrunedSegment(rdd: RDD[InternalRow]) : Unit = {
+    rdd.asInstanceOf[CarbonScanRDD[InternalRow]].setPrunedSegment(carbonSegmentToAccess)
   }
 
   protected def pruneFilterProjectRaw(plan:LogicalPlan,
@@ -394,19 +392,18 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     if (null != segmentIdString) {
       inputSegments = inputSegments :+ segmentIdString
     }
-    val carbonFilterExp = if(filterExpression.isDefined) {
+    val carbonFilterExp = if (filterExpression.isDefined) {
       filterExpression.get
     } else {
       null
     }
     val validSegments = SegmentPrunerFactory.getSegmentPruner(table.carbonTable)
       .pruneSegment(table.carbonTable,
-        carbonFilterExp,
-        MixedFormatHandler.getSegmentsToAccess(table.identifier).toArray).asScala.toList
+        carbonFilterExp, inputSegments.toArray).asScala.toList
     carbonSegmentToAccess = validSegments.filter(p => p
       .getSegment
       .getLoadMetadataDetails
-      .isCarbonFormat).map(carbonSeg=>carbonSeg.getSegment).toArray
+      .isCarbonFormat).map(carbonSeg => carbonSeg.getSegment).toArray
     val extraRdd = MixedFormatHandler.extraRDD(plan, relation, rawProjects, filterPredicates,
       validSegments)
 

@@ -27,7 +27,8 @@ import org.apache.carbondata.tranaction.SessionTransactionManager
 case class HandoffHbaseSegmentCommand(
     databaseNameOp: Option[String],
     tableName: String,
-    graceTimeinMillis: Long)
+    graceTimeinMillis: Long,
+    deleteRows: Boolean = true)
   extends DataCommand {
 
   override def processData(sparkSession: SparkSession): Seq[Row] = {
@@ -67,21 +68,22 @@ case class HandoffHbaseSegmentCommand(
     val externalSchema = CarbonUtil.getExternalSchemaString(carbonTable.getAbsoluteTableIdentifier)
 
     val tableCols =
-      carbonTable.getTableInfo.getFactTable.getListOfColumns.asScala.map(_.getColumnName).
-        filterNot(_.equalsIgnoreCase(CarbonCommonConstants.DEFAULT_INVISIBLE_DUMMY_MEASURE))
+      carbonTable.getTableInfo
+        .getFactTable
+        .getListOfColumns
+        .asScala
+        .sortBy(_.getSchemaOrdinal)
+        .map(_.getColumnName)
+        .
+          filterNot(_.equalsIgnoreCase(CarbonCommonConstants.DEFAULT_INVISIBLE_DUMMY_MEASURE))
     val header = tableCols.mkString(",")
-    val targetSchema = StructType(tableCols.map { f =>
-      rltn.schema.find(_.name.equalsIgnoreCase(f)).get
-    })
-
-
     val store = new SegmentFileStore(carbonTable.getTablePath, detail.getSegmentFile)
     val columnMetaDataInfo = store.getSegmentFile
       .getSegmentMetaDataInfo
       .getSegmentColumnMetaDataInfoMap
       .get("rowtimestamp")
     val minTimestamp = if (columnMetaDataInfo != null) {
-      ByteUtil.toLong(columnMetaDataInfo.getColumnMinValue, 0, ByteUtil.SIZEOF_LONG)
+      ByteUtil.toLong(columnMetaDataInfo.getColumnMinValue, 0, ByteUtil.SIZEOF_LONG) + 1
     } else {
       0L
     }
@@ -89,10 +91,10 @@ case class HandoffHbaseSegmentCommand(
       HBaseTableCatalog.tableCatalog -> externalSchema,
       HBaseRelation.MIN_STAMP -> minTimestamp.toString,
       HBaseRelation.MAX_STAMP -> Long.MaxValue.toString), Option.empty)(sparkSession.sqlContext)
-    val rdd = hBaseRelation.buildScan(tableCols.toArray, Array.empty)
+    val rdd = hBaseRelation.buildScan(hBaseRelation.schema.map(f => f.name).toArray, Array.empty)
       .map(f => new GenericInternalRow(f.asInstanceOf[GenericRow].values).asInstanceOf[InternalRow])
     val loadDF = Dataset.ofRows(sparkSession,
-      LogicalRDD(targetSchema.toAttributes, rdd)(sparkSession)).cache()
+      LogicalRDD(hBaseRelation.schema.toAttributes, rdd)(sparkSession)).cache()
     val tempView = UUID.randomUUID().toString.replace("-", "")
     loadDF.createOrReplaceTempView(tempView)
     val rows = sparkSession.sql(s"select max(rowtimestamp) from $tempView")
@@ -125,12 +127,15 @@ case class HandoffHbaseSegmentCommand(
     }
 
     // delete rows
-    val hBaseRelationForDelete =
-      new CarbonHBaseRelation(Map(HBaseTableCatalog.tableCatalog -> externalSchema,
-        "deleterows" -> "true"), Option.empty)(sparkSession.sqlContext)
-    hBaseRelationForDelete.insert(updated.select(hBaseRelationForDelete.schema
-      .map(_.name)
-      .map(col): _*), false)
+    if(deleteRows) {
+      val hBaseRelationForDelete =
+        new CarbonHBaseRelation(Map(HBaseTableCatalog.tableCatalog -> externalSchema,
+          "deleterows" -> "true"), Option.empty)(sparkSession.sqlContext)
+      hBaseRelationForDelete.insert(updated.select(hBaseRelationForDelete.schema
+        .map(_.name)
+        .map(col): _*), false)
+    }
+
     Seq.empty
   }
 

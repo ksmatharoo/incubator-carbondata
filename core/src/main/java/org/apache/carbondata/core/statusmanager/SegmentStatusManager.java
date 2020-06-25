@@ -125,6 +125,17 @@ public class SegmentStatusManager {
   public ValidAndInvalidSegmentsInfo getValidAndInvalidSegments(Boolean isChildTable,
       LoadMetadataDetails[] loadMetadataDetails, ReadCommittedScope readCommittedScope)
       throws IOException {
+    return getValidAndInvalidSegments(isChildTable, loadMetadataDetails, readCommittedScope,
+        new ArrayList<>());
+  }
+
+  /**
+   * get valid segment for given load status details.
+   */
+  public ValidAndInvalidSegmentsInfo getValidAndInvalidSegments(Boolean isChildTable,
+      LoadMetadataDetails[] loadMetadataDetails, ReadCommittedScope readCommittedScope,
+      List<String> prunedSegmentList)
+      throws IOException {
 
     // @TODO: move reading LoadStatus file to separate class
     List<Segment> listOfValidSegments = new ArrayList<>(10);
@@ -154,6 +165,9 @@ public class SegmentStatusManager {
             || SegmentStatus.LOAD_PARTIAL_SUCCESS == segment.getSegmentStatus()
             || SegmentStatus.STREAMING == segment.getSegmentStatus()
             || SegmentStatus.STREAMING_FINISH == segment.getSegmentStatus()) {
+          if (!prunedSegmentList.isEmpty() && !prunedSegmentList.contains(segment.getLoadName())) {
+            continue;
+          }
           // check for merged loads.
           if (null != segment.getMergedLoadName()) {
             Segment seg = new Segment(segment.getMergedLoadName(), segment.getSegmentFile(),

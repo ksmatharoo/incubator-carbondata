@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.command.management
 
 import java.io.{DataOutputStream, File}
 import java.util
+import java.util.Locale
 
 import scala.collection.JavaConverters._
 
@@ -26,6 +27,7 @@ import org.apache.hadoop.fs.FileStatus
 import org.apache.spark.sql.execution.command.{Checker, MetadataCommand}
 import org.apache.spark.sql.hive.CarbonRelation
 import org.apache.spark.sql.{CarbonEnv, Row, SparkSession}
+import org.apache.spark.util.CarbonReflectionUtils
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
@@ -33,12 +35,12 @@ import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.exception.ConcurrentOperationException
+import org.apache.carbondata.core.extrenalschema.ExternalSchemaUpdator
 import org.apache.carbondata.core.metadata.SegmentFileStore
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.segmentmeta.{SegmentColumnMetaDataInfo, SegmentMetaDataInfo}
-import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails, SegmentStatus,
-  SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
 import org.apache.carbondata.core.util.CarbonUtil
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.processing.loading.model.{CarbonDataLoadSchema, CarbonLoadModel}
@@ -90,16 +92,18 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
       throw new MalformedCarbonCommandException("Streaming segment schema cannot be empty")
     }
     writeMetaForSegment(sparkSession, carbonTable)
-    writeExternalSchema(carbonTable, schema);
+    writeExternalSchema(carbonTable, schema, options.getOrElse("format", "HBase"))
     Seq.empty
   }
 
-  private def writeExternalSchema(carbonTable: CarbonTable, schema: String): Unit = {
+  private def writeExternalSchema(carbonTable: CarbonTable, schema: String, format:String): Unit = {
+    val updatedSchema = ExternalSchemaUpdatorFactory.createFormatBasedHandler(format.toLowerCase(Locale
+      .getDefault)).updateExternalSchema(schema)
     val metadataPath = CarbonTablePath.getMetadataPath(carbonTable.getTablePath)
     var stream: DataOutputStream = null
     try {
       stream = FileFactory.getDataOutputStream(metadataPath + "/" + "externalSchema")
-      stream.write(schema.getBytes(CarbonCommonConstants.DEFAULT_CHARSET))
+      stream.write(updatedSchema.getBytes(CarbonCommonConstants.DEFAULT_CHARSET))
     }
     catch {
       case e: Exception => throw e
@@ -178,6 +182,19 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
       LOGGER.info("********clean up done**********")
       LOGGER.error("Data load failed due to failure in table status updation.")
       throw new Exception("Data load failed due to failure in table status updation.")
+    }
+  }
+
+  object ExternalSchemaUpdatorFactory {
+    def createFormatBasedHandler(format: String): ExternalSchemaUpdator = {
+      format.toString match {
+        case "hbase" =>
+          CarbonReflectionUtils
+            .createObject("org.apache.carbondata.hbase.schema.HBaseSchemaUpdator")._1
+            .asInstanceOf[ExternalSchemaUpdator]
+        case _ =>
+          throw new IllegalArgumentException("Invalid format type")
+      }
     }
   }
 }

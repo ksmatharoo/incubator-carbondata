@@ -44,6 +44,7 @@ import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier
 import org.apache.carbondata.core.readcommitter.ReadCommittedScope
 import org.apache.carbondata.core.statusmanager.{SegmentStatus, SegmentStatusManager, FileFormat => FileFormatName}
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonSessionInfo, SessionParams, ThreadLocalSessionInfo}
+import org.apache.carbondata.hadoop.api.CarbonInputFormat
 
 object MixedFormatHandler {
 

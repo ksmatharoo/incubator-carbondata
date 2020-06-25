@@ -31,8 +31,6 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
 
   override def commit(): Unit = {
-
-
     val model = new CarbonLoadModel
     model.setCarbonTransactionalTable(true)
     model.setCarbonDataLoadSchema(new CarbonDataLoadSchema(carbonTable))
@@ -87,7 +85,8 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
 
     val success = if (writeSegment) {
       newLoadMetaEntry.setSegmentFile(segment.getSegmentFileName)
-
+      newLoadMetaEntry.setDataSize("0")
+      newLoadMetaEntry.setIndexSize("0")
       CarbonLoaderUtil.writeTableStatus(model,
         newLoadMetaEntry,
         false,

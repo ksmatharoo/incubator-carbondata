@@ -28,7 +28,7 @@ import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, LogicalRe
 
 import org.apache.carbondata.core.indexstore.PrunedSegmentInfo
 import org.apache.carbondata.core.statusmanager.FileFormat
-import org.apache.carbondata.core.util.CarbonUtil
+import org.apache.carbondata.core.util.{ByteUtil, CarbonUtil}
 
 class HBaseFormatBasedHandler extends ExternalFormatHandler {
 
@@ -48,12 +48,17 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       .identifier)
     var params = Map(
       HBaseTableCatalog.tableCatalog -> externalSchema)
-    val segmentFile = prunedSegmentInfo.head.getSegmentFile
+    val sortedPrunedInfo = prunedSegmentInfo.sortBy(f => f
+      .getSegment
+      .getLoadMetadataDetails
+      .getLoadName
+      .toLong)(Ordering[Long].reverse)
+    val segmentFile = sortedPrunedInfo.head.getSegmentFile
     if (!segmentFile.getSegmentMetaDataInfo.getSegmentColumnMetaDataInfoMap.isEmpty) {
-      val info = segmentFile.getSegmentMetaDataInfo
+      val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
         .getSegmentColumnMetaDataInfoMap
-        .get("rowtimestamp").getColumnMaxValue
-      params = params + (HBaseRelation.MIN_STAMP -> segmentFile.getOptions.get("minTime"),
+        .get("rowtimestamp").getColumnMinValue, 0, ByteUtil.SIZEOF_LONG) + 1
+      params = params + (HBaseRelation.MIN_STAMP -> info.toString,
         HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
     }
     val hBaseRelation = new CarbonHBaseRelation(params, Option.empty)(l.relation.sqlContext)

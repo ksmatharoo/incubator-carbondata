@@ -84,6 +84,9 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
   // comma separated list of input segment numbers
   public static final String INPUT_SEGMENT_NUMBERS =
       "mapreduce.input.carboninputformat.segmentnumbers";
+  // comma separated list of input segment numbers
+  public static final String PRUNED_SEGMENT_NUMBERS =
+      "mapreduce.input.carboninputformat.prunedsegment";
   // comma separated list of input files
   public static final String INPUT_FILES = "mapreduce.input.carboninputformat.files";
   private static final Logger LOG =
@@ -149,13 +152,16 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     List<String> invalidSegmentIds = new ArrayList<>();
     List<Segment> streamSegments = null;
     // get all valid segments and set them into the configuration
+    String[] prunedSegment = getPrunedSegment(job);
+    if (prunedSegment.length == 1 && prunedSegment[0].equalsIgnoreCase("None")) {
+      return splits;
+    }
     SegmentStatusManager segmentStatusManager =
         new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier(),
             readCommittedScope.getConfiguration());
     SegmentStatusManager.ValidAndInvalidSegmentsInfo segments = segmentStatusManager
         .getValidAndInvalidSegments(carbonTable.isChildTableForMV(), loadMetadataDetails,
-            this.readCommittedScope);
-
+            this.readCommittedScope, Arrays.asList(prunedSegment));
     if (getValidateSegmentsToAccess(job.getConfiguration())) {
       List<Segment> validSegments = segments.getValidSegments();
       streamSegments = segments.getStreamSegments();
@@ -423,6 +429,17 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     }
     List<Segment> segments = Segment.toSegmentList(segmentString.split(","), readCommittedScope);
     return segments.toArray(new Segment[segments.size()]);
+  }
+
+  /**
+   * return valid segment to access
+   */
+  public String[] getPrunedSegment(JobContext job) {
+    String segmentString = job.getConfiguration().get(PRUNED_SEGMENT_NUMBERS, "");
+    if (segmentString.trim().isEmpty()) {
+      return new String[0];
+    }
+    return segmentString.split(",");
   }
 
   /**

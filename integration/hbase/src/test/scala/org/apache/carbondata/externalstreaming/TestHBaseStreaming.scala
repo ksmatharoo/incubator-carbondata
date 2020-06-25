@@ -30,6 +30,7 @@ import org.scalatest.BeforeAndAfterAll
 class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
   var htu: HBaseTestingUtility = _
   var loadTimestamp:Long = 0
+  var hBaseConfPath:String = _
   val writeCat =
     s"""{
        |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"PrimitiveType"},
@@ -59,8 +60,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
        |"columns":{
        |"col0":{"cf":"rowkey", "col":"key", "type":"int"},
        |"col1":{"cf":"cf1", "col":"col1", "type":"string"},
-       |"col2":{"cf":"cf2", "col":"col2", "type":"int"},
-       |"rowtimestamp":{"cf":"cf3", "col":"rowtimestamp", "type":"bigint"}
+       |"col2":{"cf":"cf2", "col":"col2", "type":"int"}
        |}
        |}""".stripMargin
 
@@ -73,6 +73,8 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
   }
 
   override def beforeAll: Unit = {
+    sql("DROP TABLE IF EXISTS source")
+    sql("DROP TABLE IF EXISTS sourceWithTimestamp")
     val data = (0 until 10).map { i =>
       IntKeyRecord(i)
     }
@@ -80,7 +82,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     htu.startMiniCluster(1)
     SparkHBaseConf.conf = htu.getConfiguration
     import sqlContext.implicits._
-    val hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
+    hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
 
     val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> writeCat,
       HBaseTableCatalog.newTable -> "5", HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath)
@@ -123,8 +125,8 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   test("test Filter Scan Query") {
     val frame = withCatalog(writeCat)
-    frame.filter("col0=-3")
-    checkAnswer(sql("select * from source where col0=-3"), frame.filter("col0=-3"))
+    frame.filter("col0=3")
+    checkAnswer(sql("select * from source where col0=3"), frame.filter("col0=3"))
   }
 
   test("test Full Scan Query with timestamp") {
@@ -134,13 +136,29 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   test("test handoff segment") {
     val prevRows = sql("select * from sourceWithTimestamp").collect()
-    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", 0).run(sqlContext.sparkSession)
+    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", 0, false).run(sqlContext.sparkSession)
     checkAnswer(sql("select * from sourceWithTimestamp"), prevRows)
+    val data = (10 until 20).map { i =>
+      IntKeyRecord(i)
+    }
+    val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCat,
+      HBaseTableCatalog.newTable -> "5",
+      HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath
+    )
+    import sqlContext.implicits._
+    sqlContext.sparkContext.parallelize(data).toDF.write.options(shcExampleTable1Option)
+      .format("org.apache.spark.sql.execution.datasources.hbase")
+      .save()
+    val rows = sql("select * from sourceWithTimestamp").collectAsList()
+    assert(rows.size() == 20)
+    assert(sql("select * from sourceWithTimestamp where segmentid(1)").collectAsList().size() == 10)
+    assert(sql("select * from sourceWithTimestamp where segmentid(2)").collectAsList().size() == 20)
   }
 
   test("test Full Scan Query with Hbase and carbon segment") {
-    sql("insert into table source values(1,'vishal',10)")
-    assert(sql("select * from source where col1='vishal'").collectAsList().size()==1)
+    sql("insert into table source values(100,'vishal',10)")
+//    assert(sql("select * from source where col0= '-1'").collectAsList().size()==1)
+    sql("select * from source where segmentid(1)").show()
   }
 
   override def afterAll(): Unit = {

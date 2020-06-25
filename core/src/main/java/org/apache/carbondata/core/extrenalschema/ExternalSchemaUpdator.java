@@ -14,18 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.carbondata.externalstreaming
 
-case class IntKeyRecord(
-    col0: Integer,
-    col1: String,
-    col2: Int)
+package org.apache.carbondata.core.extrenalschema;
 
-object IntKeyRecord {
-  def apply(i: Int): IntKeyRecord = {
-    IntKeyRecord(
-      i,
-      s"String$i extra",
-      i+10)
-  }
+public interface ExternalSchemaUpdator {
+  String updateExternalSchema(String schemaString);
 }
