@@ -111,7 +111,7 @@ public final class CarbonLoaderUtil {
 
     int fileCount = 0;
     String segmentPath = CarbonTablePath.getSegmentPath(
-        loadModel.getTablePath(), currentLoad + "");
+        loadModel.getTablePath(), currentLoad);
     CarbonFile carbonFile = FileFactory.getCarbonFile(segmentPath);
     CarbonFile[] files = carbonFile.listFiles(new CarbonFileFilter() {
 
@@ -211,7 +211,7 @@ public final class CarbonLoaderUtil {
   }
   public static boolean writeTableStatus(CarbonLoadModel carbonLoadModel,
       LoadMetadataDetails metadataDetails, boolean overwriteTable, boolean loadAsNewSegment,
-      List<Segment> segmentsToBeDeleted,  String uuid, long updateTimeStamp) throws Exception {
+      List<Segment> segmentsToBeDeleted,  String uuid, long updateTimestamp) throws Exception {
     if (!carbonLoadModel.isCarbonTransactionalTable() && overwriteTable) {
       deleteNonTransactionalTableForInsertOverwrite(carbonLoadModel);
     }
@@ -223,7 +223,7 @@ public final class CarbonLoaderUtil {
               new Segment(l.getMergedLoadName(),
                   l.getSegmentFile())).collect(Collectors.toSet()),
           carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
-          updateTimeStamp + "",
+          updateTimestamp + "",
           true,
           segmentsToBeDeleted);
     }

@@ -339,7 +339,7 @@ public final class FileFactory {
   public static boolean deleteAllCarbonFilesOfDirNonRecursive(CarbonFile path) {
     CarbonFile[] files = path.listFiles();
     for (int i = 0; i < files.length; i++) {
-      deleteAllCarbonFilesOfDir(files[i]);
+      files[i].delete();
     }
     return path.delete();
   }

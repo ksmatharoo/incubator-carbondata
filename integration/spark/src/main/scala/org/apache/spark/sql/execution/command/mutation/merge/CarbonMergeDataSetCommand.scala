@@ -216,7 +216,7 @@ case class CarbonMergeDataSetCommand(
         trxMgr,
         mutationAction)
       CarbonProperties.getInstance().addProperty(CarbonLoadOptionConstants
-        .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "true")
+        .ENABLE_CARBON_LOAD_DIRECT_WRITE_TO_STORE_PATH, "false")
 
       CarbonInsertIntoWithDf(
         databaseNameOp = Some(carbonTable.getDatabaseName),

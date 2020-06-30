@@ -54,7 +54,7 @@ import org.apache.carbondata.format.Encoding;
  * This codec will calculate delta of page max value and page value,
  * and do type casting of the diff to make storage minimum.
  */
-public class  AdaptiveDeltaIntegralCodec extends AdaptiveCodec {
+public class AdaptiveDeltaIntegralCodec extends AdaptiveCodec {
 
   private long max;
 

@@ -27,7 +27,7 @@ public interface TransactionAction {
 
   }
 
-  default void recordUpdateDetails(long updateTime, Segment[] segments,
+  default void recordUpdateDetails(long updateTime, Segment[] deletedSegments,
       boolean loadAsANewSegment) {
 
   }

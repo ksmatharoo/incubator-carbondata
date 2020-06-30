@@ -1126,12 +1126,12 @@ public class SegmentFileStore {
     for (Map.Entry<String, List<String>> entry : locationMap.entrySet()) {
       Path location = new Path(entry.getKey()).getParent();
       String parentPath = location.toString();
-      if(parentLocations.add(parentPath)) {
+      if (parentLocations.add(parentPath)) {
         if (partitionSpecs != null) {
           CarbonFile path = FileFactory.getCarbonFile(parentPath);
           deleteEmptyPartitionFolders(path);
         } else {
-          CarbonFile segmentPath = FileFactory.getCarbonFile(location.toString());
+          CarbonFile segmentPath = FileFactory.getCarbonFile(parentPath);
           if (null != segmentPath && segmentPath.exists() &&
               !new Path(tablePath).equals(new Path(segmentPath.getAbsolutePath()))) {
             FileFactory.deleteAllCarbonFilesOfDir(segmentPath);

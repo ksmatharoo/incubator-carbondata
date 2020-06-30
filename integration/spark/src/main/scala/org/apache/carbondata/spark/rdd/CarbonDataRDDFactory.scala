@@ -624,7 +624,7 @@ object CarbonDataRDDFactory {
             !carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.isChildTableForMV &&
             !CarbonLoaderUtil.isValidSegment(carbonLoadModel, carbonLoadModel.getSegmentId)) {
           LOGGER.warn("Cannot write load metadata file as there is no data to load")
-          isValidSegment = true
+          isValidSegment = false
           SegmentStatus.MARKED_FOR_DELETE
         } else {
           loadStatus
