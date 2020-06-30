@@ -26,6 +26,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 
 import org.apache.carbondata.common.exceptions.DeprecatedFeatureException;
 import org.apache.carbondata.common.logging.LogServiceFactory;
@@ -86,7 +87,7 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
       "mapreduce.input.carboninputformat.segmentnumbers";
   // comma separated list of input segment numbers
   public static final String PRUNED_SEGMENT_NUMBERS =
-      "mapreduce.input.carboninputformat.prunedsegment";
+      "mapreduce.input.carboninputformat.prunedsegmentnumbers";
   // comma separated list of input files
   public static final String INPUT_FILES = "mapreduce.input.carboninputformat.files";
   private static final Logger LOG =
@@ -161,7 +162,7 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
             readCommittedScope.getConfiguration());
     SegmentStatusManager.ValidAndInvalidSegmentsInfo segments = segmentStatusManager
         .getValidAndInvalidSegments(carbonTable.isChildTableForMV(), loadMetadataDetails,
-            this.readCommittedScope, Arrays.asList(prunedSegment));
+            this.readCommittedScope, new HashSet<>(Arrays.asList(prunedSegment)));
     if (getValidateSegmentsToAccess(job.getConfiguration())) {
       List<Segment> validSegments = segments.getValidSegments();
       streamSegments = segments.getStreamSegments();
@@ -439,9 +440,8 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     if (segmentString.trim().isEmpty()) {
       return new String[0];
     }
-    return segmentString.split(",");
+    return Stream.of(segmentString.split(",")).map(f -> f.split("#")[0]).toArray(String[]::new);
   }
-
   /**
    * Get the row count of the Block and mapping of segment and Block count.
    */

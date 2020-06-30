@@ -11,7 +11,6 @@ import org.apache.spark.sql.execution.command.management.CarbonInsertIntoWithDf
 import org.apache.spark.sql.{AnalysisException, CarbonEnv, Dataset, Row, SparkSession}
 import org.apache.spark.sql.execution.command.{Checker, DataCommand}
 import org.apache.spark.sql.hive.CarbonRelation
-import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.functions._
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
@@ -74,8 +73,7 @@ case class HandoffHbaseSegmentCommand(
         .asScala
         .sortBy(_.getSchemaOrdinal)
         .map(_.getColumnName)
-        .
-          filterNot(_.equalsIgnoreCase(CarbonCommonConstants.DEFAULT_INVISIBLE_DUMMY_MEASURE))
+        .filterNot(_.equalsIgnoreCase(CarbonCommonConstants.DEFAULT_INVISIBLE_DUMMY_MEASURE))
     val header = tableCols.mkString(",")
     val store = new SegmentFileStore(carbonTable.getTablePath, detail.getSegmentFile)
     val columnMetaDataInfo = store.getSegmentFile

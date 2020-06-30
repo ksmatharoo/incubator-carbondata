@@ -14,21 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.carbondata.core.indexstore;
 
-package org.apache.spark
+import java.util.Objects;
 
-import org.apache.spark.util.CarbonReflectionUtils
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 
-import org.apache.carbondata.core.indexstore.{SegmentPruner, SegmentPrunerImpl}
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable
-
-object SegmentPrunerFactory {
-  def getSegmentPruner(carbonTable: CarbonTable): SegmentPruner = {
-    val str = carbonTable.getTableInfo.getFactTable.getTableProperties.get("custom.pruner.class")
-    if (null == str) {
-      new SegmentPrunerImpl()
-    } else {
-      CarbonReflectionUtils.createObject(str)._1.asInstanceOf[SegmentPruner]
+public class SegmentPrunerFactory {
+  public static final SegmentPrunerFactory INSTANCE = new SegmentPrunerFactory();
+  private SegmentPrunerFactory() {
+  }
+  public SegmentPruner getSegmentPruner(CarbonTable carbonTable) {
+    String customPruner =
+        carbonTable.getTableInfo().getFactTable().getTableProperties().get("custom.pruner");
+    if (Objects.nonNull(customPruner)) {
+      try {
+        return (SegmentPruner) Class.forName(customPruner).newInstance();
+      } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
+        throw new RuntimeException(e);
+      }
     }
+    return new SegmentPrunerImpl();
   }
 }

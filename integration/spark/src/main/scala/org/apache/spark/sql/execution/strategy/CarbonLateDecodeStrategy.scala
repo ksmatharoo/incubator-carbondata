@@ -22,7 +22,6 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.log4j.Logger
-import org.apache.spark.SegmentPrunerFactory
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.CarbonExpressions.{MatchCast => Cast}
@@ -51,7 +50,7 @@ import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandExcepti
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
-import org.apache.carbondata.core.indexstore.PartitionSpec
+import org.apache.carbondata.core.indexstore.{PartitionSpec, SegmentPrunerFactory}
 import org.apache.carbondata.core.metadata.schema.BucketingInfo
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager
@@ -397,7 +396,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     } else {
       null
     }
-    val validSegments = SegmentPrunerFactory.getSegmentPruner(table.carbonTable)
+    val validSegments = SegmentPrunerFactory.INSTANCE.getSegmentPruner(table.carbonTable)
       .pruneSegment(table.carbonTable,
         carbonFilterExp, inputSegments.toArray).asScala.toList
     carbonSegmentToAccess = validSegments.filter(p => p

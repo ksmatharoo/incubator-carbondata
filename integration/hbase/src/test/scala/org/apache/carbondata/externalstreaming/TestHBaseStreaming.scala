@@ -90,7 +90,9 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .save()
     sql("DROP TABLE IF EXISTS source")
-    sql("create table source(col0 int, col1 String, col2 int) stored as carbondata")
+    sql(
+      "create table source(col0 int, col1 String, col2 int) stored as carbondata TBLPROPERTIES" +
+      "('custom.pruner' = 'org.apache.carbondata.hbase.segmentpruner.OpenTableSegmentPruner', 'local_dictionary_threshold'='2001') ")
     var options = Map("format" -> "HBase")
     options = options + ("segmentSchema" -> writeCat)
     CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", options).processMetadata(
@@ -152,13 +154,13 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     val rows = sql("select * from sourceWithTimestamp").collectAsList()
     assert(rows.size() == 20)
     assert(sql("select * from sourceWithTimestamp where segmentid(1)").collectAsList().size() == 10)
-    assert(sql("select * from sourceWithTimestamp where segmentid(2)").collectAsList().size() == 20)
+    assert(sql("select * from sourceWithTimestamp where segmentid(2)").collectAsList().size() == 10)
   }
 
   test("test Full Scan Query with Hbase and carbon segment") {
     sql("insert into table source values(100,'vishal',10)")
-//    assert(sql("select * from source where col0= '-1'").collectAsList().size()==1)
-    sql("select * from source where segmentid(1)").show()
+    assert(sql("select * from source where col0= '1'").collectAsList().size()==1)
+    assert(sql("select * from source where segmentid(1)").collectAsList().size()==1)
   }
 
   override def afterAll(): Unit = {

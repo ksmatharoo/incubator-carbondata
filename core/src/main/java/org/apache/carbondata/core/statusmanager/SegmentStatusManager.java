@@ -29,7 +29,9 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.carbondata.common.logging.LogServiceFactory;
@@ -126,7 +128,7 @@ public class SegmentStatusManager {
       LoadMetadataDetails[] loadMetadataDetails, ReadCommittedScope readCommittedScope)
       throws IOException {
     return getValidAndInvalidSegments(isChildTable, loadMetadataDetails, readCommittedScope,
-        new ArrayList<>());
+        new HashSet<>());
   }
 
   /**
@@ -134,7 +136,7 @@ public class SegmentStatusManager {
    */
   public ValidAndInvalidSegmentsInfo getValidAndInvalidSegments(Boolean isChildTable,
       LoadMetadataDetails[] loadMetadataDetails, ReadCommittedScope readCommittedScope,
-      List<String> prunedSegmentList)
+      Set<String> prunedSegmentList)
       throws IOException {
 
     // @TODO: move reading LoadStatus file to separate class

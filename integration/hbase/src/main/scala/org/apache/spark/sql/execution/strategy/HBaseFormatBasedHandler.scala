@@ -48,12 +48,7 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       .identifier)
     var params = Map(
       HBaseTableCatalog.tableCatalog -> externalSchema)
-    val sortedPrunedInfo = prunedSegmentInfo.sortBy(f => f
-      .getSegment
-      .getLoadMetadataDetails
-      .getLoadName
-      .toLong)(Ordering[Long].reverse)
-    val segmentFile = sortedPrunedInfo.head.getSegmentFile
+    val segmentFile = prunedSegmentInfo.head.getSegmentFile
     if (!segmentFile.getSegmentMetaDataInfo.getSegmentColumnMetaDataInfoMap.isEmpty) {
       val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
         .getSegmentColumnMetaDataInfoMap
