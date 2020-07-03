@@ -102,7 +102,7 @@ class DemoCarbonHBase extends QueryTest with BeforeAndAfterAll {
   }
 
   def handOff(): Unit = {
-    HandoffHbaseSegmentCommand(None, "historytable", 0).run(sqlContext.sparkSession)
+    HandoffHbaseSegmentCommand(None, "historytable", Option.empty, 0).run(sqlContext.sparkSession)
   }
 
   override def afterAll(): Unit = {

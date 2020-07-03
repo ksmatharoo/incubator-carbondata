@@ -14,15 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.carbondata.core.indexstore;
 
-import java.util.List;
+package org.apache.carbondata.segment
 
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
-import org.apache.carbondata.core.scan.expression.Expression;
-
-public interface SegmentPruner {
-
-  List<PrunedSegmentInfo> pruneSegment(CarbonTable table, Expression filterExp,
-      String[] inputSegments, String[] excludeSegments);
+class ExcludeSegmentIdUDF  extends (String => Boolean) with Serializable {
+  override def apply(v1: String): Boolean = {
+    true // Carbon applies the filter. So, Spark do not have to apply filter.
+  }
 }

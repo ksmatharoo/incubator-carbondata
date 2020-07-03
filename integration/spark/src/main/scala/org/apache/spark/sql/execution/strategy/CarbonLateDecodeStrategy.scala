@@ -57,7 +57,7 @@ import org.apache.carbondata.core.statusmanager.SegmentUpdateStatusManager
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.datamap.{TextMatch, TextMatchLimit, TextMatchMaxDocUDF, TextMatchUDF}
 import org.apache.carbondata.geo.{InPolygon, InPolygonUDF}
-import org.apache.carbondata.segment.SegmentIdUDF
+import org.apache.carbondata.segment.{ExcludeSegmentIdUDF, SegmentIdUDF}
 import org.apache.carbondata.spark.rdd.CarbonScanRDD
 
 /**
@@ -72,6 +72,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
   val LOGGER: Logger = LogServiceFactory.getLogService(this.getClass.getName)
 
   var segmentIdString: String =_
+
+  var excludeSegmentIdString: String =_
 
   var carbonSegmentToAccess: Array[Segment] =_
 
@@ -389,7 +391,11 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     }.reduceOption(new CarbonAndExpression(_, _))
     var inputSegments = MixedFormatHandler.getSegmentsToAccess(table.identifier)
     if (null != segmentIdString) {
-      inputSegments = inputSegments :+ segmentIdString
+      inputSegments = inputSegments ++ segmentIdString.split(",")
+    }
+    var excludeSegments: Seq[String] = Seq.empty
+    if (null != excludeSegmentIdString) {
+      excludeSegments = excludeSegments ++ excludeSegmentIdString.split(",")
     }
     val carbonFilterExp = if (filterExpression.isDefined) {
       filterExpression.get
@@ -398,7 +404,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     }
     val validSegments = SegmentPrunerFactory.INSTANCE.getSegmentPruner(table.carbonTable)
       .pruneSegment(table.carbonTable,
-        carbonFilterExp, inputSegments.toArray).asScala.toList
+        carbonFilterExp, inputSegments.toArray, excludeSegments.toArray).asScala.toList
     carbonSegmentToAccess = validSegments.filter(p => p
       .getSegment
       .getLoadMetadataDetails
@@ -787,6 +793,12 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
           throw new MalformedCarbonCommandException("Expect one string in segment id")
         }
         segmentIdString = u.children.head.toString()
+        None
+      case u: ScalaUDF if u.function.isInstanceOf[ExcludeSegmentIdUDF] =>
+        if (u.children.size > 1) {
+          throw new MalformedCarbonCommandException("Expect one string in segment id")
+        }
+        excludeSegmentIdString = u.children.head.toString()
         None
       case or@Or(left, right) =>
 

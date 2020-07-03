@@ -219,8 +219,9 @@ public final class CarbonLoaderUtil {
     // If the updated data should be added as new segment then update the segment information
     if (loadAsNewSegment) {
       done = done && CarbonUpdateUtil.updateTableMetadataStatus(
-          carbonLoadModel.getLoadMetadataDetails().stream().map(l ->
-              new Segment(l.getMergedLoadName(),
+          carbonLoadModel.getLoadMetadataDetails().stream().filter(
+              LoadMetadataDetails::isCarbonFormat).map(l -> new Segment(
+              l.getMergedLoadName() == null ? l.getLoadName() : l.getMergedLoadName(),
                   l.getSegmentFile())).collect(Collectors.toSet()),
           carbonLoadModel.getCarbonDataLoadSchema().getCarbonTable(),
           updateTimestamp + "",

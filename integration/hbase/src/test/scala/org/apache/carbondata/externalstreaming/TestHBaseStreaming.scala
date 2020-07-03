@@ -91,8 +91,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       .save()
     sql("DROP TABLE IF EXISTS source")
     sql(
-      "create table source(col0 int, col1 String, col2 int) stored as carbondata TBLPROPERTIES" +
-      "('custom.pruner' = 'org.apache.carbondata.hbase.segmentpruner.OpenTableSegmentPruner', 'local_dictionary_threshold'='2001') ")
+      "create table source(col0 int, col1 String, col2 int) stored as carbondata")
     var options = Map("format" -> "HBase")
     options = options + ("segmentSchema" -> writeCat)
     CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", options).processMetadata(
@@ -138,7 +137,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   test("test handoff segment") {
     val prevRows = sql("select * from sourceWithTimestamp").collect()
-    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", 0, false).run(sqlContext.sparkSession)
+    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", Option.empty, 0, false).run(sqlContext.sparkSession)
     checkAnswer(sql("select * from sourceWithTimestamp"), prevRows)
     val data = (10 until 20).map { i =>
       IntKeyRecord(i)

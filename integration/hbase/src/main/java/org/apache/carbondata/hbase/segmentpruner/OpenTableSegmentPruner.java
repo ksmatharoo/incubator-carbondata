@@ -31,9 +31,9 @@ public class OpenTableSegmentPruner extends SegmentPrunerImpl {
 
   @Override
   public List<PrunedSegmentInfo> pruneSegment(CarbonTable table, Expression filterExp,
-      String[] inputSegments) {
+      String[] inputSegments, String[] excludeSegment) {
     List<PrunedSegmentInfo> prunedSegmentInfos =
-        super.pruneSegment(table, filterExp, inputSegments);
+        super.pruneSegment(table, filterExp, inputSegments, excludeSegment);
     List<PrunedSegmentInfo> hbase = prunedSegmentInfos.stream().filter(
         seg -> seg.getSegment().getLoadMetadataDetails().getFileFormat().toString()
             .equalsIgnoreCase("hbase")).collect(Collectors.toList());

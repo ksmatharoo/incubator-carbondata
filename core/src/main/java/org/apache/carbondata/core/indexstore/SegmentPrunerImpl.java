@@ -19,9 +19,11 @@ package org.apache.carbondata.core.indexstore;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -52,23 +54,22 @@ public class SegmentPrunerImpl implements SegmentPruner {
 
   @Override
   public List<PrunedSegmentInfo> pruneSegment(CarbonTable table, Expression filterExp,
-      String[] inputSegments) {
+      String[] inputSegments, String[] excludeSegment) {
     List<Segment> allSegments;
     try {
+      Set<String> excludeSegmentList = new HashSet<>(Arrays.asList(excludeSegment));
+      Set<String> inputSegmentList = new HashSet<>(Arrays.asList(inputSegments));
       ReadCommittedScope readCommittedScope =
           new TableStatusReadCommittedScope(table.getAbsoluteTableIdentifier(),
               FileFactory.getConfiguration());
       List<LoadMetadataDetails> successLoadMetadataDetails =
-          Stream.of(readCommittedScope.getSegmentList()).filter(loadMetadataDetail -> (
-              loadMetadataDetail.getSegmentStatus().equals(SegmentStatus.SUCCESS)
+          Stream.of(readCommittedScope.getSegmentList()).filter(loadMetadataDetail ->
+              (loadMetadataDetail.getSegmentStatus().equals(SegmentStatus.SUCCESS)
                   || loadMetadataDetail.getSegmentStatus()
-                  .equals(SegmentStatus.LOAD_PARTIAL_SUCCESS))).collect(Collectors.toList());
-      if (!ArrayUtils.isEmpty(inputSegments)) {
-        List<String> inputSegmentList = Arrays.asList(inputSegments);
-        successLoadMetadataDetails = successLoadMetadataDetails.stream()
-            .filter(details -> inputSegmentList.contains(details.getLoadName()))
-            .collect(Collectors.toList());
-      }
+                  .equals(SegmentStatus.LOAD_PARTIAL_SUCCESS)) && (excludeSegmentList.isEmpty()
+                  || !excludeSegmentList.contains(loadMetadataDetail.getLoadName())) && (
+                  inputSegmentList.isEmpty() || inputSegmentList
+                      .contains(loadMetadataDetail.getLoadName()))).collect(Collectors.toList());
       allSegments = successLoadMetadataDetails.stream().map(
           successDetails -> new Segment(successDetails.getLoadName(),
               successDetails.getSegmentFile(), readCommittedScope, successDetails))
