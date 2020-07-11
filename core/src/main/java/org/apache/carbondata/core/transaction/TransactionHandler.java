@@ -38,6 +38,15 @@ public interface TransactionHandler<T> {
   String startTransaction(T transactionObj);
 
   /**
+   * interface for starting any transaction
+   *
+   * @param transactionObj object on which transaction is going on.
+   *                       it can be a carbontable object, session object or any other
+   * @return transaction id
+   */
+  String startTransaction(T transactionObj, String tableName);
+
+  /**
    * used for committing the transaction for committing id
    *
    * @param transactionId
@@ -60,7 +69,7 @@ public interface TransactionHandler<T> {
 
   TransactionHandler getTransactionManager();
 
-  void registerTableForTransaction(T transactionObj, String tableNameString);
+  void unRegisterTableForTransaction(T transactionObj, String tableNameString);
 
   String getAndSetCurrentTransactionSegment(String transactionId, String tableNameString);
 

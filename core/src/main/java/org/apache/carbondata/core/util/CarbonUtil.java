@@ -64,6 +64,7 @@ import org.apache.carbondata.core.datastore.page.encoding.ColumnPageEncoder;
 import org.apache.carbondata.core.datastore.page.encoding.DefaultEncodingFactory;
 import org.apache.carbondata.core.datastore.page.encoding.EncodedColumnPage;
 import org.apache.carbondata.core.exception.InvalidConfigurationException;
+import org.apache.carbondata.core.extrenalschema.ExternalSchema;
 import org.apache.carbondata.core.indexstore.BlockletDetailInfo;
 import org.apache.carbondata.core.indexstore.blockletindex.SegmentIndexFileStore;
 import org.apache.carbondata.core.localdictionary.generator.ColumnLocalDictionaryGenerator;
@@ -3396,17 +3397,16 @@ public final class CarbonUtil {
   }
 
 
-  public static String getExternalSchemaString(AbsoluteTableIdentifier absoluteTableIdentifier)
+  public static ExternalSchema getExternalSchema(AbsoluteTableIdentifier absoluteTableIdentifier)
       throws IOException {
     String externalSchemaPath =
         CarbonTablePath.getMetadataPath(absoluteTableIdentifier.getTablePath()) + "/"
             + "externalSchema";
     CarbonFile carbonFile = FileFactory.getCarbonFile(externalSchemaPath);
-    byte[] data;
+    ExternalSchema externalSchema = new ExternalSchema();
     try (DataInputStream dataInputStream = carbonFile.getDataInputStream(1024)) {
-      data = new byte[(int) carbonFile.getLength()];
-      dataInputStream.readFully(data);
+      externalSchema.readFields(dataInputStream);
     }
-    return new String(data, CarbonCommonConstants.DEFAULT_CHARSET);
+    return externalSchema;
   }
 }

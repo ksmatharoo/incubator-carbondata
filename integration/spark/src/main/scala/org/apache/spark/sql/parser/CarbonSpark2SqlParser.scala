@@ -34,7 +34,7 @@ import org.apache.spark.sql.execution.command.management._
 import org.apache.spark.sql.execution.command.schema.CarbonAlterTableDropColumnCommand
 import org.apache.spark.sql.execution.command.stream.{CarbonCreateStreamCommand, CarbonDropStreamCommand, CarbonShowStreamsCommand}
 import org.apache.spark.sql.execution.command.table.CarbonCreateTableCommand
-import org.apache.spark.sql.execution.command.transaction.{CarbonGetCurrentTransactionSegmentCommand, CommitTransactionCommand, RegisterTransactionTableCommand, RollbackTransactionCommand, StartTransactionCommand}
+import org.apache.spark.sql.execution.command.transaction.{CarbonGetCurrentTransactionSegmentCommand, CommitTransactionCommand, UnRegisterTransactionTableCommand, RollbackTransactionCommand, StartTransactionCommand}
 import org.apache.spark.sql.secondaryindex.command._
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.util.CarbonException
@@ -508,7 +508,7 @@ class CarbonSpark2SqlParser extends CarbonDDLSqlParser {
   protected lazy val registerTransactionTable: Parser[LogicalPlan] =
     UNREGISTER ~> TRANSACTION ~> TABLE ~> stringLit <~ opt(";") ^^ {
       case tablename =>
-        RegisterTransactionTableCommand(tablename)
+        UnRegisterTransactionTableCommand(tablename)
     }
 
   /**

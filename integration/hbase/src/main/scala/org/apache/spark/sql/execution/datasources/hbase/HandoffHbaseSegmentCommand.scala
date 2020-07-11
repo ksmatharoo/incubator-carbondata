@@ -71,7 +71,6 @@ case class HandoffHbaseSegmentCommand(
     if (SegmentStatusManager.isOverwriteInProgressInTable(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "handoff segment")
     }
-
     val details =
       SegmentStatusManager.readLoadMetadata(
         CarbonTablePath.getMetadataPath(carbonTable.getTablePath))
@@ -82,15 +81,15 @@ case class HandoffHbaseSegmentCommand(
       .getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
-    val fullTableName = carbonTable.getDatabaseName + "." + carbonTable.getTableName
+    val fullTableName = String.join(".", carbonTable.getDatabaseName, carbonTable.getTableName)
     var transactionId = transactionManager.getTransactionId(sparkSession,
       fullTableName)
-    var isTransctionStarted = false
+    var isTransactionStarted = false
     if (transactionId == null) {
-      isTransctionStarted = true
-      transactionId = transactionManager.startTransaction(sparkSession)
+      isTransactionStarted = true
+      transactionId = transactionManager.startTransaction(sparkSession, fullTableName)
     }
-    val externalSchema = CarbonUtil.getExternalSchemaString(carbonTable.getAbsoluteTableIdentifier)
+    val externalSchema = CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier)
     val tableCols =
       carbonTable.getTableInfo
         .getFactTable
@@ -111,7 +110,7 @@ case class HandoffHbaseSegmentCommand(
       0L
     }
     val hBaseRelation = new CarbonHBaseRelation(Map(
-      HBaseTableCatalog.tableCatalog -> externalSchema,
+      HBaseTableCatalog.tableCatalog -> externalSchema.getHandOffSchema,
       HBaseRelation.MIN_STAMP -> minTimestamp.toString,
       HBaseRelation.MAX_STAMP -> Long.MaxValue.toString), Option.empty)(sparkSession.sqlContext)
     val rdd = hBaseRelation.buildScan(hBaseRelation.schema.map(f => f.name).toArray, Array.empty)
@@ -152,7 +151,7 @@ case class HandoffHbaseSegmentCommand(
       transactionManager.recordTransactionAction(transactionId,
         new HbaseSegmentTransactionAction(carbonTable, segmentId, detail.getLoadName, maxTimeStamp),
         TransactionActionType.COMMIT_SCOPE)
-      if (isTransctionStarted) {
+      if (isTransactionStarted) {
         transactionManager.commitTransaction(transactionId)
       }
     } finally {
@@ -163,7 +162,8 @@ case class HandoffHbaseSegmentCommand(
     // delete rows
     if (deleteRows) {
       val hBaseRelationForDelete =
-        new CarbonHBaseRelation(Map(HBaseTableCatalog.tableCatalog -> externalSchema,
+        new CarbonHBaseRelation(Map(
+          HBaseTableCatalog.tableCatalog -> externalSchema.getHandOffSchema,
           "deleterows" -> "true"), Option.empty)(sparkSession.sqlContext)
       hBaseRelationForDelete.insert(updated.select(hBaseRelationForDelete.schema
         .map(_.name)

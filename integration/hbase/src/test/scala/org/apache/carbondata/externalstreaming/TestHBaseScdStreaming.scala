@@ -44,7 +44,7 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
       "int, IUD string) stored as carbondata TBLPROPERTIES" +
       "('custom.pruner' = 'org.apache.carbondata.hbase.segmentpruner.OpenTableSegmentPruner') ")
     var options = Map("format" -> "HBase")
-    options = options + ("segmentSchema" -> writeCat)
+    options = options + ("querySchema" -> writeCat)
     CarbonAddExternalStreamingSegmentCommand(Some("default"), "scdhbaseCarbon", options).processMetadata(
       sqlContext.sparkSession)
   }

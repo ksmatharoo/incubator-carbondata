@@ -48,6 +48,14 @@ public class TransactionManager implements TransactionHandler<Object> {
   }
 
   @Override
+  public String startTransaction(Object transactionObj, String tableName) {
+    if (null == transactionHandler) {
+      throw new RuntimeException("Failed to load Transaction manager class");
+    }
+    return transactionHandler.startTransaction(transactionObj, tableName);
+  }
+
+  @Override
   public void commitTransaction(String transactionId) {
     this.transactionHandler.commitTransaction(transactionId);
   }
@@ -80,8 +88,8 @@ public class TransactionManager implements TransactionHandler<Object> {
   }
 
   @Override
-  public void registerTableForTransaction(Object transactionObj, String tableNameString) {
-    this.transactionHandler.registerTableForTransaction(transactionObj, tableNameString);
+  public void unRegisterTableForTransaction(Object transactionObj, String tableNameString) {
+    this.transactionHandler.unRegisterTableForTransaction(transactionObj, tableNameString);
   }
 
   @Override

@@ -31,11 +31,10 @@ import org.apache.spark.util.CarbonReflectionUtils
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
-import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.exception.ConcurrentOperationException
-import org.apache.carbondata.core.extrenalschema.ExternalSchemaUpdator
+import org.apache.carbondata.core.extrenalschema.{ExternalSchema, ExternalSchemaUpdator}
 import org.apache.carbondata.core.metadata.SegmentFileStore
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
@@ -73,7 +72,6 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
     if (!carbonTable.getTableInfo.isTransactionalTable) {
       throw new MalformedCarbonCommandException("Unsupported operation on non transactional table")
     }
-
     if (carbonTable.hasMVCreated) {
       throw new MalformedCarbonCommandException("Unsupported operation on MV table")
     }
@@ -81,29 +79,38 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
     if (SegmentStatusManager.isOverwriteInProgressInTable(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "delete segment")
     }
-
-    if (!validateFormat(options.getOrElse("format", "HBase"))) {
+    val externalFormat = options.getOrElse("format", "HBase")
+    if (!validateFormat(externalFormat)) {
       throw new MalformedCarbonCommandException(
         "Invalid format: " + options.getOrElse("format", "HBase") + " Valid Formats are:" +
         supportedFormats)
     }
-    val schema = options.getOrElse("segmentSchema", "")
-    if (schema.isEmpty) {
+    val schemaUpdator = ExternalSchemaUpdatorFactory.createFormatBasedHandler(externalFormat.toLowerCase(
+      Locale.getDefault))
+
+    var querySchema = options.getOrElse("querySchema", "")
+    querySchema = if (querySchema.isEmpty) {
       throw new MalformedCarbonCommandException("Streaming segment schema cannot be empty")
+    } else {
+      schemaUpdator.updateExternalSchema(options.getOrElse("querySchema", ""))
+    }
+    var handOffSchema = options.getOrElse("handoffschema", "")
+    handOffSchema = if (handOffSchema.isEmpty) {
+      ""
+    } else {
+      schemaUpdator.updateExternalSchema(handOffSchema)
     }
     writeMetaForSegment(sparkSession, carbonTable)
-    writeExternalSchema(carbonTable, schema, options.getOrElse("format", "HBase"))
+    writeExternalSchema(carbonTable, new ExternalSchema(querySchema, handOffSchema))
     Seq.empty
   }
 
-  private def writeExternalSchema(carbonTable: CarbonTable, schema: String, format:String): Unit = {
-    val updatedSchema = ExternalSchemaUpdatorFactory.createFormatBasedHandler(format.toLowerCase(Locale
-      .getDefault)).updateExternalSchema(schema)
+  private def writeExternalSchema(carbonTable: CarbonTable, externalSchema: ExternalSchema): Unit = {
     val metadataPath = CarbonTablePath.getMetadataPath(carbonTable.getTablePath)
     var stream: DataOutputStream = null
     try {
       stream = FileFactory.getDataOutputStream(metadataPath + "/" + "externalSchema")
-      stream.write(updatedSchema.getBytes(CarbonCommonConstants.DEFAULT_CHARSET))
+      externalSchema.write(stream)
     }
     catch {
       case e: Exception => throw e

@@ -455,14 +455,16 @@ object DeleteExecution {
     val jobConf: JobConf = new JobConf(FileFactory.getConfiguration)
     val job: Job = new Job(jobConf)
     FileInputFormat.addInputPath(job, new Path(absoluteTableIdentifier.getTablePath))
+    val fullTableName = String.join(".",
+      absoluteTableIdentifier.getDatabaseName,
+      absoluteTableIdentifier.getTableName)
     val transactionId = TransactionManager.getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
-      .getTransactionId(sparkSession)
-    val segmentId  = TransactionManager.getInstance()
+      .getTransactionId(sparkSession, fullTableName)
+    val segmentId = TransactionManager.getInstance()
       .getTransactionManager
-      .getCurrentTransactionSegment(transactionId,
-        absoluteTableIdentifier.getDatabaseName + "." + absoluteTableIdentifier.getTableName)
+      .getCurrentTransactionSegment(transactionId, fullTableName)
     if (null != segmentId) {
       val segment: Array[Segment] = new Array[Segment](1)
       segment(0) = Segment.toSegment(segmentId)

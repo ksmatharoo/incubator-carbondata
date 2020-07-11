@@ -42,10 +42,10 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       projects: Seq[NamedExpression],
       filters: Seq[Expression],
       supportBatch: Boolean): (RDD[InternalRow], Boolean) = {
-    val externalSchema = CarbonUtil.getExternalSchemaString(l
+    val externalSchema = CarbonUtil.getExternalSchema(l
       .relation
       .asInstanceOf[CarbonDatasourceHadoopRelation]
-      .identifier)
+      .identifier).getQuerySchema
     var params = Map(
       HBaseTableCatalog.tableCatalog -> externalSchema)
     val segmentFile = prunedSegmentInfo.head.getSegmentFile

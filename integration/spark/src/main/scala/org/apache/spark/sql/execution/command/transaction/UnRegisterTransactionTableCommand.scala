@@ -22,15 +22,15 @@ import org.apache.spark.sql.execution.command.MetadataCommand
 import org.apache.carbondata.core.transaction.TransactionManager
 import org.apache.carbondata.tranaction.SessionTransactionManager
 
-case class RegisterTransactionTableCommand(tableListString: String)
+case class UnRegisterTransactionTableCommand(tableListString: String)
   extends MetadataCommand {
-  override protected def opName: String = "Register Transaction Table"
+  override protected def opName: String = "UnRegister Transaction Table"
 
   override def processMetadata(sparkSession: SparkSession): Seq[Row] = {
     TransactionManager.getInstance()
       .getTransactionManager
       .asInstanceOf[SessionTransactionManager]
-      .registerTableForTransaction(sparkSession, tableListString)
+      .unRegisterTableForTransaction(sparkSession, tableListString)
     Seq.empty
   }
 }

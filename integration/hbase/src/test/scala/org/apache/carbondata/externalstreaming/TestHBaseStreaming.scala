@@ -93,7 +93,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     sql(
       "create table source(col0 int, col1 String, col2 int) stored as carbondata")
     var options = Map("format" -> "HBase")
-    options = options + ("segmentSchema" -> writeCat)
+    options = options + ("querySchema" -> writeCat)
     CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", options).processMetadata(
       sqlContext.sparkSession)
 
@@ -112,7 +112,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       "create table sourceWithTimestamp(col0 int, col1 String, col2 int, rowtimestamp LONG) " +
       "stored as carbondata")
     var optionsNew = Map("format" -> "HBase")
-    optionsNew = optionsNew + ("segmentSchema" -> catWithTimestamp)
+    optionsNew = optionsNew + ("querySchema" -> catWithTimestamp)
     CarbonAddExternalStreamingSegmentCommand(Some("default"),
       "sourceWithTimestamp",
       optionsNew).processMetadata(

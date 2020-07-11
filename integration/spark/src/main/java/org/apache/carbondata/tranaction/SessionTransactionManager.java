@@ -37,9 +37,9 @@ import org.apache.spark.sql.SparkSession;
 
 public class SessionTransactionManager implements TransactionHandler<SparkSession> {
 
-  private Map<String, SparkSession> transactionIdToSessionMap;
+  private Map<String, TransactionObj> transactionIdToSessionMap;
 
-  private Map<SparkSession, String> sessionToTransactionIdMap;
+  private Map<TransactionObj, String> sessionToTransactionIdMap;
 
   private Map<String, Queue<TransactionAction>> openTransactionActions;
 
@@ -47,7 +47,7 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
 
   private Map<String, Queue<TransactionAction>> perfTransactionAction;
 
-  private Map<SparkSession, Set<String>> transactionalTableNames;
+  private Map<TransactionObj, Set<String>> transactionalTableNames;
 
   private Map<String, Map<String, String>> transactionSegmentMap;
 
@@ -63,14 +63,20 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
 
   @Override
   public String startTransaction(SparkSession sparkSession) {
-    String transactionId = sessionToTransactionIdMap.get(sparkSession);
+    return startTransaction(sparkSession, "");
+  }
+
+  @Override
+  public String startTransaction(SparkSession sparkSession, String tableName) {
+    TransactionObj transactionObj = new TransactionObj(sparkSession, tableName);
+    String transactionId = sessionToTransactionIdMap.get(transactionObj);
     if (null != transactionId) {
       throw new RuntimeException(
           "Single transaction is supported on Session." + " Commit old transaction first.");
     }
     transactionId = UUID.randomUUID().toString();
-    transactionIdToSessionMap.put(transactionId, sparkSession);
-    sessionToTransactionIdMap.put(sparkSession, transactionId);
+    transactionIdToSessionMap.put(transactionId, transactionObj);
+    sessionToTransactionIdMap.put(transactionObj, transactionId);
     return transactionId;
   }
 
@@ -174,19 +180,24 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
 
   @Override
   public String getTransactionId(SparkSession session, String tableUniqueName) {
-    if (null == this.sessionToTransactionIdMap.get(session)) {
-      return null;
+    TransactionObj transactionObj = new TransactionObj(session, "");
+    if (null == this.sessionToTransactionIdMap.get(transactionObj)) {
+      transactionObj = new TransactionObj(session, tableUniqueName);
+      if(null == this.sessionToTransactionIdMap.get(transactionObj)) {
+        return null;
+      }
     }
-    Set<String> tableList = transactionalTableNames.get(session);
+    Set<String> tableList = transactionalTableNames.get(transactionObj);
     if (null != tableList && tableList.contains(tableUniqueName.toLowerCase(Locale.getDefault()))) {
       return null;
     }
-    return sessionToTransactionIdMap.get(session);
+    return sessionToTransactionIdMap.get(transactionObj);
   }
 
   @Override
   public String getTransactionId(SparkSession session) {
-    return sessionToTransactionIdMap.get(session);
+    TransactionObj transactionObj = new TransactionObj(session, "");
+    return sessionToTransactionIdMap.get(transactionObj);
   }
 
   @Override
@@ -195,13 +206,14 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
   }
 
   @Override
-  public void registerTableForTransaction(SparkSession sparkSession, String tableListString) {
-    String transactionId = sessionToTransactionIdMap.get(sparkSession);
+  public void unRegisterTableForTransaction(SparkSession sparkSession, String tableListString) {
+    TransactionObj transactionObj = new TransactionObj(sparkSession, "");
+    String transactionId = sessionToTransactionIdMap.get(transactionObj);
     if (null == transactionId) {
       throw new RuntimeException("No current transaction is running on this session");
     }
     Set<String> tableNames =
-        transactionalTableNames.computeIfAbsent(sparkSession, k -> new HashSet<>());
+        transactionalTableNames.computeIfAbsent(transactionObj, k -> new HashSet<>());
     String[] split = tableListString.split(",");
     for (String str : split) {
       tableNames.add(str.trim().toLowerCase(Locale.getDefault()));
@@ -254,6 +266,36 @@ public class SessionTransactionManager implements TransactionHandler<SparkSessio
           transactionAction.recordUpdateDetails(updateTime, deletedSegments, loadAsANewSegment);
         }
       }
+    }
+  }
+
+  private static class TransactionObj {
+    private SparkSession sparkSession;
+    private String tableName;
+    private TransactionObj(SparkSession sparkSession, String tableName) {
+      this.sparkSession = sparkSession;
+      this.tableName = tableName;
+    }
+
+    public SparkSession getSparkSession() {
+      return sparkSession;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      TransactionObj that = (TransactionObj) o;
+      return sparkSession.equals(that.sparkSession) && tableName.equals(that.tableName);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(sparkSession, tableName);
     }
   }
 }
