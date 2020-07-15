@@ -40,7 +40,10 @@ import org.apache.carbondata.core.util.CarbonTimeStatisticsFactory;
 import org.apache.carbondata.core.util.ThreadLocalSessionInfo;
 import org.apache.carbondata.hadoop.api.CarbonInputFormat;
 import org.apache.carbondata.hadoop.api.CarbonTableInputFormat;
+import org.apache.carbondata.presto.hbase.Utils;
+import org.apache.carbondata.presto.hbase.split.HBaseSplit;
 import org.apache.carbondata.presto.impl.CarbonLocalMultiBlockSplit;
+import org.apache.carbondata.presto.impl.CarbonSplitsHolder;
 import org.apache.carbondata.presto.impl.CarbonTableCacheModel;
 import org.apache.carbondata.presto.impl.CarbonTableReader;
 
@@ -115,7 +118,6 @@ public class CarbondataSplitManager extends HiveSplitManager {
 
     HiveTableHandle hiveTable = (HiveTableHandle) tableHandle;
     SchemaTableName schemaTableName = hiveTable.getSchemaTableName();
-
     // get table metadata
     SemiTransactionalHiveMetastore metastore =
         metastoreProvider.apply((HiveTransactionHandle) transactionHandle);
@@ -149,12 +151,12 @@ public class CarbondataSplitManager extends HiveSplitManager {
     Expression filters = PrestoFilterUtil.parseFilterExpression(predicate);
     try {
 
-      List<CarbonLocalMultiBlockSplit> splits =
+      CarbonSplitsHolder splits =
           carbonTableReader.getInputSplits(cache, filters, predicate, configuration, partitions);
 
       ImmutableList.Builder<ConnectorSplit> cSplits = ImmutableList.builder();
       long index = 0;
-      for (CarbonLocalMultiBlockSplit split : splits) {
+      for (CarbonLocalMultiBlockSplit split : splits.getMultiBlockSplits()) {
         index++;
         Properties properties = new Properties();
         for (Map.Entry<String, String> entry : table.getStorage().getSerdeParameters().entrySet()) {
@@ -173,6 +175,24 @@ public class CarbondataSplitManager extends HiveSplitManager {
             Optional.empty(), false));
       }
 
+      for (HBaseSplit split : splits.getExtraSplits()) {
+        index++;
+        Properties properties = new Properties();
+        for (Map.Entry<String, String> entry : table.getStorage().getSerdeParameters().entrySet()) {
+          properties.setProperty(entry.getKey(), entry.getValue());
+        }
+        properties.setProperty("tablePath", cache.getCarbonTable().getTablePath());
+        properties.setProperty("hbaseSplit", HBaseSplit.getJsonString(split));
+        properties.setProperty("queryId", queryId);
+        properties.setProperty("index", String.valueOf(index));
+        properties.setProperty(CarbonInputFormat.TABLE_INFO, configuration.get(CarbonInputFormat.TABLE_INFO));
+        properties.setProperty(CarbonTableInputFormat.INPUT_SEGMENT_NUMBERS, "");
+        cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
+            schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0,
+            0, properties, new ArrayList(), split.getAddresses(),
+            OptionalInt.empty(), false, new HashMap<>(),
+            Optional.empty(), false));
+      }
       statisticRecorder.logStatisticsAsTableDriver();
 
       statistic

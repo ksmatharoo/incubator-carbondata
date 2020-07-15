@@ -21,6 +21,7 @@ import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
 
+import org.apache.carbondata.presto.hbase.HBaseConnection;
 import org.apache.carbondata.presto.impl.CarbonTableReader;
 
 import com.google.inject.Binder;
@@ -103,6 +104,7 @@ public class CarbondataModule extends HiveModule {
     binder.bind(CoercionPolicy.class).to(HiveCoercionPolicy.class).in(Scopes.SINGLETON);
 
     binder.bind(HdfsConfigurationInitializer.class).in(Scopes.SINGLETON);
+    binder.bind(HBaseConnection.class).in(Scopes.SINGLETON);
     newSetBinder(binder, DynamicConfigurationProvider.class);
     binder.bind(HdfsConfiguration.class).to(HiveHdfsConfiguration.class).in(Scopes.SINGLETON);
     binder.bind(HdfsEnvironment.class).in(Scopes.SINGLETON);

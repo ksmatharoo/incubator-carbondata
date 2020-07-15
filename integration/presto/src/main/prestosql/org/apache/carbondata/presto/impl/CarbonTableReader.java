@@ -37,6 +37,7 @@ import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.DataMapFilter;
 import org.apache.carbondata.core.datamap.DataMapStoreManager;
+import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
@@ -53,11 +54,14 @@ import org.apache.carbondata.core.metadata.schema.partition.PartitionType;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.TableInfo;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
+import org.apache.carbondata.core.readcommitter.ReadCommittedScope;
 import org.apache.carbondata.core.reader.ThriftReader;
 import org.apache.carbondata.core.scan.expression.Expression;
+import org.apache.carbondata.core.segmentmeta.SegmentColumnMetaDataInfo;
 import org.apache.carbondata.core.statusmanager.FileFormat;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
+import org.apache.carbondata.core.util.ByteUtil;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
@@ -65,6 +69,12 @@ import org.apache.carbondata.hadoop.CarbonInputSplit;
 import org.apache.carbondata.hadoop.api.CarbonInputFormat;
 import org.apache.carbondata.hadoop.api.CarbonTableInputFormat;
 import org.apache.carbondata.presto.PrestoFilterUtil;
+import org.apache.carbondata.presto.hbase.Constants;
+import org.apache.carbondata.presto.hbase.HBaseConnection;
+import org.apache.carbondata.presto.hbase.Utils;
+import org.apache.carbondata.presto.hbase.metadata.HbaseCarbonTable;
+import org.apache.carbondata.presto.hbase.metadata.HbaseMetastoreUtil;
+import org.apache.carbondata.presto.hbase.split.HBaseSplit;
 import org.apache.carbondata.sdk.file.CarbonWriterBuilder;
 import org.apache.carbondata.sdk.file.Schema;
 
@@ -75,10 +85,20 @@ import io.prestosql.plugin.hive.HivePartition;
 import io.prestosql.plugin.hive.HiveType;
 import io.prestosql.plugin.hive.metastore.Column;
 import io.prestosql.plugin.hive.metastore.Table;
+import io.prestosql.spi.HostAddress;
+import io.prestosql.spi.PrestoException;
+import io.prestosql.spi.connector.ColumnHandle;
+import io.prestosql.spi.connector.ConnectorSplit;
 import io.prestosql.spi.connector.SchemaTableName;
+import io.prestosql.spi.predicate.Domain;
+import io.prestosql.spi.predicate.Range;
 import io.prestosql.spi.predicate.TupleDomain;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.TableNotFoundException;
+import org.apache.hadoop.hbase.client.RegionLocator;
+import org.apache.hadoop.hbase.util.Pair;
 import org.apache.hadoop.hive.serde2.typeinfo.DecimalTypeInfo;
 import org.apache.hadoop.hive.serde2.typeinfo.TypeInfo;
 import org.apache.hadoop.mapred.JobConf;
@@ -87,6 +107,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.log4j.Logger;
 import org.apache.thrift.TBase;
 
+import static java.lang.String.format;
 import static org.apache.hadoop.fs.s3a.Constants.ACCESS_KEY;
 import static org.apache.hadoop.fs.s3a.Constants.ENDPOINT;
 import static org.apache.hadoop.fs.s3a.Constants.SECRET_KEY;
@@ -141,13 +162,10 @@ public class CarbonTableReader {
    */
   public CarbonTableCacheModel getCarbonCache(SchemaTableName table, String location,
       Configuration config, Table hiveTable) {
-    if (hiveTable != null) {
-      return new CarbonTableCacheModel(System.currentTimeMillis(), getCarbonTable(hiveTable));
-    }
     updateSchemaTables(table, config);
     CarbonTableCacheModel carbonTableCacheModel = carbonCache.get().get(table);
     if (carbonTableCacheModel == null || !carbonTableCacheModel.isValid()) {
-      return parseCarbonMetadata(table, location, config);
+      return parseCarbonMetadata(table, location, config, hiveTable);
     }
     return carbonTableCacheModel;
   }
@@ -249,7 +267,7 @@ public class CarbonTableReader {
    * @return the CarbonTableCacheModel instance which contains all the needed metadata for a table.
    */
   private CarbonTableCacheModel parseCarbonMetadata(SchemaTableName table, String tablePath,
-      Configuration config) {
+      Configuration config, Table hiveTable) {
     try {
       CarbonTableCacheModel cache = getValidCacheBySchemaTableName(table);
       if (cache != null) {
@@ -286,6 +304,9 @@ public class CarbonTableReader {
           thriftReader.close();
           modifiedTime = schemaFile.getLastModifiedTime();
         } else {
+          if (hiveTable != null) {
+            return new CarbonTableCacheModel(System.currentTimeMillis(), getCarbonTable(hiveTable));
+          }
           tableInfo = CarbonUtil.inferSchema(tablePath, table.getTableName(), false, config);
         }
         // Step 3: convert format level TableInfo to code level TableInfo
@@ -330,7 +351,7 @@ public class CarbonTableReader {
    * @return list of multiblock split
    * @throws IOException
    */
-  public List<CarbonLocalMultiBlockSplit> getInputSplits(
+  public CarbonSplitsHolder getInputSplits(
       CarbonTableCacheModel tableCacheModel,
       Expression filters,
       TupleDomain<HiveColumnHandle> constraints,
@@ -350,6 +371,7 @@ public class CarbonTableReader {
     CarbonTableInputFormat.setTableInfo(config, tableInfo);
     JobConf jobConf = new JobConf(config);
     List<PartitionSpec> filteredPartitions = new ArrayList<>();
+    List<HBaseSplit> extraSplits = new ArrayList<>();
 
     PartitionInfo partitionInfo = carbonTable.getPartitionInfo();
     if (partitionInfo != null && partitionInfo.getPartitionType() == PartitionType.NATIVE_HIVE) {
@@ -390,10 +412,132 @@ public class CarbonTableReader {
         }
         LOGGER.error("Size fo MultiblockList   " + multiBlockSplitList.size());
       }
+
+      ReadCommittedScope readCommitted =
+          carbonTableInputFormat.getReadCommitted(job, carbonTable.getAbsoluteTableIdentifier());
+      SegmentStatusManager statusManager = new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier(), jobConf);
+      SegmentStatusManager.ValidAndInvalidSegmentsInfo validAndInvalidSegments = statusManager
+          .getValidAndInvalidSegments(carbonTable.isChildTableForMV(),
+              readCommitted.getSegmentList(), readCommitted);
+      List<Segment> validSegments = validAndInvalidSegments.getValidSegments();
+      List<Segment> hbaseSegs = validSegments.stream().filter(
+          f -> f.getLoadMetadataDetails().getFileFormat().getFormat().equalsIgnoreCase("hbase"))
+          .collect(Collectors.toList());
+      if (hbaseSegs.size() > 0) {
+        HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
+            CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
+        SegmentFileStore.SegmentFile segmentFile = SegmentFileStore.readSegmentFile(CarbonTablePath
+            .getSegmentFilePath(carbonTable.getTablePath(), hbaseSegs.get(0).getSegmentFileName()));
+        SegmentColumnMetaDataInfo rowtimestamp =
+            segmentFile.getSegmentMetaDataInfo().getSegmentColumnMetaDataInfoMap()
+                .get("rowtimestamp");
+        long timestamp = 0;
+        if (rowtimestamp != null) {
+          timestamp = ByteUtil.toLong(rowtimestamp.getColumnMinValue(), 0,
+              rowtimestamp.getColumnMinValue().length) + 1;
+        }
+        List<HBaseSplit> hbaseSplits;
+        if(Utils.isBatchGet(constraints, hbaseTable.getRow().getHbaseColumns())) {
+          hbaseSplits = getSplitsForBatchGet(constraints, hbaseTable, timestamp);
+        } else {
+          hbaseSplits = getSplitsForScan(constraints, hbaseTable, timestamp);
+        }
+        extraSplits.addAll(hbaseSplits);
+      }
+
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    return multiBlockSplitList;
+    return new CarbonSplitsHolder(multiBlockSplitList, extraSplits);
+  }
+
+  private List<HBaseSplit> getSplitsForScan(TupleDomain<HiveColumnHandle> constraints, HbaseCarbonTable tableHandle, long timestamp)
+  {
+    HBaseConnection hBaseConnection = new HBaseConnection(config);
+    List<HBaseSplit> splits = new ArrayList<>();
+    Pair<byte[][], byte[][]> startEndKeys = null;
+    TableName hbaseTableName = TableName.valueOf(tableHandle.getNamespace(),tableHandle.getName());
+
+    try {
+      if (hBaseConnection.getHbaseAdmin().getTableDescriptor(hbaseTableName) != null) {
+        RegionLocator regionLocator =
+            hBaseConnection.getConn().getRegionLocator(hbaseTableName);
+        startEndKeys = regionLocator.getStartEndKeys();
+      }
+    }
+    catch (TableNotFoundException e) {
+      throw new RuntimeException(format(
+              "table %s not found, maybe deleted by other user", tableHandle.getName()));
+    }
+    catch (IOException e) {
+      LOGGER.error(e);
+      throw new RuntimeException(e);
+    }
+
+    Map<String, List<Range>> ranges = new HashMap<>();
+    Map<HiveColumnHandle, Domain> predicates = constraints.getDomains().get();
+    predicates
+        .entrySet()
+        .forEach(
+            entry -> {
+              ColumnHandle handle = entry.getKey();
+              if (handle instanceof HiveColumnHandle) {
+                ranges.put(
+                    ((HiveColumnHandle) handle).getName(),
+                    entry.getValue().getValues().getRanges().getOrderedRanges());
+              }
+            });
+
+    List<HostAddress> hostAddresses = new ArrayList<>();
+    if (startEndKeys == null) {
+      throw new NullPointerException("null pointer found when getting splits for scan");
+    }
+    for (int i = 0; i < startEndKeys.getFirst().length; i++) {
+      String startRow = new String(startEndKeys.getFirst()[i]);
+      String endRow = new String(startEndKeys.getSecond()[i]);
+      String cf = tableHandle.getsMap().values().iterator().next().getCf();
+      splits.add(
+          new HBaseSplit(hostAddresses, startRow, endRow, ranges, null, tableHandle, false, timestamp));
+    }
+
+    return splits;
+  }
+
+  private List<HBaseSplit> getSplitsForBatchGet(TupleDomain<HiveColumnHandle> constraints, HbaseCarbonTable tableHandle, long timestamp)
+  {
+    List<HBaseSplit> splits = new ArrayList<>();
+    Domain rowIdDomain = null;
+    Map<HiveColumnHandle, Domain> domains = constraints.getDomains().get();
+    for (Map.Entry<HiveColumnHandle, Domain> entry : domains.entrySet()) {
+      HiveColumnHandle handle = entry.getKey();
+      if (handle.getName().equalsIgnoreCase(tableHandle.getRow().getHbaseColumns()[0].getColName())) {
+        rowIdDomain = entry.getValue();
+      }
+    }
+    List<Range> rowIds = rowIdDomain != null ? rowIdDomain.getValues().getRanges().getOrderedRanges() : new ArrayList<>();
+
+    int maxSplitSize;
+    // Each split has at least 20 pieces of data, and the maximum number of splits is 30.
+    if (rowIds.size() / Constants.BATCHGET_SPLIT_RECORD_COUNT > Constants.BATCHGET_SPLIT_MAX_COUNT) {
+      maxSplitSize = rowIds.size() / Constants.BATCHGET_SPLIT_MAX_COUNT;
+    }
+    else {
+      maxSplitSize = Constants.BATCHGET_SPLIT_RECORD_COUNT;
+    }
+
+    List<HostAddress> hostAddresses = new ArrayList<>();
+
+    int rangeSize = rowIds.size();
+    int currentIndex = 0;
+    while (currentIndex < rangeSize) {
+      int endIndex = rangeSize - currentIndex > maxSplitSize ? (currentIndex + currentIndex) : rangeSize;
+      Map<String, List<Range>> splitRange = new HashMap<>();
+      splitRange.put(tableHandle.getRow().getHbaseColumns()[0].getColName(), rowIds.subList(currentIndex, endIndex));
+      splits.add(new HBaseSplit(hostAddresses, null, null, splitRange, null, tableHandle, true, timestamp));
+      currentIndex += endIndex - currentIndex;
+    }
+
+    return splits;
   }
 
   /**

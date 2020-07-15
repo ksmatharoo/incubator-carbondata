@@ -79,7 +79,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       IntKeyRecord(i)
     }
     htu = new HBaseTestingUtility()
-    htu.startMiniCluster(1)
+//    htu.startMiniCluster(1)
     SparkHBaseConf.conf = htu.getConfiguration
     import sqlContext.implicits._
     hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
@@ -109,7 +109,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
     sql("DROP TABLE IF EXISTS sourceWithTimestamp")
     sql(
-      "create table sourceWithTimestamp(col0 int, col1 String, col2 int, rowtimestamp LONG) " +
+      "create table sourceWithTimestamp(col0 int, col1 String, col2 int) " +
       "stored as carbondata")
     var optionsNew = Map("format" -> "HBase")
     optionsNew = optionsNew + ("querySchema" -> catWithTimestamp)
@@ -164,7 +164,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   override def afterAll(): Unit = {
     sql("DROP TABLE IF EXISTS source")
-    sql("DROP TABLE IF EXISTS sourceWithTimestamp")
+//    sql("DROP TABLE IF EXISTS sourceWithTimestamp")
     htu.shutdownMiniCluster()
   }
 }
