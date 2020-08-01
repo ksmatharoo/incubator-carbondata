@@ -12,7 +12,7 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
   var loadTimestamp:Long = 0
   var hBaseConfPath:String = _
 
-  val writeCat =
+  val handoffCat =
     s"""{
        |"table":{"namespace":"default", "name":"SCD", "tableCoder":"PrimitiveType"},
        |"rowkey":"key",
@@ -22,7 +22,21 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
        |"c_name":{"cf":"cf2", "col":"c_name", "type":"string"},
        |"quantity":{"cf":"cf2", "col":"quantity", "type":"int"},
        |"price":{"cf":"cf2", "col":"price", "type":"int"},
-       |"IUD":{"cf":"cf2", "col":"IUD", "type":"String"}
+       |"operation_type":{"cf":"cf2", "col":"operation_type", "type":"String"}
+       |}
+       |}""".stripMargin
+
+  val queryCat =
+    s"""{
+       |"table":{"namespace":"default", "name":"SCD", "tableCoder":"PrimitiveType"},
+       |"rowkey":"key",
+       |"columns":{
+       |"id":{"cf":"rowkey", "col":"key", "type":"string"},
+       |"name":{"cf":"cf2", "col":"name", "type":"string"},
+       |"c_name":{"cf":"cf2", "col":"c_name", "type":"string"},
+       |"quantity":{"cf":"cf2", "col":"quantity", "type":"int"},
+       |"price":{"cf":"cf2", "col":"price", "type":"int"},
+       |"operation_type":{"cf":"cf2", "col":"operation_type", "type":"String"}
        |}
        |}""".stripMargin
 
@@ -33,7 +47,7 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     htu.startMiniCluster(1)
     SparkHBaseConf.conf = htu.getConfiguration
     hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
-    val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> writeCat,
+    val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> handoffCat,
       HBaseTableCatalog.newTable -> "5", HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath)
     generateData(10).write
       .options(shcExampleTableOption)
@@ -41,12 +55,16 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
       .save()
     sql(
       "create table scdhbaseCarbon(id String, name String, c_name string, quantity int, price " +
-      "int, IUD string) stored as carbondata TBLPROPERTIES" +
+      "int, operation_type string) stored as carbondata TBLPROPERTIES" +
       "('custom.pruner' = 'org.apache.carbondata.hbase.segmentpruner.OpenTableSegmentPruner') ")
     var options = Map("format" -> "HBase")
-    options = options + ("querySchema" -> writeCat)
-    CarbonAddExternalStreamingSegmentCommand(Some("default"), "scdhbaseCarbon", options).processMetadata(
+    options = options + ("operation_type_column" -> "operation_type")
+    options = options + ("insert_operation_value" -> "insert")
+    options = options + ("update_operation_value" -> "update")
+    options = options + ("delete_operation_value" -> "delete")
+    CarbonAddExternalStreamingSegmentCommand(Some("default"), "scdhbaseCarbon", queryCat, Some(handoffCat), options).processMetadata(
       sqlContext.sparkSession)
+    print()
   }
 
   def withCatalog(cat: String, timestamp: Long): DataFrame = {
@@ -67,7 +85,7 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     checkAnswer(sql("select * from scdhbaseCarbon where segmentid(1)"), prevRows)
     val frame = generateFullCDC(10, 2, 2, 1, 2)
     val l = System.currentTimeMillis()
-    val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> writeCat,
+    val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> handoffCat,
       HBaseTableCatalog.newTable -> "5",
       HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath,
       HBaseRelation.TIMESTAMP -> l.toString)
@@ -81,17 +99,17 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
              .size() == 1)
     assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and id='id4'").collectAsList()
              .size() == 1)
-    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and IUD='U'").collectAsList()
+    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and operation_type='update'").collectAsList()
              .size() == 2)
-    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and IUD='I'").collectAsList()
+    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and operation_type='insert'").collectAsList()
              .size() == 16)
   }
 
   def generateData(numOrders: Int = 10): DataFrame = {
     import sqlContext.implicits._
     sqlContext.sparkContext.parallelize(1 to numOrders, 4)
-      .map { x => ("id"+x, s"order$x",s"customer$x", x*10, x*75, "I")
-      }.toDF("id", "name", "c_name", "quantity", "price", "IUD")
+      .map { x => ("id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
+      }.toDF("id", "name", "c_name", "quantity", "price", "operation_type")
   }
 
   def generateFullCDC(
@@ -105,13 +123,13 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     val ds1 = sqlContext.sparkContext.parallelize(numNewOrders+1 to (numOrders), 4)
       .map {x =>
         if (x <= numNewOrders + numUpdatedOrders) {
-          ("id"+x, s"order$x",s"customer$x", x*10, x*75, "U")
+          ("id"+x, s"order$x",s"customer$x", x*10, x*75, "update")
         } else {
-          ("id"+x, s"order$x",s"customer$x", x*10, x*75, "I")
+          ("id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
         }
-      }.toDF("id", "name", "c_name", "quantity", "price", "IUD")
+      }.toDF("id", "name", "c_name", "quantity", "price", "operation_type")
     val ds2 = sqlContext.sparkContext.parallelize(1 to numNewOrders, 4)
-      .map {x => ("newid"+x, s"order$x",s"customer$x", x*10, x*75, "I")
+      .map {x => ("newid"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
       }.toDS().toDF()
     ds1.union(ds2)
   }

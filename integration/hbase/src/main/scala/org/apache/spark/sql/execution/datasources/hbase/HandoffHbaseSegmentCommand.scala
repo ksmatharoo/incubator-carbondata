@@ -22,9 +22,6 @@ import java.util.UUID
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, GenericRow}
-import org.apache.spark.sql.execution.LogicalRDD
 import org.apache.spark.sql.execution.command.management.CarbonInsertIntoWithDf
 import org.apache.spark.sql.execution.command.mutation.DeleteExecution
 import org.apache.spark.sql.execution.command.mutation.merge.{CarbonMergeDataSetException, MutationActionFactory}
@@ -32,12 +29,16 @@ import org.apache.spark.sql.execution.command.{Checker, DataCommand, ExecutionEr
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hive.CarbonRelation
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, GenericRow}
+import org.apache.spark.sql.execution.LogicalRDD
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.exception.ConcurrentOperationException
+import org.apache.carbondata.core.extrenalschema.ExternalSchema
 import org.apache.carbondata.core.metadata.SegmentFileStore
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
@@ -121,29 +122,32 @@ case class HandoffHbaseSegmentCommand(
     loadDF.createOrReplaceTempView(tempView)
     val rows = sparkSession.sql(s"select max(rowtimestamp) from $tempView")
       .collect()
-    if (rows.isEmpty) {
+    if (rows.isEmpty || rows.head.isNullAt(0)) {
       transactionManager.rollbackTransaction(transactionId);
       return Seq.empty
     }
     val maxTimeStamp = rows.head.getLong(0) - graceTimeInMillis
     val updated = loadDF.where(col("rowtimestamp").leq(lit(maxTimeStamp)))
+
     val setValue = CarbonProperties.getInstance()
       .getProperty(CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT,
         CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT_DEFAULT)
+    val updatedTableCols = tableCols.map(f => "`" + f + "`")
     try {
       CarbonProperties.getInstance()
         .addProperty(CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT, "false")
       if (joinColumns.isDefined) {
         insertAndUpdateData(sparkSession,
           carbonTable,
-          tableCols,
+          updatedTableCols,
           header,
           updated,
           detail,
           transactionManager,
-          transactionId)
+          transactionId,
+          externalSchema)
       } else {
-        insertData(sparkSession, carbonTable, tableCols, header, updated)
+        insertData(sparkSession, carbonTable, updatedTableCols, header, updated)
       }
       val segmentId = transactionManager
         .getAndSetCurrentTransactionSegment(transactionId,
@@ -166,7 +170,7 @@ case class HandoffHbaseSegmentCommand(
           HBaseTableCatalog.tableCatalog -> externalSchema.getHandOffSchema,
           "deleterows" -> "true"), Option.empty)(sparkSession.sqlContext)
       hBaseRelationForDelete.insert(updated.select(hBaseRelationForDelete.schema
-        .map(_.name)
+        .map("`" + _.name + "`")
         .map(col): _*), false)
     }
     Seq.empty
@@ -194,11 +198,16 @@ case class HandoffHbaseSegmentCommand(
       updated: Dataset[Row],
       loadMetadataDetails: LoadMetadataDetails,
       transactionManager: SessionTransactionManager,
-      transactionId: String) = {
+      transactionId: String,
+      externalSchema: ExternalSchema) = {
 
-    val iDf = updated.where(col("IUD").equalTo(lit("I")))
-    var uDf = updated.where(col("IUD").equalTo(lit("U")))
-    val dDf = updated.where(col("IUD").equalTo(lit("D")))
+    val operationTypeColumn = externalSchema.getParam("operation_type_column")
+    val iDf = updated.where(col(operationTypeColumn).equalTo(lit(externalSchema.getParam(
+      "insert_operation_value"))))
+    var uDf = updated.where(col(operationTypeColumn).equalTo(lit(externalSchema.getParam(
+      "update_operation_value"))))
+    val dDf = updated.where(col(operationTypeColumn).equalTo(lit(externalSchema.getParam(
+      "delete_operation_value"))))
     val tableDF =
       sparkSession.sql(s"SELECT * FROM ${ carbonTable.getDatabaseName }.${
         carbonTable

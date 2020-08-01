@@ -47,6 +47,8 @@ import org.apache.carbondata.processing.util.CarbonLoaderUtil
 
 case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
     tableName: String,
+    querySchema:String,
+    handOffSchema: Option[String],
     options: Map[String, String]) extends MetadataCommand {
 
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
@@ -88,20 +90,16 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
     val schemaUpdator = ExternalSchemaUpdatorFactory.createFormatBasedHandler(externalFormat.toLowerCase(
       Locale.getDefault))
 
-    var querySchema = options.getOrElse("querySchema", "")
-    querySchema = if (querySchema.isEmpty) {
+    if (querySchema.isEmpty) {
       throw new MalformedCarbonCommandException("Streaming segment schema cannot be empty")
-    } else {
-      schemaUpdator.updateExternalSchema(options.getOrElse("querySchema", ""))
     }
-    var handOffSchema = options.getOrElse("handoffschema", "")
-    handOffSchema = if (handOffSchema.isEmpty) {
-      ""
+    val handOffSchemaString = if (handOffSchema.isEmpty) {
+      schemaUpdator.updateExternalSchema(querySchema)
     } else {
-      schemaUpdator.updateExternalSchema(handOffSchema)
+      schemaUpdator.updateExternalSchema(handOffSchema.get)
     }
     writeMetaForSegment(sparkSession, carbonTable)
-    writeExternalSchema(carbonTable, new ExternalSchema(querySchema, handOffSchema))
+    writeExternalSchema(carbonTable, new ExternalSchema(querySchema, handOffSchemaString, options.asJava))
     Seq.empty
   }
 

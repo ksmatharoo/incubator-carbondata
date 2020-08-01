@@ -76,8 +76,8 @@ public class LoadTransactionActions implements TransactionAction {
 
   public void commit() throws Exception {
     SegmentStatus segmentStatus = loadMetadataDetails.getSegmentStatus();
-    if (segmentStatus == SegmentStatus.MARKED_FOR_DELETE
-        || segmentStatus == SegmentStatus.LOAD_FAILURE && isValidSegment) {
+    if ((segmentStatus == SegmentStatus.MARKED_FOR_DELETE
+        || segmentStatus == SegmentStatus.LOAD_FAILURE) && isValidSegment) {
       throw new Exception("Failed to commit transaction:");
     }
     if (tableModel != null) {

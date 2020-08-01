@@ -16,6 +16,9 @@
  */
 package org.apache.carbondata.externalstreaming
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 case class IntKeyRecord(
     col0: Integer,
     col1: String,
@@ -26,6 +29,40 @@ object IntKeyRecord {
     IntKeyRecord(
       i,
       s"String$i extra",
-      i+10)
+      i + 10)
   }
 }
+
+case class MultiDataTypeKeyRecordAllType(
+    col0: Integer,
+    col1: String,
+    col2: Long,
+    col3: Double,
+    col4: String,
+    col5: Double,
+    col6: Double,
+    col7: Boolean,
+    col8: Short,
+    col9: Long,
+    col10: Double)
+
+object MultiDataTypeKeyRecordGenerator {
+  val formatter = new SimpleDateFormat("dd-MM-yyyy")
+  def apply(i: Int): MultiDataTypeKeyRecordAllType = {
+    MultiDataTypeKeyRecordAllType(
+      i,
+      s"String$i extra",
+      i + 10,
+      10.5,
+      formatter.format(System.currentTimeMillis()),
+      75.5 * i,
+      75.5 * i,
+      true,
+      i.toShort,
+      System.currentTimeMillis(),
+      75.05 * i)
+  }
+}
+
+
+

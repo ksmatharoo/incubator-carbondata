@@ -25,7 +25,9 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.carbondata.common.exceptions.DeprecatedFeatureException;
@@ -157,19 +159,25 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     if (prunedSegment.length == 1 && prunedSegment[0].equalsIgnoreCase("None")) {
       return splits;
     }
+    Set<String> prunedSegs = new HashSet<>(Arrays.asList(prunedSegment));
     SegmentStatusManager segmentStatusManager =
         new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier(),
             readCommittedScope.getConfiguration());
     SegmentStatusManager.ValidAndInvalidSegmentsInfo segments = segmentStatusManager
         .getValidAndInvalidSegments(carbonTable.isChildTableForMV(), loadMetadataDetails,
-            this.readCommittedScope, new HashSet<>(Arrays.asList(prunedSegment)));
+            this.readCommittedScope, prunedSegs);
     if (getValidateSegmentsToAccess(job.getConfiguration())) {
       List<Segment> validSegments = segments.getValidSegments();
       streamSegments = segments.getStreamSegments();
       streamSegments = getFilteredSegment(job, streamSegments, true, readCommittedScope);
+      List<Segment> prunedInProgressSeg = segments.getListOfInProgressSegments().stream()
+          .filter(segment -> prunedSegs.contains(segment.getSegmentNo()))
+          .collect(Collectors.toList());
       if (validSegments.size() == 0) {
         splits.addAll(getSplitsOfStreaming(job, streamSegments, carbonTable));
-        return splits;
+        if (prunedInProgressSeg.isEmpty()) {
+          return splits;
+        }
       }
       List<Segment> filteredSegmentToAccess =
           getFilteredSegment(job, segments.getValidSegments(), true, readCommittedScope);
@@ -179,11 +187,16 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
             getFilteredSegment(job, segments.getListOfInProgressSegments(), true,
                 readCommittedScope));
       }
+      if (!prunedInProgressSeg.isEmpty()) {
+        filteredSegmentToAccess
+            .addAll(getFilteredSegment(job, prunedInProgressSeg, true, readCommittedScope));
+      }
       if (filteredSegmentToAccess.size() == 0) {
         splits.addAll(getSplitsOfStreaming(job, streamSegments, carbonTable));
         return splits;
       } else {
-        setSegmentsToAccess(job.getConfiguration(), filteredSegmentToAccess);
+        setSegmentsToAccess(job.getConfiguration(),
+            new ArrayList<>(new HashSet<>(filteredSegmentToAccess)));
       }
 
       // remove entry in the segment index if there are invalid segments

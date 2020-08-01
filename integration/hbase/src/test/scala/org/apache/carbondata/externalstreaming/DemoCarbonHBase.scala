@@ -96,8 +96,7 @@ class DemoCarbonHBase extends QueryTest with BeforeAndAfterAll {
 
   def registerHBaseTableToCarbonWithSchema(): Unit = {
     var options = Map("format" -> "HBase")
-    options = options + ("segmentSchema" -> cat)
-    CarbonAddExternalStreamingSegmentCommand(Some("default"), "historytable", options).processMetadata(
+    CarbonAddExternalStreamingSegmentCommand(Some("default"), "historytable", cat, None, options).processMetadata(
       sqlContext.sparkSession)
   }
 

@@ -70,6 +70,14 @@ public class SegmentPrunerImpl implements SegmentPruner {
                   || !excludeSegmentList.contains(loadMetadataDetail.getLoadName())) && (
                   inputSegmentList.isEmpty() || inputSegmentList
                       .contains(loadMetadataDetail.getLoadName()))).collect(Collectors.toList());
+      if (!inputSegmentList.isEmpty()) {
+        successLoadMetadataDetails.addAll(Stream.of(readCommittedScope.getSegmentList()).filter(
+            loadMetadataDetail -> (loadMetadataDetail.getSegmentStatus()
+                .equals(SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS)
+                || loadMetadataDetail.getSegmentStatus().equals(SegmentStatus.INSERT_IN_PROGRESS)
+                && inputSegmentList.contains(loadMetadataDetail.getLoadName())))
+            .collect(Collectors.toList()));
+      }
       allSegments = successLoadMetadataDetails.stream().map(
           successDetails -> new Segment(successDetails.getLoadName(),
               successDetails.getSegmentFile(), readCommittedScope, successDetails))

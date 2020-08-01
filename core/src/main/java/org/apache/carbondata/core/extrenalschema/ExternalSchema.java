@@ -20,20 +20,25 @@ package org.apache.carbondata.core.extrenalschema;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 import org.apache.carbondata.core.metadata.schema.table.Writable;
 
 public class ExternalSchema implements Writable {
   private String querySchema;
   private String handOffSchema;
+  private Map<String, String> extraParams;
 
   public ExternalSchema() {
 
   }
 
-  public ExternalSchema(String querySchema, String handOffSchema) {
+  public ExternalSchema(String querySchema, String handOffSchema, Map<String, String> extraParams) {
     this.querySchema = querySchema;
     this.handOffSchema = handOffSchema;
+    this.extraParams = extraParams;
   }
 
   public String getQuerySchema() {
@@ -41,19 +46,43 @@ public class ExternalSchema implements Writable {
   }
 
   public String getHandOffSchema() {
-    return handOffSchema.isEmpty() ? querySchema : handOffSchema;
+    return handOffSchema;
+  }
+
+  public Map<String, String> getExtraParams() {
+    return extraParams;
+  }
+
+  public String getParam(String key) {
+    return extraParams.get(key);
   }
 
   @Override
   public void write(DataOutput out) throws IOException {
     out.writeUTF(querySchema);
     out.writeUTF(handOffSchema);
+    out.writeInt(Objects.nonNull(extraParams) ? extraParams.size() : 0);
+    if (Objects.nonNull(extraParams)) {
+      extraParams.forEach((k, v) -> {
+        try {
+          out.writeUTF(k);
+          out.writeUTF(v);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      });
+    }
   }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     this.querySchema = in.readUTF();
     this.handOffSchema = in.readUTF();
+    this.extraParams = new HashMap<>();
+    int extrasParamSize = in.readInt();
+    for (int i = 0; i < extrasParamSize; i++) {
+      this.extraParams.put(in.readUTF(), in.readUTF());
+    }
   }
 
 }

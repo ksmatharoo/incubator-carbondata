@@ -29,31 +29,8 @@ import org.scalatest.BeforeAndAfterAll
 
 class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
   var htu: HBaseTestingUtility = _
-  var loadTimestamp:Long = 0
   var hBaseConfPath:String = _
   val writeCat =
-    s"""{
-       |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"PrimitiveType"},
-       |"rowkey":"key",
-       |"columns":{
-       |"col0":{"cf":"rowkey", "col":"key", "type":"int"},
-       |"col1":{"cf":"cf1", "col":"col1", "type":"string"},
-       |"col2":{"cf":"cf2", "col":"col2", "type":"int"}
-       |}
-       |}""".stripMargin
-
-  val writeCatTimestamp =
-    s"""{
-       |"table":{"namespace":"default", "name":"shcExampleTable1", "tableCoder":"PrimitiveType"},
-       |"rowkey":"key",
-       |"columns":{
-       |"col0":{"cf":"rowkey", "col":"key", "type":"int"},
-       |"col1":{"cf":"cf1", "col":"col1", "type":"string"},
-       |"col2":{"cf":"cf2", "col":"col2", "type":"int"}
-       |}
-       |}""".stripMargin
-
-  val catWithTimestamp =
     s"""{
        |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"PrimitiveType"},
        |"rowkey":"key",
@@ -71,6 +48,17 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .load()
   }
+
+  val writeCatTimestamp =
+    s"""{
+       |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"PrimitiveType"},
+       |"rowkey":"key",
+       |"columns":{
+       |"col0":{"cf":"rowkey", "col":"key", "type":"int"},
+       |"col1":{"cf":"cf1", "col":"col1", "type":"string"},
+       |"col2":{"cf":"cf2", "col":"col2", "type":"int"}
+       |}
+       |}""".stripMargin
 
   override def beforeAll: Unit = {
     sql("DROP TABLE IF EXISTS source")
@@ -93,16 +81,14 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     sql(
       "create table source(col0 int, col1 String, col2 int) stored as carbondata")
     var options = Map("format" -> "HBase")
-    options = options + ("querySchema" -> writeCat)
-    CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", options).processMetadata(
+    CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", writeCat, None, options).processMetadata(
       sqlContext.sparkSession)
 
-    loadTimestamp = System.currentTimeMillis()
-    val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCat,
+
+    val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCatTimestamp,
       HBaseTableCatalog.newTable -> "5",
       HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath
     )
-
     sqlContext.sparkContext.parallelize(data).toDF.write.options(shcExampleTable1Option)
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .save()
@@ -111,10 +97,9 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     sql(
       "create table sourceWithTimestamp(col0 int, col1 String, col2 int) " +
       "stored as carbondata")
-    var optionsNew = Map("format" -> "HBase")
-    optionsNew = optionsNew + ("querySchema" -> catWithTimestamp)
+    val optionsNew = Map("format" -> "HBase")
     CarbonAddExternalStreamingSegmentCommand(Some("default"),
-      "sourceWithTimestamp",
+      "sourceWithTimestamp",writeCatTimestamp, None,
       optionsNew).processMetadata(
       sqlContext.sparkSession)
   }
@@ -130,11 +115,6 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     checkAnswer(sql("select * from source where col0=3"), frame.filter("col0=3"))
   }
 
-  test("test Full Scan Query with timestamp") {
-    val rows = sql("select * from sourceWithTimestamp").collectAsList().asScala
-    assert(rows.exists(row => row.get(3).isInstanceOf[Long]))
-  }
-
   test("test handoff segment") {
     val prevRows = sql("select * from sourceWithTimestamp").collect()
     HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", Option.empty, 0, false).run(sqlContext.sparkSession)
@@ -142,7 +122,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     val data = (10 until 20).map { i =>
       IntKeyRecord(i)
     }
-    val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCat,
+    val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCatTimestamp,
       HBaseTableCatalog.newTable -> "5",
       HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath
     )
@@ -154,12 +134,6 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     assert(rows.size() == 20)
     assert(sql("select * from sourceWithTimestamp where segmentid(1)").collectAsList().size() == 10)
     assert(sql("select * from sourceWithTimestamp where segmentid(2)").collectAsList().size() == 10)
-  }
-
-  test("test Full Scan Query with Hbase and carbon segment") {
-    sql("insert into table source values(100,'vishal',10)")
-    assert(sql("select * from source where col0= '1'").collectAsList().size()==1)
-    assert(sql("select * from source where segmentid(1)").collectAsList().size()==1)
   }
 
   override def afterAll(): Unit = {
