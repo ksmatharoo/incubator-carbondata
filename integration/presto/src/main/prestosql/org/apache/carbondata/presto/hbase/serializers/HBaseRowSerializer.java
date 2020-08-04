@@ -52,7 +52,7 @@ public interface HBaseRowSerializer
      */
     static HBaseRowSerializer getDefault()
     {
-        return new StringRowSerializer();
+        return new PrimitiveRowSerializer();
     }
 
     /**

@@ -20,10 +20,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.presto.hbase.metadata.HbaseColumn;
 import org.apache.carbondata.presto.hbase.serializers.HBaseRowSerializer;
-import org.apache.carbondata.presto.hbase.serializers.StringRowSerializer;
+import org.apache.carbondata.presto.hbase.serializers.PhoenixRowSerializer;
 import org.apache.carbondata.presto.hbase.split.HBaseSplit;
 
 import com.google.common.collect.ImmutableList;
@@ -107,7 +106,7 @@ public class HBaseRecordSet
         rowIdName = split.getTable().getRow().getHbaseColumns()[0];
         this.split = split;
         this.conn = hbaseConn;
-        this.serializer = HBaseRowSerializer.getSerializerInstance(StringRowSerializer.class.getName());
+        this.serializer = HBaseRowSerializer.getSerializerInstance(PhoenixRowSerializer.class.getName());
         this.serializer.setRowIdName(rowIdName.getColName());
         this.columnHandles = columnHandles;
         ImmutableList.Builder<Type> types = ImmutableList.builder();

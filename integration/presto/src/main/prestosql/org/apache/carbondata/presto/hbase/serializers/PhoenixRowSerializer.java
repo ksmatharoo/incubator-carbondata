@@ -14,15 +14,6 @@
  */
 package org.apache.carbondata.presto.hbase.serializers;
 
-import java.nio.ByteBuffer;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.Charset;
-import java.nio.charset.CharsetDecoder;
-import java.sql.Date;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +31,7 @@ import io.prestosql.spi.block.Block;
 import io.prestosql.spi.type.Type;
 import io.prestosql.spi.type.VarcharType;
 import org.apache.hadoop.hbase.client.Result;
-import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.phoenix.schema.types.*;
 
 import static io.prestosql.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.prestosql.spi.type.BigintType.BIGINT;
@@ -53,17 +44,14 @@ import static io.prestosql.spi.type.TimeType.TIME;
 import static io.prestosql.spi.type.TimestampType.TIMESTAMP;
 import static io.prestosql.spi.type.TinyintType.TINYINT;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static java.util.concurrent.TimeUnit.DAYS;
 
 /**
- * StringRowSerializer
- *
- * @since 2020-03-30
+ * PhoenixRowSerializer
  */
-public class StringRowSerializer
+public class PhoenixRowSerializer
         implements HBaseRowSerializer
 {
-    private static final Logger LOG = Logger.get(StringRowSerializer.class);
+    private static final Logger LOG = Logger.get(PhoenixRowSerializer.class);
 
     private final Map<String, Map<String, String>> familyQualifierColumnMap = new HashMap<>();
 
@@ -151,43 +139,43 @@ public class StringRowSerializer
     public byte[] setObjectBytes(Type type, Object value)
     {
         if (type.equals(BIGINT) && value instanceof Integer) {
-            return Bytes.toBytes(((Integer) value).longValue());
+            return PLong.INSTANCE.toBytes(((Integer) value).longValue());
         }
         else if (type.equals(BIGINT) && value instanceof Long) {
-            return Bytes.toBytes((Long) value);
+            return PLong.INSTANCE.toBytes(value);
         }
         else if (type.equals(BOOLEAN)) {
-            return Bytes.toBytes((Boolean) (value.equals(Boolean.TRUE)));
+            return PBoolean.INSTANCE.toBytes(value.equals(Boolean.TRUE));
         }
         else if (type.equals(DATE)) {
-            return Bytes.toBytes((Long) value);
+            return PLong.INSTANCE.toBytes(value);
         }
         else if (type.equals(DOUBLE)) {
-            return Bytes.toBytes((Double) value);
+            return PDouble.INSTANCE.toBytes(value);
         }
         else if (type.equals(INTEGER) && value instanceof Integer) {
-            return Bytes.toBytes((Integer) value);
+            return PInteger.INSTANCE.toBytes(value);
         }
         else if (type.equals(INTEGER) && value instanceof Long) {
-            return Bytes.toBytes(((Long) value).intValue());
+            return PInteger.INSTANCE.toBytes(((Long) value).intValue());
         }
         else if (type.equals(SMALLINT)) {
-            return Bytes.toBytes((Short) value);
+            return PSmallint.INSTANCE.toBytes(value);
         }
         else if (type.equals(TIME)) {
-            return Bytes.toBytes((Long) value);
+            return PLong.INSTANCE.toBytes(value);
         }
         else if (type.equals(TINYINT)) {
-            return Bytes.toBytes((byte) value);
+            return PTinyint.INSTANCE.toBytes(value);
         }
         else if (type.equals(TIMESTAMP)) {
-            return Bytes.toBytes((Long) value);
+            return PLong.INSTANCE.toBytes(value);
         }
         else if (type instanceof VarcharType && value instanceof String) {
-            return ((String) value).getBytes(UTF_8);
+            return PVarchar.INSTANCE.toBytes(value);
         }
         else if (type instanceof VarcharType && value instanceof Slice) {
-            return ((Slice) value).toStringUtf8().getBytes(UTF_8);
+            return PVarchar.INSTANCE.toBytes(((Slice) value).toStringUtf8());
         }
         else {
             LOG.error("getBytes: Unsupported type %s", type);
@@ -208,34 +196,34 @@ public class StringRowSerializer
         byte[] fieldValue = getFieldValue(columnName);
 
         if (type.equals(BIGINT)) {
-            return (T) (Long) Bytes.toLong(fieldValue);
+            return (T) PLong.INSTANCE.toObject(fieldValue);
         }
         else if (type.equals(BOOLEAN)) {
-            return (T) (Boolean) (fieldValue[0] != 0);
+            return (T) PBoolean.INSTANCE.toObject (fieldValue);
         }
         else if (type.equals(DATE)) {
-            return (T) (Long) Bytes.toLong(fieldValue);
+            return (T) PLong.INSTANCE.toObject(fieldValue);
         }
         else if (type.equals(DOUBLE)) {
-            return (T) (Double) Bytes.toDouble(fieldValue);
+            return (T) PDouble.INSTANCE.toObject(fieldValue);
         }
         else if (type.equals(INTEGER)) {
-            return (T) (Long)((Integer)Bytes.toInt(fieldValue)).longValue();
+            return (T) (Long)((Integer)PInteger.INSTANCE.toObject(fieldValue)).longValue();
         }
         else if (type.equals(SMALLINT)) {
-            return (T) (Long)((Short) Bytes.toShort(fieldValue)).longValue();
+            return (T) (Long)((Short) PSmallint.INSTANCE.toObject(fieldValue)).longValue();
         }
         else if (type.equals(TIME)) {
-            return (T) (Long) Bytes.toLong(fieldValue);
+            return (T) PLong.INSTANCE.toObject(fieldValue);
         }
         else if (type.equals(TIMESTAMP)) {
-            return (T) (Long) Bytes.toLong(fieldValue);
+            return (T) PLong.INSTANCE.toObject(fieldValue);
         }
         else if (type.equals(TINYINT)) {
-            return (T) (Long)((Byte) fieldValue[0]).longValue();
+            return (T) (Long)((Byte) PTinyint.INSTANCE.toObject(fieldValue)).longValue();
         }
         else if (type instanceof VarcharType) {
-            return (T) Slices.utf8Slice(new String(fieldValue));
+            return (T) Slices.utf8Slice(PVarchar.INSTANCE.toObject(fieldValue).toString());
         }
         else {
             LOG.error("decode: StringRowSerializer does not support decoding type %s", type);
