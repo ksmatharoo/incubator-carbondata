@@ -16,7 +16,10 @@ package org.apache.carbondata.presto.hbase;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.carbondata.presto.hbase.metadata.HbaseColumn;
@@ -34,6 +37,10 @@ import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
+import org.apache.phoenix.schema.PDatum;
+import org.apache.phoenix.schema.RowKeySchema;
+import org.apache.phoenix.schema.SortOrder;
+import org.apache.phoenix.schema.types.PDataType;
 
 import static java.util.Objects.requireNonNull;
 
@@ -59,7 +66,7 @@ public class HBaseGetRecordCursor
             Connection connection,
             HBaseRowSerializer serializer,
             List<Type> columnTypes,
-            HbaseColumn rowIdName,
+            String[] rowIdName,
             String[] fieldToColumnName,
             String defaultValue)
     {
@@ -73,22 +80,31 @@ public class HBaseGetRecordCursor
         this.conn = connection;
         try (Table table =
                 connection.getTable(TableName.valueOf(split.getTable().getNamespace(), split.getTable().getName()))) {
-            List<Object> rowKeys = new ArrayList<>();
-            Type type = null;
-            if (hBaseSplit.getRanges().containsKey(hBaseSplit.getTable().getRow().getHbaseColumns()[0].getColName())) {
-                for (Range range : hBaseSplit.getRanges().get(hBaseSplit.getTable().getRow().getHbaseColumns()[0].getColName())) {
-                    type = range.getType();
-                    Object object = range.getSingleValue();
-                    if (object instanceof Slice) {
-                        rowKeys.add( ((Slice) object).getBase());
+            Map<String, List<Object>> rowKeys = new LinkedHashMap<>();
+            Type[] types = new Type[hBaseSplit.getTable().getRow().getHbaseColumns().length];
+            int sizeOfRows = 0;
+            if (Arrays.stream(hBaseSplit.getTable().getRow().getHbaseColumns()).allMatch(col -> hBaseSplit.getRanges().containsKey(col.getColName()))) {
+                int i = 0;
+                for (HbaseColumn hbaseColumn : hBaseSplit.getTable().getRow().getHbaseColumns()) {
+                    List<Object> vals =
+                        rowKeys.computeIfAbsent(hbaseColumn.getColName(), k -> new ArrayList<>());
+                    Type type = null;
+                    for (Range range : hBaseSplit.getRanges().get(hbaseColumn.getColName())) {
+                        type = range.getType();
+                        Object object = range.getSingleValue();
+                        if (object instanceof Slice) {
+                            vals.add( ((Slice) object).toStringUtf8());
+                        }
+                        else {
+                            vals.add(range.getSingleValue());
+                        }
                     }
-                    else {
-                        rowKeys.add(range.getSingleValue());
-                    }
+                    sizeOfRows = vals.size();
+                    types[i++] = type;
                 }
             }
 
-            this.results = getResults(rowKeys, table, type);
+            this.results = getResults(convertToRows(rowKeys, sizeOfRows), table, types);
         }
         catch (IOException e) {
             LOG.error(e, e.getMessage());
@@ -97,14 +113,29 @@ public class HBaseGetRecordCursor
         this.bytesRead = 0L;
     }
 
-    private Result[] getResults(List<Object> rowKeys, Table table, Type type) {
+    private List<Object[]> convertToRows(Map<String, List<Object>> rowKeys, int size) {
+        List<Object[]>  list = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            Object[] row = new Object[rowKeys.size()];
+            int k = 0;
+            for (Map.Entry<String, List<Object>> entry : rowKeys.entrySet()) {
+                row[k++] = entry.getValue().get(i);
+            }
+            list.add(row);
+        }
+        return list;
+    }
+
+    private Result[] getResults(List<Object[]> rowKeys, Table table, Type[] types) {
+
         List<Get> gets =
                 rowKeys.stream()
                         .map(
                                 rowKey -> {
-                                    Get get = new Get(serializer.setObjectBytes(type, rowKey));
+
+                                    Get get = new Get(serializer.encodeCompositeRowKey(rowKey, types));
                                     for (HiveColumnHandle hch : columnHandles) {
-                                            if (!this.rowIdName.getColName().equals(hch.getName())) {
+                                            if (!Utils.contains(Utils.getHbaseColumn(split.getTable(), hch).getColName(), rowIdName)) {
                                                 get.addColumn(
                                                         Bytes.toBytes(Utils.getHbaseColumn(split.getTable(), hch).getCf()),
                                                         Bytes.toBytes(hch.getName()));
@@ -127,6 +158,8 @@ public class HBaseGetRecordCursor
             return new Result[0];
         }
     }
+
+
 
     @Override
     public boolean advanceNextPosition()

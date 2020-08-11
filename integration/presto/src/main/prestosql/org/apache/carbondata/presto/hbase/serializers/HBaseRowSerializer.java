@@ -60,7 +60,7 @@ public interface HBaseRowSerializer
      *
      * @param name Hetu column name
      */
-    void setRowIdName(String name);
+    void setRowIdName(String[] name, Type[] types);
 
     /**
      * Sets the mapping for the Hetu column name to HBase family and qualifier.
@@ -118,14 +118,6 @@ public interface HBaseRowSerializer
      */
     boolean isNull(String name);
 
-    /**
-     * return Array type block
-     *
-     * @param name Column name
-     * @param type Array type
-     * @return True if null, false otherwise.
-     */
-    Block getArray(String name, Type type);
 
     /**
      * return Map type block.
@@ -152,23 +144,9 @@ public interface HBaseRowSerializer
         return ImmutableList.copyOf(list.iterator());
     }
 
-    /**
-     * Given the map type and Hetu Block, decodes the Block into a map of values.
-     *
-     * @param type Map type
-     * @param block Map block
-     * @return List of values
-     */
-    static Map<Object, Object> getMapFromBlock(Type type, Block block)
-    {
-        Map<Object, Object> map = new HashMap<>(block.getPositionCount() / Constants.NUMBER2);
-        for (int i = 0; i < block.getPositionCount(); i += Constants.NUMBER2) {
-            map.put(
-                    readObject(type.getTypeParameters().get(0), block, i),
-                    readObject(type.getTypeParameters().get(1), block, i + 1));
-        }
-        return map;
-    }
+    public byte[] encodeCompositeRowKey(Object[] row, Type[] types);
+
+    public Object[] decodeCompositeRowKey(byte[] row, Type[] types);
 
     /**
      * Encodes the given list into a Block.

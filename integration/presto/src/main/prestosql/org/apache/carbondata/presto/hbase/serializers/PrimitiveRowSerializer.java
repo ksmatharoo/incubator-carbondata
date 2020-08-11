@@ -57,7 +57,7 @@ public class PrimitiveRowSerializer
 
     private final Map<String, byte[]> columnValues = new HashMap<>();
 
-    private String rowIdName;
+    private String[] rowIdName;
 
     private List<HiveColumnHandle> columnHandles;
 
@@ -72,7 +72,7 @@ public class PrimitiveRowSerializer
     }
 
     @Override
-    public void setRowIdName(String name)
+    public void setRowIdName(String[] name, Type[] types)
     {
         this.rowIdName = name;
     }
@@ -110,7 +110,7 @@ public class PrimitiveRowSerializer
     public void deserialize(Result result, String defaultValue, HbaseCarbonTable table)
     {
         if (!columnValues.containsKey(rowIdName)) {
-            columnValues.put(rowIdName, result.getRow());
+            columnValues.put(rowIdName[0], result.getRow());
         }
 
         String family;
@@ -238,19 +238,21 @@ public class PrimitiveRowSerializer
     }
 
     @Override
-    public Block getArray(String name, Type type)
-    {
-        return HBaseRowSerializer.getBlockFromArray(type, getBytesObject(type, name));
-    }
-
-    @Override
     public Block getMap(String name, Type type)
     {
         return HBaseRowSerializer.getBlockFromMap(type, getBytesObject(type, name));
     }
 
+    @Override public byte[] encodeCompositeRowKey(Object[] row, Type[] types) {
+        throw new UnsupportedOperationException("Not supported");
+    }
+
     private byte[] getFieldValue(String name)
     {
         return columnValues.get(name);
+    }
+
+    @Override public Object[] decodeCompositeRowKey(byte[] row, Type[] types) {
+        throw new UnsupportedOperationException("not supported");
     }
 }

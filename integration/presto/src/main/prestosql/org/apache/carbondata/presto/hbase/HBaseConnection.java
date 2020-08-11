@@ -108,6 +108,7 @@ public class HBaseConnection {
         ugi = HBaseKerberosAuthentication
             .authenticateAndReturnUGI(userName, userKeytabFile, krb5File, cfg);
       } catch (IOException e) {
+        LOG.error(e);
         LOG.error("auth failed...cause by %s", e);
       }
     }

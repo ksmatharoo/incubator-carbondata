@@ -467,7 +467,7 @@ public class CarbonTableReader {
     }
     catch (TableNotFoundException e) {
       throw new RuntimeException(format(
-              "table %s not found, maybe deleted by other user", tableHandle.getName()));
+              "table %s with schema %s not found, maybe deleted by other user", tableHandle.getName(), tableHandle.getNamespace()));
     }
     catch (IOException e) {
       LOGGER.error(e);
@@ -508,18 +508,23 @@ public class CarbonTableReader {
     List<HBaseSplit> splits = new ArrayList<>();
     Domain rowIdDomain = null;
     Map<HiveColumnHandle, Domain> domains = constraints.getDomains().get();
+    Map<String, List<Range>> rangesMap = new HashMap<>();
+    String[] rowIdNames = Arrays.stream(tableHandle.getRow().getHbaseColumns()).map(f -> f.getColName()).toArray(String[]::new);
+    int rangeSize = 0;
     for (Map.Entry<HiveColumnHandle, Domain> entry : domains.entrySet()) {
       HiveColumnHandle handle = entry.getKey();
-      if (handle.getName().equalsIgnoreCase(tableHandle.getRow().getHbaseColumns()[0].getColName())) {
+      if (Utils.contains(handle.getName(), rowIdNames)) {
         rowIdDomain = entry.getValue();
+        List<Range> rowIds = rowIdDomain != null ? rowIdDomain.getValues().getRanges().getOrderedRanges() : new ArrayList<>();
+        rangeSize = rowIds.size();
+        rangesMap.put(handle.getName(), rowIds);
       }
     }
-    List<Range> rowIds = rowIdDomain != null ? rowIdDomain.getValues().getRanges().getOrderedRanges() : new ArrayList<>();
 
     int maxSplitSize;
     // Each split has at least 20 pieces of data, and the maximum number of splits is 30.
-    if (rowIds.size() / Constants.BATCHGET_SPLIT_RECORD_COUNT > Constants.BATCHGET_SPLIT_MAX_COUNT) {
-      maxSplitSize = rowIds.size() / Constants.BATCHGET_SPLIT_MAX_COUNT;
+    if (rangeSize / Constants.BATCHGET_SPLIT_RECORD_COUNT > Constants.BATCHGET_SPLIT_MAX_COUNT) {
+      maxSplitSize = rangeSize / Constants.BATCHGET_SPLIT_MAX_COUNT;
     }
     else {
       maxSplitSize = Constants.BATCHGET_SPLIT_RECORD_COUNT;
@@ -527,12 +532,13 @@ public class CarbonTableReader {
 
     List<HostAddress> hostAddresses = new ArrayList<>();
 
-    int rangeSize = rowIds.size();
     int currentIndex = 0;
     while (currentIndex < rangeSize) {
       int endIndex = rangeSize - currentIndex > maxSplitSize ? (currentIndex + currentIndex) : rangeSize;
       Map<String, List<Range>> splitRange = new HashMap<>();
-      splitRange.put(tableHandle.getRow().getHbaseColumns()[0].getColName(), rowIds.subList(currentIndex, endIndex));
+      for (Map.Entry<String, List<Range>> entry : rangesMap.entrySet()) {
+        splitRange.put(entry.getKey(), entry.getValue().subList(currentIndex, endIndex));
+      }
       splits.add(new HBaseSplit(hostAddresses, null, null, splitRange, null, tableHandle, true, timestamp));
       currentIndex += endIndex - currentIndex;
     }

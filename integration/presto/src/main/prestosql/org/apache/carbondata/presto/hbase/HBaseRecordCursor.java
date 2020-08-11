@@ -88,7 +88,7 @@ public class HBaseRecordCursor
     /**
      * rowId name
      */
-    public HbaseColumn rowIdName;
+    public String[] rowIdName;
 
     /**
      * read bytes
@@ -124,7 +124,7 @@ public class HBaseRecordCursor
             List<HiveColumnHandle> columnHandles,
             List<Type> columnTypes,
             HBaseRowSerializer serializer,
-            HbaseColumn rowIdName,
+            String[] rowIdName,
             String[] fieldToColumnName,
             String defaultValue,
             HBaseSplit hBaseSplit)
@@ -157,7 +157,7 @@ public class HBaseRecordCursor
             HBaseRowSerializer serializer,
             ResultScanner scanner,
             String[] fieldToColumnName,
-            HbaseColumn rowIdName,
+            String[] rowIdName,
             String defaultValue,
             HBaseSplit hBaseSplit)
     {
@@ -198,7 +198,7 @@ public class HBaseRecordCursor
 
             byte[] bytes;
             for (HiveColumnHandle hc : columnHandles) {
-                if (!hc.getName().equals(rowIdName.getColName())) {
+                if (!Utils.contains(hc.getName(), rowIdName)) {
                     HbaseColumn hbaseColumn = Utils.getHbaseColumn(split.getTable(), hc);
                     bytes =
                             row.getValue(
@@ -242,7 +242,7 @@ public class HBaseRecordCursor
     @Override
     public long getLong(int field)
     {
-        checkFieldType(field, ImmutableList.of(BIGINT, DATE, INTEGER, REAL, SMALLINT, TIME, TIMESTAMP, TINYINT));
+//        checkFieldType(field, ImmutableList.of(BIGINT, DATE, INTEGER, REAL, SMALLINT, TIME, TIMESTAMP, TINYINT));
         Type type = getType(field);
         return (long) (serializer.getBytesObject(type, fieldToColumnName[field]));
     }

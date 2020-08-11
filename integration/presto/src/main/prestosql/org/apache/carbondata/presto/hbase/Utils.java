@@ -16,6 +16,8 @@ package org.apache.carbondata.presto.hbase;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,7 +26,6 @@ import org.apache.carbondata.presto.hbase.metadata.HbaseColumn;
 
 import io.airlift.log.Logger;
 import io.prestosql.plugin.hive.HiveColumnHandle;
-import io.prestosql.spi.connector.ColumnHandle;
 import io.prestosql.spi.predicate.Domain;
 import io.prestosql.spi.predicate.Range;
 import io.prestosql.spi.predicate.TupleDomain;
@@ -49,19 +50,19 @@ public class Utils
      */
     public static boolean isBatchGet(TupleDomain<HiveColumnHandle> tupleDomain, HbaseColumn[] rowIds)
     {
+        String[] rowIdNames = Arrays.stream(rowIds).map(HbaseColumn::getColName).toArray(String[]::new);
         if (tupleDomain != null && tupleDomain.getDomains().isPresent()) {
             Map<HiveColumnHandle, Domain> domains = tupleDomain.getDomains().get();
-            HiveColumnHandle columnHandle =
+            HiveColumnHandle[] columnHandle =
                     domains.keySet().stream()
-                            .map(key -> (HiveColumnHandle) key)
-                            .filter((key -> key.getName().equalsIgnoreCase(rowIds[0].getColName())))
-                            .findAny()
-                            .orElse(null);
+                            .filter((key -> Utils.contains(key.getName(), rowIdNames))).toArray(HiveColumnHandle[]::new);
 
-            if (columnHandle != null) {
-                for (Range range : domains.get(columnHandle).getValues().getRanges().getOrderedRanges()) {
-                    if (range.isSingleValue()) {
-                        return true;
+            if (columnHandle.length == rowIds.length) {
+                for (HiveColumnHandle handle : columnHandle) {
+                    for (Range range : domains.get(handle).getValues().getRanges().getOrderedRanges()) {
+                        if (range.isSingleValue()) {
+                            return true;
+                        }
                     }
                 }
             }
@@ -103,6 +104,24 @@ public class Utils
 
     public static HbaseColumn getHbaseColumn(HbaseCarbonTable table, HiveColumnHandle handle){
         return table.getsMap().get(handle.getName());
+    }
+
+    public static boolean containsAll(HbaseCarbonTable table, List<HiveColumnHandle> handles, String[] rowKeys){
+        for (int i = 0; i < handles.size(); i++) {
+            if(!handles.get(i).getName().equalsIgnoreCase(rowKeys[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static boolean contains(String colName,  String[] vals) {
+        for (int i = 0; i < vals.length; i++) {
+            if (vals[i].equals(colName)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

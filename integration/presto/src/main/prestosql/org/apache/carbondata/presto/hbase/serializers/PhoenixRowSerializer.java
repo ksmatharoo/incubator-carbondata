@@ -28,9 +28,15 @@ import io.airlift.slice.Slices;
 import io.prestosql.plugin.hive.HiveColumnHandle;
 import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.block.Block;
+import io.prestosql.spi.type.DecimalType;
 import io.prestosql.spi.type.Type;
 import io.prestosql.spi.type.VarcharType;
 import org.apache.hadoop.hbase.client.Result;
+import org.apache.hadoop.hbase.io.ImmutableBytesWritable;
+import org.apache.phoenix.query.QueryConstants;
+import org.apache.phoenix.schema.PDatum;
+import org.apache.phoenix.schema.RowKeySchema;
+import org.apache.phoenix.schema.SortOrder;
 import org.apache.phoenix.schema.types.*;
 
 import static io.prestosql.spi.StandardErrorCode.NOT_SUPPORTED;
@@ -57,7 +63,9 @@ public class PhoenixRowSerializer
 
     private final Map<String, byte[]> columnValues = new HashMap<>();
 
-    private String rowIdName;
+    private String[] rowIdName;
+
+    private Type[] rowTypes;
 
     private List<HiveColumnHandle> columnHandles;
 
@@ -72,9 +80,10 @@ public class PhoenixRowSerializer
     }
 
     @Override
-    public void setRowIdName(String name)
+    public void setRowIdName(String[] name, Type[] types)
     {
         this.rowIdName = name;
+        this.rowTypes = types;
     }
 
     @Override
@@ -109,23 +118,48 @@ public class PhoenixRowSerializer
      */
     public void deserialize(Result result, String defaultValue, HbaseCarbonTable table)
     {
-        if (!columnValues.containsKey(rowIdName)) {
-            columnValues.put(rowIdName, result.getRow());
+        if (rowIdName.length < 2) {
+            if (!columnValues.containsKey(rowIdName[0])) {
+                columnValues.put(rowIdName[0], result.getRow());
+            }
+        } else {
+            for (int i = 0; i < rowIdName.length; i++) {
+                if (!columnValues.containsKey(rowIdName[i])) {
+                    columnValues.put(rowIdName[i], result.getRow());
+                }
+            }
         }
 
         String family;
         String qualifer;
-        String value = null;
         byte[] bytes;
         for (HiveColumnHandle hc : columnHandles) {
             HbaseColumn hbaseColumn = Utils.getHbaseColumn(table, hc);
-            if (!hbaseColumn.getColName().equals(rowIdName)) {
+            if (!contains(hbaseColumn.getColName(), rowIdName)) {
                 family = hbaseColumn.getCf();
                 qualifer = hc.getName();
                 bytes = result.getValue(family.getBytes(UTF_8), qualifer.getBytes(UTF_8));
                 columnValues.put(familyQualifierColumnMap.get(family).get(qualifer), bytes);
             }
         }
+    }
+
+    boolean contains(String colName,  String[] vals) {
+        for (int i = 0; i < vals.length; i++) {
+            if (vals[i].equals(colName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    int getIndex(String colName,  String[] vals) {
+        for (int i = 0; i < vals.length; i++) {
+            if (vals[i].equals(colName)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -194,6 +228,21 @@ public class PhoenixRowSerializer
     public <T> T getBytesObject(Type type, String columnName)
     {
         byte[] fieldValue = getFieldValue(columnName);
+        int index = getIndex(columnName, rowIdName);
+        if (rowIdName.length > 1 && index > -1) {
+            Object[] objects = decodeCompositeRowKey(fieldValue, rowTypes);
+            if (rowTypes[index].equals(INTEGER)) {
+                return (T) (Long)((Integer)objects[index]).longValue();
+            } else if (rowTypes[index].equals(SMALLINT)) {
+                return (T) (Long)((Short)objects[index]).longValue();
+            }  else if (rowTypes[index].equals(TINYINT)) {
+                return (T) (Long)((Byte)objects[index]).longValue();
+            } else if (rowTypes[index] instanceof VarcharType) {
+                return (T) Slices.utf8Slice(objects[index].toString());
+            } else {
+                return (T) objects[index];
+            }
+        }
 
         if (type.equals(BIGINT)) {
             return (T) PLong.INSTANCE.toObject(fieldValue);
@@ -231,16 +280,110 @@ public class PhoenixRowSerializer
         }
     }
 
+    public byte[] encodeCompositeRowKey(Object[] row, Type[] types) {
+        byte[][] bytes = new byte[row.length][];
+        for (int i = 0; i < row.length; i++) {
+            bytes[i] = setObjectBytes(types[i], row[i]);
+            if (types[i] instanceof VarcharType && i < row.length - 1) {
+                byte[] temp =
+                    new byte[bytes[i].length + QueryConstants.SEPARATOR_BYTE_ARRAY.length];
+                System.arraycopy(bytes[i], 0, temp, 0, bytes[i].length);
+                System.arraycopy(QueryConstants.SEPARATOR_BYTE_ARRAY, 0, temp, bytes[i].length,
+                    QueryConstants.SEPARATOR_BYTE_ARRAY.length);
+                bytes[i] = temp;
+            }
+        }
+        int size = 0;
+        for (int i = 0; i < bytes.length; i++) {
+            size += bytes[i].length;
+        }
+        byte[] rowKey = new byte[size];
+        int runningLen = 0;
+        for (int i = 0; i < bytes.length; i++) {
+            System.arraycopy(bytes[i], 0, rowKey, runningLen, bytes[i].length);
+            runningLen += bytes[i].length;
+        }
+        return rowKey;
+    }
+
+    public Object[] decodeCompositeRowKey(byte[] row, Type[] types) {
+        RowKeySchema schema = buildSchema(types);
+        ImmutableBytesWritable ptr = new ImmutableBytesWritable();
+        int maxOffest = schema.iterator(row, 0, row.length, ptr);
+        Object[] ret = new Object[types.length];
+        for (int i = 0; i < schema.getFieldCount(); i++) {
+            if (schema.next(ptr, i, maxOffest) != null) {
+                Object value = convertToTypeInstance(types[i])
+                    .toObject(ptr, schema.getField(i).getDataType(), SortOrder.getDefault());
+                ret[i] = value;
+            }
+        }
+        return ret;
+    }
+
+    private RowKeySchema buildSchema(Type[] types) {
+        RowKeySchema.RowKeySchemaBuilder builder = new RowKeySchema.RowKeySchemaBuilder(types.length);
+        for (Type type : types) {
+            builder.addField(buildPDatum(type), false, SortOrder.getDefault());
+        }
+
+        return builder.build();
+    }
+
+    private PDatum buildPDatum(Type type) {
+        return new PDatum() {
+            @Override public boolean isNullable() {
+                return false;
+            }
+
+            @Override public PDataType getDataType() {
+                return convertToTypeInstance(type);
+            }
+
+            @Override public Integer getMaxLength() {
+                return null;
+            }
+
+            @Override public Integer getScale() {
+                return null;
+            }
+
+            @Override public SortOrder getSortOrder() {
+                return null;
+            }
+        };
+    }
+
+    private PDataType convertToTypeInstance(Type type) {
+        if (type.equals(BOOLEAN)) {
+            return PBoolean.INSTANCE;
+        } else if (type.equals(DATE)) {
+            return PLong.INSTANCE;
+        } else if (type.equals(TINYINT)) {
+            return PTinyint.INSTANCE;
+        } else if (type.equals(DOUBLE)) {
+            return PDouble.INSTANCE;
+        } else if (type.equals(INTEGER)) {
+            return PInteger.INSTANCE;
+        } else if (type.equals(BIGINT)) {
+            return PLong.INSTANCE;
+        } else if (type.equals(SMALLINT)) {
+            return PSmallint.INSTANCE;
+        } else if (type instanceof VarcharType) {
+            return PVarchar.INSTANCE;
+        } else if (type instanceof DecimalType) {
+            return PDecimal.INSTANCE;
+        } else if (type.equals(TIMESTAMP)) {
+            return PLong.INSTANCE;
+        } else {
+            throw new UnsupportedOperationException("unsupported data type " + type);
+        }
+}
+
     @Override
     public boolean isNull(String name)
     {
         return columnValues.get(name) == null || columnValues.get(name).equals("NULL");
-    }
-
-    @Override
-    public Block getArray(String name, Type type)
-    {
-        return HBaseRowSerializer.getBlockFromArray(type, getBytesObject(type, name));
     }
 
     @Override

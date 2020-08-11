@@ -40,6 +40,7 @@ import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
+import org.apache.hadoop.hbase.filter.BinaryPrefixComparator;
 import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.FilterList;
@@ -73,7 +74,7 @@ public class HBaseRecordSet
 
     private HBaseRowSerializer serializer;
 
-    private HbaseColumn rowIdName;
+    private String[] rowIdName;
 
     private ResultScanner scanner;
 
@@ -103,16 +104,24 @@ public class HBaseRecordSet
     {
         requireNonNull(session, "session is null");
 
-        rowIdName = split.getTable().getRow().getHbaseColumns()[0];
+        HbaseColumn[] rowKeys = split.getTable().getRow().getHbaseColumns();
         this.split = split;
         this.conn = hbaseConn;
         this.serializer = HBaseRowSerializer.getSerializerInstance(PhoenixRowSerializer.class.getName());
-        this.serializer.setRowIdName(rowIdName.getColName());
         this.columnHandles = columnHandles;
+        Type[] rowTypes = new Type[rowKeys.length];
+        rowIdName = new String[rowKeys.length];
         ImmutableList.Builder<Type> types = ImmutableList.builder();
         for (HiveColumnHandle column : columnHandles) {
             types.add(column.getType());
+            for (int i = 0; i < rowKeys.length; i++) {
+                if (rowKeys[i].getColName().equalsIgnoreCase(column.getName())) {
+                    rowTypes[i] = column.getType();
+                    rowIdName[i] = column.getName();
+                }
+            }
         }
+        this.serializer.setRowIdName(rowIdName, rowTypes);
         this.columnTypes = types.build();
         this.defaultValue = null;
 
@@ -122,7 +131,7 @@ public class HBaseRecordSet
             HiveColumnHandle hc = columnHandles.get(i);
             fieldToColumnName[i] = hc.getName();
             HbaseColumn hbaseColumn = Utils.getHbaseColumn(split.getTable(), hc);
-            if (!hbaseColumn.getColName().equals(rowIdName.getColName())) {
+            if (!Utils.contains(hbaseColumn.getColName(), rowIdName)) {
                 String cf = hbaseColumn.getCf();
                 scan.addColumn(
                         cf.getBytes(Charset.forName("UTF-8")),
@@ -131,6 +140,7 @@ public class HBaseRecordSet
             }
         }
     }
+
 
     @Override
     public List<Type> getColumnTypes()
@@ -162,7 +172,7 @@ public class HBaseRecordSet
                                         Utils.getHbaseColumn(split.getTable(), hBaseColumnHandle);
                                     String cf = hbaseColumn.getCf();
                                     if (this.rowIdName == null
-                                            || !this.rowIdName.getColName().equals(hbaseColumn.getColName())) {
+                                            || !Utils.contains(hbaseColumn.getColName(), this.rowIdName)) {
                                         scan.addColumn(
                                                 Bytes.toBytes(cf),
                                                 Bytes.toBytes(hBaseColumnHandle.getName()));
@@ -214,10 +224,9 @@ public class HBaseRecordSet
     public FilterList getFiltersFromDomains(Map<String, List<Range>> domainMap)
     {
         FilterList andFilters = new FilterList(FilterList.Operator.MUST_PASS_ALL);
-
         // select count(rowKey) / rowKey from table_xxx;
-        if (this.columnHandles.size() == 1
-                && Utils.getHbaseColumn(split.getTable(), this.columnHandles.get(0)).getColName().equals(this.rowIdName.getColName())) {
+        if (this.columnHandles.size() == rowIdName.length
+                && Utils.containsAll(split.getTable(), this.columnHandles, this.rowIdName)) {
             scan.setCaching(Constants.SCAN_CACHING_SIZE);
             scan.setCacheBlocks(false);
             andFilters.addFilter(new FirstKeyOnlyFilter());
@@ -267,7 +276,7 @@ public class HBaseRecordSet
                             }
                             // operate IS NULL
                             if (ranges.isEmpty()) {
-                                boolean isKey = (this.rowIdName.equals(columnHandle.getName()));
+                                boolean isKey = Utils.contains(columnHandle.getName(), this.rowIdName);
                                 andFilters.addFilter(
                                         columnOrKeyFilter(hbaseColumn, null, CompareFilter.CompareOp.EQUAL, isKey, null));
                             }
@@ -327,7 +336,7 @@ public class HBaseRecordSet
             List<Filter> filters)
     {
         final int filterSize = 2;
-        boolean isKey = (this.rowIdName.equals(columnHandle.getCol()));
+        boolean isKey = Utils.contains (columnHandle.getColName(), this.rowIdName);
 
         for (Range range : ranges) {
             if (range.isSingleValue()) {

@@ -121,4 +121,16 @@ class PrestoHbaseTest extends FunSuiteLike with BeforeAndAfterAll {
       .executeQuery("select * from alldatatype")
     System.out.println(actualResult)
   }
+
+  test("test the result for alldatatypes in presto with point query") {
+    val actualResult: List[Map[String, Any]] = prestoServer
+      .executeQuery("select * from alldatatype where col0=10 and col1='String10 extra'")
+    System.out.println(actualResult)
+  }
+
+  test("test the result for alldatatypes in presto with paritial point query") {
+    val actualResult: List[Map[String, Any]] = prestoServer
+      .executeQuery("select * from alldatatype where col0=10")
+    System.out.println(actualResult)
+  }
 }

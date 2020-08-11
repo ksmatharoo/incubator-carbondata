@@ -51,14 +51,13 @@ import io.airlift.slice.SliceOutput;
 import io.airlift.slice.Slices;
 import io.prestosql.spi.HostAddress;
 import io.prestosql.spi.block.Block;
-import io.prestosql.spi.connector.ColumnHandle;
-import io.prestosql.spi.connector.ConnectorSplit;
 import io.prestosql.spi.predicate.Marker;
 import io.prestosql.spi.predicate.Range;
 import io.prestosql.spi.predicate.TupleDomain;
 import io.prestosql.spi.type.BigintType;
 import io.prestosql.spi.type.DateType;
 import io.prestosql.spi.type.DecimalType;
+import io.prestosql.spi.type.DoubleType;
 import io.prestosql.spi.type.IntegerType;
 import io.prestosql.spi.type.TimestampType;
 import io.prestosql.spi.type.TinyintType;
@@ -237,12 +236,14 @@ public class HBaseSplit
             return TinyintType.TINYINT;
         } else if (ids.equalsIgnoreCase(DateType.DATE.getDisplayName())) {
             return DateType.DATE;
-        } else if (ids.equalsIgnoreCase("decimal")) {
+        } else if (ids.contains("decimal")) {
             return DecimalType.createDecimalType();
         } else if (ids.equalsIgnoreCase(BigintType.BIGINT.getDisplayName())) {
             return BigintType.BIGINT;
         } else if (ids.equalsIgnoreCase(TimestampType.TIMESTAMP.getDisplayName())) {
             return TimestampType.TIMESTAMP;
+        } else if (ids.equalsIgnoreCase(DoubleType.DOUBLE.getDisplayName())) {
+            return DoubleType.DOUBLE;
         }
         return null;
     }
