@@ -20,10 +20,9 @@ package org.apache.spark.sql.execution.datasources.hbase
 import java.util.UUID
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 import org.apache.spark.sql.execution.command.management.CarbonInsertIntoWithDf
-import org.apache.spark.sql.execution.command.mutation.DeleteExecution
+import org.apache.spark.sql.execution.command.mutation.{DeleteExecution, HorizontalCompaction}
 import org.apache.spark.sql.execution.command.mutation.merge.{CarbonMergeDataSetException, MutationActionFactory}
 import org.apache.spark.sql.execution.command.{Checker, DataCommand, ExecutionErrors, UpdateTableModel}
 import org.apache.spark.sql.functions._
@@ -48,6 +47,8 @@ import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.core.util.{ByteUtil, CarbonProperties, CarbonUtil}
 import org.apache.carbondata.processing.loading.FailureCauses
 import org.apache.carbondata.tranaction.SessionTransactionManager
+import org.apache.carbondata.hbase.HBaseConstants._
+import org.apache.carbondata.hbase.HBaseUtil._
 
 case class HandoffHbaseSegmentCommand(
     databaseNameOp: Option[String],
@@ -76,7 +77,7 @@ case class HandoffHbaseSegmentCommand(
       SegmentStatusManager.readLoadMetadata(
         CarbonTablePath.getMetadataPath(carbonTable.getTablePath))
     val detail = details.filter(_.getSegmentStatus.equals(SegmentStatus.SUCCESS)).
-      find(_.getFileFormat.getFormat.equalsIgnoreCase("hbase"))
+      find(_.getFileFormat.getFormat.equalsIgnoreCase(CARBON_HBASE_FORMAT_NAME))
       .getOrElse(throw new AnalysisException(s"Segment with format hbase doesn't exist"))
     val transactionManager = TransactionManager
       .getInstance()
@@ -104,42 +105,45 @@ case class HandoffHbaseSegmentCommand(
     val columnMetaDataInfo = store.getSegmentFile
       .getSegmentMetaDataInfo
       .getSegmentColumnMetaDataInfoMap
-      .get("rowtimestamp")
+      .get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN)
     val minTimestamp = if (columnMetaDataInfo != null) {
       ByteUtil.toLong(columnMetaDataInfo.getColumnMinValue, 0, ByteUtil.SIZEOF_LONG) + 1
     } else {
       0L
     }
+    val hbaseConfFilePath = CarbonProperties.getInstance()
+      .getProperty(CARBON_HBASE_CONF_FILE_PATH)
+
     val hBaseRelation = new CarbonHBaseRelation(Map(
       HBaseTableCatalog.tableCatalog -> externalSchema.getHandOffSchema,
       HBaseRelation.MIN_STAMP -> minTimestamp.toString,
-      HBaseRelation.MAX_STAMP -> Long.MaxValue.toString), Option.empty)(sparkSession.sqlContext)
+      HBaseRelation.MAX_STAMP -> Long.MaxValue.toString,
+      HBaseRelation.HBASE_CONFIGFILE -> hbaseConfFilePath), Option.empty)(sparkSession.sqlContext)
     val rdd = hBaseRelation.buildScan(hBaseRelation.schema.map(f => f.name).toArray, Array.empty)
-      .map(f => new GenericInternalRow(f.asInstanceOf[GenericRow].values).asInstanceOf[InternalRow])
-    val loadDF = Dataset.ofRows(sparkSession,
-      LogicalRDD(hBaseRelation.schema.toAttributes, rdd)(sparkSession)).cache()
+    val loadDF = sparkSession.sqlContext.createDataFrame(rdd, hBaseRelation.schema).cache
     val tempView = UUID.randomUUID().toString.replace("-", "")
     loadDF.createOrReplaceTempView(tempView)
-    val rows = sparkSession.sql(s"select max(rowtimestamp) from $tempView")
+    val rows = sparkSession.sql(s"select max($CARBON_HABSE_ROW_TIMESTAMP_COLUMN) from $tempView")
       .collect()
     if (rows.isEmpty || rows.head.isNullAt(0)) {
       transactionManager.rollbackTransaction(transactionId);
       return Seq.empty
     }
     val maxTimeStamp = rows.head.getLong(0) - graceTimeInMillis
-    val updated = loadDF.where(col("rowtimestamp").leq(lit(maxTimeStamp)))
-
+    val updated = loadDF.where(col(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).leq(lit(maxTimeStamp)))
     val setValue = CarbonProperties.getInstance()
       .getProperty(CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT,
         CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT_DEFAULT)
-    val updatedTableCols = tableCols.map(f => "`" + f + "`")
+    val defaultColumnFamily = externalSchema.getParam(CABON_HBASE_DEFAULT_COLUMN_FAMILY)
+    val colWithCf = tableCols.map(columnName => updateColumnFamily(defaultColumnFamily, columnName))
+    val columnsToSelect = colWithCf.zip(tableCols).map(f => { col(f._1).as(f._2) })
     try {
       CarbonProperties.getInstance()
         .addProperty(CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT, "false")
       if (joinColumns.isDefined) {
         insertAndUpdateData(sparkSession,
           carbonTable,
-          updatedTableCols,
+          columnsToSelect,
           header,
           updated,
           detail,
@@ -147,11 +151,11 @@ case class HandoffHbaseSegmentCommand(
           transactionId,
           externalSchema)
       } else {
-        insertData(sparkSession, carbonTable, updatedTableCols, header, updated)
+        insertData(sparkSession, carbonTable, columnsToSelect, header, updated)
       }
       val segmentId = transactionManager
         .getAndSetCurrentTransactionSegment(transactionId,
-          carbonTable.getDatabaseName + "." + carbonTable.getTableName)
+          carbonTable.getDatabaseName + DOT + carbonTable.getTableName)
       transactionManager.recordTransactionAction(transactionId,
         new HbaseSegmentTransactionAction(carbonTable, segmentId, detail.getLoadName, maxTimeStamp),
         TransactionActionType.COMMIT_SCOPE)
@@ -168,6 +172,7 @@ case class HandoffHbaseSegmentCommand(
       val hBaseRelationForDelete =
         new CarbonHBaseRelation(Map(
           HBaseTableCatalog.tableCatalog -> externalSchema.getHandOffSchema,
+          HBaseRelation.HBASE_CONFIGFILE -> hbaseConfFilePath,
           "deleterows" -> "true"), Option.empty)(sparkSession.sqlContext)
       hBaseRelationForDelete.insert(updated.select(hBaseRelationForDelete.schema
         .map("`" + _.name + "`")
@@ -178,7 +183,7 @@ case class HandoffHbaseSegmentCommand(
 
   private def insertData(sparkSession: SparkSession,
       carbonTable: CarbonTable,
-      tableCols: mutable.Buffer[String],
+      tableCols: Seq[Column],
       header: String,
       updated: Dataset[Row]) = {
     CarbonInsertIntoWithDf(
@@ -186,28 +191,29 @@ case class HandoffHbaseSegmentCommand(
       tableName = carbonTable.getTableName,
       options = Map(("fileheader" -> header)),
       isOverwriteTable = false,
-      dataFrame = updated.select(tableCols.map(col): _*),
+      dataFrame = updated.select(tableCols: _*),
       updateModel = None,
       tableInfoOp = Some(carbonTable.getTableInfo)).process(sparkSession)
   }
 
   private def insertAndUpdateData(sparkSession: SparkSession,
       carbonTable: CarbonTable,
-      tableCols: mutable.Buffer[String],
+      tableCols: Seq[Column],
       header: String,
       updated: Dataset[Row],
       loadMetadataDetails: LoadMetadataDetails,
       transactionManager: SessionTransactionManager,
       transactionId: String,
       externalSchema: ExternalSchema) = {
-
-    val operationTypeColumn = externalSchema.getParam("operation_type_column")
+    val operationTypeColumn = updateColumnFamily(externalSchema.getParam(
+      CABON_HBASE_DEFAULT_COLUMN_FAMILY),
+      externalSchema.getParam(CARBON_HBASE_OPERATION_TYPE_COLUMN))
     val iDf = updated.where(col(operationTypeColumn).equalTo(lit(externalSchema.getParam(
-      "insert_operation_value"))))
+      CARBON_HBASE_INSERT_OPERATION_VALUE)))).select(tableCols: _*)
     var uDf = updated.where(col(operationTypeColumn).equalTo(lit(externalSchema.getParam(
-      "update_operation_value"))))
+      CARBON_HBASE_UPDATE_OPERATION_VALUE)))).select(tableCols: _*)
     val dDf = updated.where(col(operationTypeColumn).equalTo(lit(externalSchema.getParam(
-      "delete_operation_value"))))
+      CARBON_HBASE_DELETE_OPERATION_VALUE)))).select(tableCols: _*)
     val tableDF =
       sparkSession.sql(s"SELECT * FROM ${ carbonTable.getDatabaseName }.${
         carbonTable
@@ -263,7 +269,7 @@ case class HandoffHbaseSegmentCommand(
       tableName = carbonTable.getTableName,
       options = Map(("fileheader" -> header)),
       isOverwriteTable = false,
-      dataFrame = iDf.union(uDf).select(tableCols.map(col): _*),
+      dataFrame = iDf.union(uDf),
       updateModel = Some(new UpdateTableModel(true, timestamp,
         executorErrors, Array.empty[Segment], true)),
       tableInfoOp = Some(carbonTable.getTableInfo)).process(sparkSession)
@@ -274,10 +280,13 @@ case class HandoffHbaseSegmentCommand(
       throw new CarbonMergeDataSetException("writing of update status file failed")
     }
     transactionManager.recordUpdateDetails(transactionId,
-      carbonTable.getDatabaseName + "." + carbonTable.getTableName,
+      carbonTable.getDatabaseName + DOT + carbonTable.getTableName,
       timestamp,
       tuple._2.toArray,
       true)
+    HorizontalCompaction.tryHorizontalCompaction(sparkSession,
+      carbonTable,
+      isUpdateOperation = false)
   }
 
   override protected def opName: String = {

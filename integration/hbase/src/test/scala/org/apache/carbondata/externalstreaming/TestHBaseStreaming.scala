@@ -17,14 +17,17 @@
 
 package org.apache.carbondata.externalstreaming
 
-import scala.collection.JavaConverters._
 
 import org.apache.hadoop.hbase.HBaseTestingUtility
-import org.apache.spark.sql.{DataFrame}
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
 import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
+import org.apache.spark.sql.functions._
+
+import org.apache.carbondata.core.util.CarbonProperties
+import org.apache.carbondata.hbase.HBaseConstants
 
 
 class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
@@ -32,12 +35,13 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
   var hBaseConfPath:String = _
   val writeCat =
     s"""{
-       |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"PrimitiveType"},
-       |"rowkey":"key",
+       |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"Phoenix"},
+       |"rowkey":"col0",
        |"columns":{
-       |"col0":{"cf":"rowkey", "col":"key", "type":"int"},
-       |"col1":{"cf":"cf1", "col":"col1", "type":"string"},
-       |"col2":{"cf":"cf2", "col":"col2", "type":"int"}
+       |"rowkey.col0":{"cf":"rowkey", "col":"col0", "type":"int"},
+       |"cf1.col0":{"cf":"cf1", "col":"col0", "type":"int"},
+       |"cf1.col1":{"cf":"cf1", "col":"col1", "type":"string"},
+       |"cf1.col2":{"cf":"cf1", "col":"col2", "type":"int"}
        |}
        |}""".stripMargin
 
@@ -51,12 +55,13 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   val writeCatTimestamp =
     s"""{
-       |"table":{"namespace":"default", "name":"shcExampleTable", "tableCoder":"PrimitiveType"},
-       |"rowkey":"key",
+       |"table":{"namespace":"default", "name":"shcExampleTable1", "tableCoder":"Phoenix"},
+       |"rowkey":"col0",
        |"columns":{
-       |"col0":{"cf":"rowkey", "col":"key", "type":"int"},
-       |"col1":{"cf":"cf1", "col":"col1", "type":"string"},
-       |"col2":{"cf":"cf2", "col":"col2", "type":"int"}
+       |"rowkey.col0":{"cf":"rowkey", "col":"col0", "type":"int"},
+       |"cf1.col0":{"cf":"cf1", "col":"col0", "type":"int"},
+       |"cf1.col1":{"cf":"cf1", "col":"col1", "type":"string"},
+       |"cf1.col2":{"cf":"cf1", "col":"col2", "type":"int"}
        |}
        |}""".stripMargin
 
@@ -67,29 +72,51 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       IntKeyRecord(i)
     }
     htu = new HBaseTestingUtility()
-//    htu.startMiniCluster(1)
+    htu.startMiniCluster(1)
     SparkHBaseConf.conf = htu.getConfiguration
     import sqlContext.implicits._
     hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
-
+    CarbonProperties.getInstance()
+      .addProperty(HBaseConstants.CARBON_HBASE_CONF_FILE_PATH, hBaseConfPath)
     val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> writeCat,
       HBaseTableCatalog.newTable -> "5", HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath)
-    sqlContext.sparkContext.parallelize(data).toDF.write.options(shcExampleTableOption)
+
+    val updateDf = sqlContext.sparkContext
+      .parallelize(data)
+      .toDF
+      .select(col("col0").as("rowkey.col0"),
+        col("col0").as("cf1.col0"),
+        col("col1").as("cf1.col1"),
+        col("col2").as("cf1.col2"))
+
+    updateDf.write.options(shcExampleTableOption)
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .save()
     sql("DROP TABLE IF EXISTS source")
     sql(
       "create table source(col0 int, col1 String, col2 int) stored as carbondata")
     var options = Map("format" -> "HBase")
+    options = options + ("defaultColumnFamily" -> "cf1")
+    options = options + ("rowKeyColumnFamily" -> "rowkey")
     CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", writeCat, None, options).processMetadata(
       sqlContext.sparkSession)
 
-
+    val data1 = (0 until 10).map { i =>
+      IntKeyRecord(i)
+    }
     val shcExampleTable1Option = Map(HBaseTableCatalog.tableCatalog -> writeCatTimestamp,
       HBaseTableCatalog.newTable -> "5",
       HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath
     )
-    sqlContext.sparkContext.parallelize(data).toDF.write.options(shcExampleTable1Option)
+    val updateDf1 = sqlContext.sparkContext
+      .parallelize(data1)
+      .toDF
+      .select(col("col0").as("rowkey.col0"),
+        col("col0").as("cf1.col0"),
+        col("col1").as("cf1.col1"),
+        col("col2").as("cf1.col2"))
+
+    updateDf1.write.options(shcExampleTable1Option)
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .save()
 
@@ -97,7 +124,13 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     sql(
       "create table sourceWithTimestamp(col0 int, col1 String, col2 int) " +
       "stored as carbondata")
-    val optionsNew = Map("format" -> "HBase")
+    var optionsNew = Map("format" -> "HBase")
+    optionsNew = optionsNew + ("defaultColumnFamily" -> "cf1")
+    optionsNew = optionsNew + ("rowKeyColumnFamily" -> "rowkey")
+    CarbonAddExternalStreamingSegmentCommand(Some("default"),
+      "sourceWithTimestamp",writeCatTimestamp, None,
+      optionsNew).processMetadata(
+      sqlContext.sparkSession)
     CarbonAddExternalStreamingSegmentCommand(Some("default"),
       "sourceWithTimestamp",writeCatTimestamp, None,
       optionsNew).processMetadata(
@@ -105,17 +138,20 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
   }
 
   test("test Full Scan Query") {
-    val frame = withCatalog(writeCat)
+    val frame = withCatalog(writeCat).drop("rowkey.col0")
     checkAnswer(sql("select * from source"), frame)
   }
 
   test("test Filter Scan Query") {
-    val frame = withCatalog(writeCat)
-    frame.filter("col0=3")
-    checkAnswer(sql("select * from source where col0=3"), frame.filter("col0=3"))
+    val frame = withCatalog(writeCat).drop("rowkey.col0")
+    checkAnswer(sql("select * from source where col0=3"), frame.filter("`cf1.col0`=3"))
   }
 
   test("test handoff segment") {
+    val prevRows1 = sql("select col1,col0 from sourceWithTimestamp where col1='String0 extra'").collect()
+    assert(prevRows1.length == 1)
+    val prevRows2 = sql("select * from sourceWithTimestamp where col1='String0 extra'").collect()
+    assert(prevRows2.length == 1)
     val prevRows = sql("select * from sourceWithTimestamp").collect()
     HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", Option.empty, 0, false).run(sqlContext.sparkSession)
     checkAnswer(sql("select * from sourceWithTimestamp"), prevRows)
@@ -127,9 +163,19 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
       HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath
     )
     import sqlContext.implicits._
-    sqlContext.sparkContext.parallelize(data).toDF.write.options(shcExampleTable1Option)
+    val updateDf = sqlContext
+      .sparkContext
+      .parallelize(data)
+      .toDF
+      .select(col("col0").as("rowkey.col0"),
+        col("col0").as("cf1.col0"),
+        col("col1").as("cf1.col1"),
+        col("col2").as("cf1.col2"))
+
+    updateDf.write.options(shcExampleTable1Option)
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .save()
+
     val rows = sql("select * from sourceWithTimestamp").collectAsList()
     assert(rows.size() == 20)
     assert(sql("select * from sourceWithTimestamp where segmentid(1)").collectAsList().size() == 10)
@@ -138,7 +184,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
 
   override def afterAll(): Unit = {
     sql("DROP TABLE IF EXISTS source")
-//    sql("DROP TABLE IF EXISTS sourceWithTimestamp")
+    sql("DROP TABLE IF EXISTS sourceWithTimestamp")
     htu.shutdownMiniCluster()
   }
 }

@@ -36,7 +36,7 @@ object IntKeyRecord {
 case class MultiDataTypeKeyRecordAllType(
     col0: Integer,
     col1: String,
-    col2: Long,
+    var col2: Long,
     col3: Double,
     col4: String,
     col5: Double,
@@ -52,7 +52,7 @@ object MultiDataTypeKeyRecordGenerator {
     MultiDataTypeKeyRecordAllType(
       i,
       s"String$i extra",
-      i + 10,
+      10,
       10.5,
       formatter.format(System.currentTimeMillis()),
       75.5 * i,

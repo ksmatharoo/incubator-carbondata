@@ -82,6 +82,14 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "delete segment")
     }
     val externalFormat = options.getOrElse("format", "HBase")
+    val externalSegment = new SegmentStatusManager(carbonTable
+      .getAbsoluteTableIdentifier).getValidAndInvalidSegments.getValidSegments.asScala.filter(
+      f => !f.getLoadMetadataDetails.isCarbonFormat
+    )
+    if (externalSegment.nonEmpty) {
+      LOGGER.info("External Segment is already register. Ignoring the command")
+      return Seq.empty
+    }
     if (!validateFormat(externalFormat)) {
       throw new MalformedCarbonCommandException(
         "Invalid format: " + options.getOrElse("format", "HBase") + " Valid Formats are:" +
@@ -105,6 +113,13 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
 
   private def writeExternalSchema(carbonTable: CarbonTable, externalSchema: ExternalSchema): Unit = {
     val metadataPath = CarbonTablePath.getMetadataPath(carbonTable.getTablePath)
+    val metadataFolder = FileFactory.getCarbonFile(metadataPath)
+    if (!metadataFolder.exists()) {
+      val isFolderCreated = metadataFolder.mkdirs()
+      if (!isFolderCreated) {
+        throw new RuntimeException("Problem while creating metadata folder")
+      }
+    }
     var stream: DataOutputStream = null
     try {
       stream = FileFactory.getDataOutputStream(metadataPath + "/" + "externalSchema")

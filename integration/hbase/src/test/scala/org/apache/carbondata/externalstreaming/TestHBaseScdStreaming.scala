@@ -7,6 +7,9 @@ import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTab
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
+import org.apache.carbondata.core.util.CarbonProperties
+import org.apache.carbondata.hbase.HBaseConstants
+
 class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
   var htu: HBaseTestingUtility = _
   var loadTimestamp:Long = 0
@@ -14,29 +17,31 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
 
   val handoffCat =
     s"""{
-       |"table":{"namespace":"default", "name":"SCD", "tableCoder":"PrimitiveType"},
-       |"rowkey":"key",
+       |"table":{"namespace":"default", "name":"SCD", "tableCoder":"Phoenix"},
+       |"rowkey":"id",
        |"columns":{
-       |"id":{"cf":"rowkey", "col":"key", "type":"string"},
-       |"name":{"cf":"cf2", "col":"name", "type":"string"},
-       |"c_name":{"cf":"cf2", "col":"c_name", "type":"string"},
-       |"quantity":{"cf":"cf2", "col":"quantity", "type":"int"},
-       |"price":{"cf":"cf2", "col":"price", "type":"int"},
-       |"operation_type":{"cf":"cf2", "col":"operation_type", "type":"String"}
+       |"rowkey.id":{"cf":"rowkey", "col":"id", "type":"string"},
+       |"cf2.id":{"cf":"cf2", "col":"id", "type":"string"},
+       |"cf2.name":{"cf":"cf2", "col":"name", "type":"string"},
+       |"cf2.c_name":{"cf":"cf2", "col":"c_name", "type":"string"},
+       |"cf2.quantity":{"cf":"cf2", "col":"quantity", "type":"int"},
+       |"cf2.price":{"cf":"cf2", "col":"price", "type":"int"},
+       |"cf2.operation_type":{"cf":"cf2", "col":"operation_type", "type":"String"}
        |}
        |}""".stripMargin
 
   val queryCat =
     s"""{
-       |"table":{"namespace":"default", "name":"SCD", "tableCoder":"PrimitiveType"},
-       |"rowkey":"key",
+       |"table":{"namespace":"default", "name":"SCD", "tableCoder":"Phoenix"},
+       |"rowkey":"id",
        |"columns":{
-       |"id":{"cf":"rowkey", "col":"key", "type":"string"},
-       |"name":{"cf":"cf2", "col":"name", "type":"string"},
-       |"c_name":{"cf":"cf2", "col":"c_name", "type":"string"},
-       |"quantity":{"cf":"cf2", "col":"quantity", "type":"int"},
-       |"price":{"cf":"cf2", "col":"price", "type":"int"},
-       |"operation_type":{"cf":"cf2", "col":"operation_type", "type":"String"}
+       |"rowkey.id":{"cf":"rowkey", "col":"id", "type":"string"},
+       |"cf2.id":{"cf":"cf2", "col":"id", "type":"string"},
+       |"cf2.name":{"cf":"cf2", "col":"name", "type":"string"},
+       |"cf2.c_name":{"cf":"cf2", "col":"c_name", "type":"string"},
+       |"cf2.quantity":{"cf":"cf2", "col":"quantity", "type":"int"},
+       |"cf2.price":{"cf":"cf2", "col":"price", "type":"int"},
+       |"cf2.operation_type":{"cf":"cf2", "col":"operation_type", "type":"String"}
        |}
        |}""".stripMargin
 
@@ -49,10 +54,13 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
     val shcExampleTableOption = Map(HBaseTableCatalog.tableCatalog -> handoffCat,
       HBaseTableCatalog.newTable -> "5", HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath)
-    generateData(10).write
+    val frame = generateData(10)
+    frame.write
       .options(shcExampleTableOption)
       .format("org.apache.spark.sql.execution.datasources.hbase")
       .save()
+    CarbonProperties.getInstance()
+      .addProperty(HBaseConstants.CARBON_HBASE_CONF_FILE_PATH, hBaseConfPath)
     sql(
       "create table scdhbaseCarbon(id String, name String, c_name string, quantity int, price " +
       "int, operation_type string) stored as carbondata TBLPROPERTIES" +
@@ -62,9 +70,14 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     options = options + ("insert_operation_value" -> "insert")
     options = options + ("update_operation_value" -> "update")
     options = options + ("delete_operation_value" -> "delete")
-    CarbonAddExternalStreamingSegmentCommand(Some("default"), "scdhbaseCarbon", queryCat, Some(handoffCat), options).processMetadata(
+    options = options + ("defaultColumnFamily" -> "cf2")
+    options = options + ("rowKeyColumnFamily" -> "rowkey")
+    CarbonAddExternalStreamingSegmentCommand(Some("default"),
+      "scdhbaseCarbon",
+      queryCat,
+      Some(handoffCat),
+      options).processMetadata(
       sqlContext.sparkSession)
-    print()
   }
 
   def withCatalog(cat: String, timestamp: Long): DataFrame = {
@@ -108,8 +121,8 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
   def generateData(numOrders: Int = 10): DataFrame = {
     import sqlContext.implicits._
     sqlContext.sparkContext.parallelize(1 to numOrders, 4)
-      .map { x => ("id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
-      }.toDF("id", "name", "c_name", "quantity", "price", "operation_type")
+      .map { x => ("id"+x, "id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
+      }.toDF("rowkey.id", "cf2.id", "cf2.name", "cf2.c_name", "cf2.quantity", "cf2.price", "cf2.operation_type")
   }
 
   def generateFullCDC(
@@ -123,13 +136,13 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     val ds1 = sqlContext.sparkContext.parallelize(numNewOrders+1 to (numOrders), 4)
       .map {x =>
         if (x <= numNewOrders + numUpdatedOrders) {
-          ("id"+x, s"order$x",s"customer$x", x*10, x*75, "update")
+          ("id"+x, "id"+x, s"order$x",s"customer$x", x*10, x*75, "update")
         } else {
-          ("id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
+          ("id"+x, "id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
         }
-      }.toDF("id", "name", "c_name", "quantity", "price", "operation_type")
+      }.toDF("rowkey.id", "cf2.id", "cf2.name", "cf2.c_name", "cf2.quantity", "cf2.price", "cf2.operation_type")
     val ds2 = sqlContext.sparkContext.parallelize(1 to numNewOrders, 4)
-      .map {x => ("newid"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
+      .map {x => ("newid"+x,"newid"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
       }.toDS().toDF()
     ds1.union(ds2)
   }

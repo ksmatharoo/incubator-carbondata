@@ -20,15 +20,15 @@ package org.apache.spark.sql.execution.strategy
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.CarbonDatasourceHadoopRelation
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{Expression, NamedExpression}
-import org.apache.spark.sql.catalyst.planning.PhysicalOperation
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.hbase.{CarbonHBaseRelation, HBaseRelation, HBaseTableCatalog}
 import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, LogicalRelation}
 
 import org.apache.carbondata.core.indexstore.PrunedSegmentInfo
 import org.apache.carbondata.core.statusmanager.FileFormat
 import org.apache.carbondata.core.util.{ByteUtil, CarbonUtil}
+import org.apache.carbondata.hbase.HBaseConstants._
 
 class HBaseFormatBasedHandler extends ExternalFormatHandler {
 
@@ -45,24 +45,47 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
     val externalSchema = CarbonUtil.getExternalSchema(l
       .relation
       .asInstanceOf[CarbonDatasourceHadoopRelation]
-      .identifier).getQuerySchema
+      .identifier)
+
     var params = Map(
-      HBaseTableCatalog.tableCatalog -> externalSchema)
+      HBaseTableCatalog.tableCatalog -> externalSchema.getQuerySchema)
     val segmentFile = prunedSegmentInfo.head.getSegmentFile
     if (!segmentFile.getSegmentMetaDataInfo.getSegmentColumnMetaDataInfoMap.isEmpty) {
       val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
         .getSegmentColumnMetaDataInfoMap
-        .get("rowtimestamp").getColumnMinValue, 0, ByteUtil.SIZEOF_LONG) + 1
+        .get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).getColumnMinValue,
+        0,
+        ByteUtil.SIZEOF_LONG) + 1
       params = params + (HBaseRelation.MIN_STAMP -> info.toString,
         HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
     }
+
     val hBaseRelation = new CarbonHBaseRelation(params, Option.empty)(l.relation.sqlContext)
     val hbasePlan = plan transform {
-      case PhysicalOperation(_,_, relation: LogicalRelation) if relation.relation
+      case lR:LogicalRelation if lR.relation
         .isInstanceOf[CarbonDatasourceHadoopRelation] =>
         LogicalRelation(hBaseRelation)
     }
-    val hbaseRdd = DataSourceStrategy(l.relation.sqlContext.conf).apply(hbasePlan).head.execute()
+    val rowKeyColFamily = externalSchema.getParam(CABON_HBASE_ROWKEY_COLUMN_FAMILY)
+    val hbaseOutput = hbasePlan.collect{
+      case l:LogicalRelation => l
+    }.head.output.filter(f=> !f.name.startsWith(rowKeyColFamily))
+
+    val updatedExp = hbasePlan.transformAllExpressions {
+      case attr: AttributeReference if !attr.name.contains(".") =>
+        hbaseOutput
+          .find(a => a.name.split("\\.")(1).equals(attr.name)).get
+    }
+
+    val withProject = updatedExp match {
+      case l: LogicalRelation =>
+        Project(l.output.filterNot(_.name.startsWith(rowKeyColFamily)), l)
+      case f@Filter(c, l:LogicalRelation) =>
+        Filter(c, Project(l.output.filterNot(_.name.startsWith(rowKeyColFamily)), l))
+      case others => others
+    }
+
+    val hbaseRdd = DataSourceStrategy(l.relation.sqlContext.conf).apply(withProject).head.execute()
     (hbaseRdd, false)
   }
 }
