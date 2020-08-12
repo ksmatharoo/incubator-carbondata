@@ -18,9 +18,10 @@ class TestAllDataTypeTestCase extends QueryTest with BeforeAndAfterAll {
   val writeCatTimestamp =
     s"""{
        |"table":{"namespace":"default", "name":"shcExampleTable1", "tableCoder":"Phoenix"},
-       |"rowkey":"col0",
+       |"rowkey":"col0:col1",
        |"columns":{
        |"rowkey.col0":{"cf":"rowkey", "col":"col0", "type":"int"},
+       |"rowkey.col1":{"cf":"rowkey", "col":"col1", "type":"string"},
        |"cf2.col0":{"cf":"cf2", "col":"col0", "type":"int"},
        |"cf2.col1":{"cf":"cf2", "col":"col1", "type":"string"},
        |"cf2.col2":{"cf":"cf2", "col":"col2", "type":"bigint"},
@@ -58,7 +59,7 @@ class TestAllDataTypeTestCase extends QueryTest with BeforeAndAfterAll {
 
   override def beforeAll: Unit = {
     htu = new HBaseTestingUtility()
-    htu.startMiniCluster(1)
+//    htu.startMiniCluster(1)
     SparkHBaseConf.conf = htu.getConfiguration
     import sqlContext.implicits._
     hBaseConfPath = s"$integrationPath/hbase/src/test/resources/hbase-site-local.xml"
@@ -75,6 +76,7 @@ class TestAllDataTypeTestCase extends QueryTest with BeforeAndAfterAll {
 
     val frame = sqlContext.sparkContext.parallelize(data).toDF
       .select(col("col0").as("rowkey.col0"),
+        col("col1").as("rowkey.col1"),
         col("col0").as("cf2.col0"),
        col("col1").as("cf2.col1"),
       col("col2").as("cf2.col2"),
@@ -126,6 +128,7 @@ class TestAllDataTypeTestCase extends QueryTest with BeforeAndAfterAll {
     import sqlContext.implicits._
     val outFrame = sqlContext.sparkContext.parallelize(data).toDF
       .select(col("col0").as("rowkey.col0"),
+        col("col1").as("rowkey.col1"),
         col("col0").as("cf2.col0"),
         col("col1").as("cf2.col1"),
         col("col2").as("cf2.col2"),

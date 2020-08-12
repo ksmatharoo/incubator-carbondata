@@ -20,8 +20,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.carbondata.presto.hbase.Constants;
 import org.apache.carbondata.presto.hbase.metadata.HbaseCarbonTable;
+import org.apache.carbondata.presto.hbase.metadata.HbaseColumn;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.google.common.collect.ImmutableList;
@@ -60,7 +60,7 @@ public interface HBaseRowSerializer
      *
      * @param name Hetu column name
      */
-    void setRowIdName(String[] name, Type[] types);
+    void setRowIdName(HbaseColumn[] name, Type[] types);
 
     /**
      * Sets the mapping for the Hetu column name to HBase family and qualifier.

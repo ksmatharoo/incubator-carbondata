@@ -21,7 +21,6 @@ import org.apache.hadoop.hbase.client.Result
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.expressions.GenericRow
 import org.apache.spark.sql.sources.Filter
-import org.apache.spark.unsafe.types.UTF8String
 
 class CarbonHBaseTableScanRDD(relation: HBaseRelation,
     requiredColumns: Array[String],
@@ -32,17 +31,9 @@ class CarbonHBaseTableScanRDD(relation: HBaseRelation,
   override def buildRow(fields: Seq[Field], result: Result): Row = {
     val row = super.buildRow(fields, result)
     val finalRow = if (isTimeStampColumnRequired) {
-      Row.fromSeq(row.asInstanceOf[GenericRow].values.map{ s => s match {
-        case s: String => UTF8String.fromString(s)
-        case o => o
-      }
-      } :+ result.rawCells()(0).getTimestamp)
+      Row.fromSeq(row.asInstanceOf[GenericRow].values :+ result.rawCells()(0).getTimestamp)
     } else {
-      Row.fromSeq(row.asInstanceOf[GenericRow].values.map{ s => s match {
-        case s: String => UTF8String.fromString(s)
-        case o => o
-      }
-      })
+      row
     }
     finalRow
   }

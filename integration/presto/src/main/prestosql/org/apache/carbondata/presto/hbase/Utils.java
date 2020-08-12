@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.apache.carbondata.presto.hbase.metadata.HbaseCarbonTable;
 import org.apache.carbondata.presto.hbase.metadata.HbaseColumn;
@@ -50,12 +51,11 @@ public class Utils
      */
     public static boolean isBatchGet(TupleDomain<HiveColumnHandle> tupleDomain, HbaseColumn[] rowIds)
     {
-        String[] rowIdNames = Arrays.stream(rowIds).map(HbaseColumn::getColName).toArray(String[]::new);
         if (tupleDomain != null && tupleDomain.getDomains().isPresent()) {
             Map<HiveColumnHandle, Domain> domains = tupleDomain.getDomains().get();
             HiveColumnHandle[] columnHandle =
                     domains.keySet().stream()
-                            .filter((key -> Utils.contains(key.getName(), rowIdNames))).toArray(HiveColumnHandle[]::new);
+                            .filter((key -> Utils.contains(key.getName(), rowIds))).toArray(HiveColumnHandle[]::new);
 
             if (columnHandle.length == rowIds.length) {
                 for (HiveColumnHandle handle : columnHandle) {
@@ -103,21 +103,21 @@ public class Utils
     }
 
     public static HbaseColumn getHbaseColumn(HbaseCarbonTable table, HiveColumnHandle handle){
-        return table.getsMap().get(handle.getName());
+        return table.getsMap().values().stream().filter(f -> !f.getCf().equals("rowkey") && f.getColNameWithoutCf().equals(handle.getName())).findAny().get();
     }
 
-    public static boolean containsAll(HbaseCarbonTable table, List<HiveColumnHandle> handles, String[] rowKeys){
+    public static boolean containsAll(List<HiveColumnHandle> handles, HbaseColumn[] rowKeys){
         for (int i = 0; i < handles.size(); i++) {
-            if(!handles.get(i).getName().equalsIgnoreCase(rowKeys[i])) {
+            if(!handles.get(i).getName().equalsIgnoreCase(rowKeys[i].getColNameWithoutCf())) {
                 return false;
             }
         }
         return true;
     }
 
-    public static boolean contains(String colName,  String[] vals) {
+    public static boolean contains(String colName,  HbaseColumn[] vals) {
         for (int i = 0; i < vals.length; i++) {
-            if (vals[i].equals(colName)) {
+            if (vals[i].getColName().substring(vals[i].getCf().length()+1).equals(colName)) {
                 return true;
             }
         }

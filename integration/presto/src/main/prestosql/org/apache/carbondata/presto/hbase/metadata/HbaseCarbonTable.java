@@ -69,7 +69,7 @@ public class HbaseCarbonTable {
       int i = 0;
       for (String key : keys) {
         for(HbaseColumn col: sMap.values()) {
-          if (col.getCol().equalsIgnoreCase(key)) {
+          if (col.getCol().equalsIgnoreCase(key) && col.getCf().equalsIgnoreCase("rowkey")) {
             hbaseColumns[i++] = col;
           }
         }

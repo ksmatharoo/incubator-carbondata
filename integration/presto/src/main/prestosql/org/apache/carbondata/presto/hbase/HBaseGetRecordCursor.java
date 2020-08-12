@@ -37,12 +37,6 @@ import org.apache.hadoop.hbase.client.Get;
 import org.apache.hadoop.hbase.client.Result;
 import org.apache.hadoop.hbase.client.Table;
 import org.apache.hadoop.hbase.util.Bytes;
-import org.apache.phoenix.schema.PDatum;
-import org.apache.phoenix.schema.RowKeySchema;
-import org.apache.phoenix.schema.SortOrder;
-import org.apache.phoenix.schema.types.PDataType;
-
-import static java.util.Objects.requireNonNull;
 
 /**
  * HBaseGetRecordCursor
@@ -66,7 +60,7 @@ public class HBaseGetRecordCursor
             Connection connection,
             HBaseRowSerializer serializer,
             List<Type> columnTypes,
-            String[] rowIdName,
+            HbaseColumn[] rowIdName,
             String[] fieldToColumnName,
             String defaultValue)
     {
@@ -83,13 +77,13 @@ public class HBaseGetRecordCursor
             Map<String, List<Object>> rowKeys = new LinkedHashMap<>();
             Type[] types = new Type[hBaseSplit.getTable().getRow().getHbaseColumns().length];
             int sizeOfRows = 0;
-            if (Arrays.stream(hBaseSplit.getTable().getRow().getHbaseColumns()).allMatch(col -> hBaseSplit.getRanges().containsKey(col.getColName()))) {
+            if (Arrays.stream(hBaseSplit.getTable().getRow().getHbaseColumns()).allMatch(col -> hBaseSplit.getRanges().containsKey(col.getColNameWithoutCf()))) {
                 int i = 0;
                 for (HbaseColumn hbaseColumn : hBaseSplit.getTable().getRow().getHbaseColumns()) {
                     List<Object> vals =
                         rowKeys.computeIfAbsent(hbaseColumn.getColName(), k -> new ArrayList<>());
                     Type type = null;
-                    for (Range range : hBaseSplit.getRanges().get(hbaseColumn.getColName())) {
+                    for (Range range : hBaseSplit.getRanges().get(hbaseColumn.getColNameWithoutCf())) {
                         type = range.getType();
                         Object object = range.getSingleValue();
                         if (object instanceof Slice) {
@@ -135,11 +129,11 @@ public class HBaseGetRecordCursor
 
                                     Get get = new Get(serializer.encodeCompositeRowKey(rowKey, types));
                                     for (HiveColumnHandle hch : columnHandles) {
-                                            if (!Utils.contains(Utils.getHbaseColumn(split.getTable(), hch).getColName(), rowIdName)) {
+//                                            if (!Utils.contains(Utils.getHbaseColumn(split.getTable(), hch).getColName(), rowIdName)) {
                                                 get.addColumn(
                                                         Bytes.toBytes(Utils.getHbaseColumn(split.getTable(), hch).getCf()),
                                                         Bytes.toBytes(hch.getName()));
-                                            }
+//                                            }
                                     }
                                     try {
                                         get.setTimeRange(split.getTimestamp(), Long.MAX_VALUE);

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class HbaseColumn {
 
   private String colName;
+  private String colNameWithoutCf;
   private String cf;
   private String col;
   private String fCoder;
@@ -25,11 +26,15 @@ public class HbaseColumn {
     this.fCoder = fCoder;
     this.len = len;
     this.type = type;
+    this.colNameWithoutCf = colName.substring(cf.length()+1);
   }
 
   @JsonProperty
   public String getColName() {
     return colName;
+  }
+  public String getColNameWithoutCf() {
+    return colNameWithoutCf;
   }
   @JsonProperty
   public String getCf() {

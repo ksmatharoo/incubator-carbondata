@@ -88,7 +88,7 @@ public class HBaseRecordCursor
     /**
      * rowId name
      */
-    public String[] rowIdName;
+    public HbaseColumn[] rowIdName;
 
     /**
      * read bytes
@@ -124,7 +124,7 @@ public class HBaseRecordCursor
             List<HiveColumnHandle> columnHandles,
             List<Type> columnTypes,
             HBaseRowSerializer serializer,
-            String[] rowIdName,
+            HbaseColumn[] rowIdName,
             String[] fieldToColumnName,
             String defaultValue,
             HBaseSplit hBaseSplit)
@@ -157,7 +157,7 @@ public class HBaseRecordCursor
             HBaseRowSerializer serializer,
             ResultScanner scanner,
             String[] fieldToColumnName,
-            String[] rowIdName,
+            HbaseColumn[] rowIdName,
             String defaultValue,
             HBaseSplit hBaseSplit)
     {
@@ -198,7 +198,7 @@ public class HBaseRecordCursor
 
             byte[] bytes;
             for (HiveColumnHandle hc : columnHandles) {
-                if (!Utils.contains(hc.getName(), rowIdName)) {
+//                if (!Utils.contains(hc.getName(), rowIdName)) {
                     HbaseColumn hbaseColumn = Utils.getHbaseColumn(split.getTable(), hc);
                     bytes =
                             row.getValue(
@@ -207,7 +207,7 @@ public class HBaseRecordCursor
                     if (bytes != null) {
                         bytesRead += bytes.length;
                     }
-                }
+//                }
             }
 
             serializer.deserialize(row, this.defaultValue, split.getTable());

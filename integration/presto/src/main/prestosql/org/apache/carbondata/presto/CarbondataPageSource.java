@@ -232,7 +232,7 @@ class CarbondataPageSource implements ConnectorPageSource {
 
       Block[] blocks = new Block[columnHandles.size()];
       for (int column = 0; column < blocks.length; column++) {
-        blocks[column] = new LazyBlock(batchSize, new CarbondataBlockLoader(column));
+        blocks[column] = new LazyBlock(batchSize, new CarbondataBlockLoader(column, batchSize));
       }
       Page page = new Page(batchSize, blocks);
       return page;
@@ -469,9 +469,11 @@ class CarbondataPageSource implements ConnectorPageSource {
     private final int expectedBatchId = batchId;
     private final int columnIndex;
     private boolean loaded;
+    private int size;
 
-    CarbondataBlockLoader(int columnIndex) {
+    CarbondataBlockLoader(int columnIndex, int size) {
       this.columnIndex = columnIndex;
+      this.size = size;
     }
 
     @Override
@@ -483,6 +485,7 @@ class CarbondataPageSource implements ConnectorPageSource {
         vectorReader.getColumnarBatch().column(columnIndex).loadPage();
         PrestoVectorBlockBuilder blockBuilder =
             (PrestoVectorBlockBuilder) vectorReader.getColumnarBatch().column(columnIndex);
+        blockBuilder.setBatchSize(size);
         block = blockBuilder.buildBlock();
         sizeOfData += block.getSizeInBytes();
       } catch (Exception e) {

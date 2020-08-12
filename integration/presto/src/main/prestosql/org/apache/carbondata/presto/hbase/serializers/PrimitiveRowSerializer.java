@@ -57,7 +57,7 @@ public class PrimitiveRowSerializer
 
     private final Map<String, byte[]> columnValues = new HashMap<>();
 
-    private String[] rowIdName;
+    private HbaseColumn[] rowIdName;
 
     private List<HiveColumnHandle> columnHandles;
 
@@ -72,7 +72,7 @@ public class PrimitiveRowSerializer
     }
 
     @Override
-    public void setRowIdName(String[] name, Type[] types)
+    public void setRowIdName(HbaseColumn[] name, Type[] types)
     {
         this.rowIdName = name;
     }
@@ -109,9 +109,9 @@ public class PrimitiveRowSerializer
      */
     public void deserialize(Result result, String defaultValue, HbaseCarbonTable table)
     {
-        if (!columnValues.containsKey(rowIdName)) {
-            columnValues.put(rowIdName[0], result.getRow());
-        }
+//        if (!columnValues.containsKey(rowIdName)) {
+//            columnValues.put(rowIdName[0], result.getRow());
+//        }
 
         String family;
         String qualifer;
@@ -119,12 +119,12 @@ public class PrimitiveRowSerializer
         byte[] bytes;
         for (HiveColumnHandle hc : columnHandles) {
             HbaseColumn hbaseColumn = Utils.getHbaseColumn(table, hc);
-            if (!hbaseColumn.getColName().equals(rowIdName)) {
+//            if (!hbaseColumn.getColName().equals(rowIdName)) {
                 family = hbaseColumn.getCf();
                 qualifer = hc.getName();
                 bytes = result.getValue(family.getBytes(UTF_8), qualifer.getBytes(UTF_8));
                 columnValues.put(familyQualifierColumnMap.get(family).get(qualifer), bytes);
-            }
+//            }
         }
     }
 

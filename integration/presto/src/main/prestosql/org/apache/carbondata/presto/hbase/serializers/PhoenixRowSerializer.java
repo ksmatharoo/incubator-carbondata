@@ -63,7 +63,7 @@ public class PhoenixRowSerializer
 
     private final Map<String, byte[]> columnValues = new HashMap<>();
 
-    private String[] rowIdName;
+    private HbaseColumn[] rowIdName;
 
     private Type[] rowTypes;
 
@@ -80,7 +80,7 @@ public class PhoenixRowSerializer
     }
 
     @Override
-    public void setRowIdName(String[] name, Type[] types)
+    public void setRowIdName(HbaseColumn[] name, Type[] types)
     {
         this.rowIdName = name;
         this.rowTypes = types;
@@ -118,40 +118,32 @@ public class PhoenixRowSerializer
      */
     public void deserialize(Result result, String defaultValue, HbaseCarbonTable table)
     {
-        if (rowIdName.length < 2) {
-            if (!columnValues.containsKey(rowIdName[0])) {
-                columnValues.put(rowIdName[0], result.getRow());
-            }
-        } else {
-            for (int i = 0; i < rowIdName.length; i++) {
-                if (!columnValues.containsKey(rowIdName[i])) {
-                    columnValues.put(rowIdName[i], result.getRow());
-                }
-            }
-        }
+//        if (rowIdName.length < 2) {
+//            if (!columnValues.containsKey(rowIdName[0])) {
+//                columnValues.put(rowIdName[0], result.getRow());
+//            }
+//        } else {
+//            for (int i = 0; i < rowIdName.length; i++) {
+//                if (!columnValues.containsKey(rowIdName[i])) {
+//                    columnValues.put(rowIdName[i], result.getRow());
+//                }
+//            }
+//        }
 
         String family;
         String qualifer;
         byte[] bytes;
         for (HiveColumnHandle hc : columnHandles) {
             HbaseColumn hbaseColumn = Utils.getHbaseColumn(table, hc);
-            if (!contains(hbaseColumn.getColName(), rowIdName)) {
+//            if (!Utils.contains(hbaseColumn.getColName(), rowIdName)) {
                 family = hbaseColumn.getCf();
                 qualifer = hc.getName();
                 bytes = result.getValue(family.getBytes(UTF_8), qualifer.getBytes(UTF_8));
                 columnValues.put(familyQualifierColumnMap.get(family).get(qualifer), bytes);
-            }
+//            }
         }
     }
 
-    boolean contains(String colName,  String[] vals) {
-        for (int i = 0; i < vals.length; i++) {
-            if (vals[i].equals(colName)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     int getIndex(String colName,  String[] vals) {
         for (int i = 0; i < vals.length; i++) {
@@ -228,21 +220,21 @@ public class PhoenixRowSerializer
     public <T> T getBytesObject(Type type, String columnName)
     {
         byte[] fieldValue = getFieldValue(columnName);
-        int index = getIndex(columnName, rowIdName);
-        if (rowIdName.length > 1 && index > -1) {
-            Object[] objects = decodeCompositeRowKey(fieldValue, rowTypes);
-            if (rowTypes[index].equals(INTEGER)) {
-                return (T) (Long)((Integer)objects[index]).longValue();
-            } else if (rowTypes[index].equals(SMALLINT)) {
-                return (T) (Long)((Short)objects[index]).longValue();
-            }  else if (rowTypes[index].equals(TINYINT)) {
-                return (T) (Long)((Byte)objects[index]).longValue();
-            } else if (rowTypes[index] instanceof VarcharType) {
-                return (T) Slices.utf8Slice(objects[index].toString());
-            } else {
-                return (T) objects[index];
-            }
-        }
+//        int index = getIndex(columnName, rowIdName);
+//        if (rowIdName.length > 1 && index > -1) {
+//            Object[] objects = decodeCompositeRowKey(fieldValue, rowTypes);
+//            if (rowTypes[index].equals(INTEGER)) {
+//                return (T) (Long)((Integer)objects[index]).longValue();
+//            } else if (rowTypes[index].equals(SMALLINT)) {
+//                return (T) (Long)((Short)objects[index]).longValue();
+//            }  else if (rowTypes[index].equals(TINYINT)) {
+//                return (T) (Long)((Byte)objects[index]).longValue();
+//            } else if (rowTypes[index] instanceof VarcharType) {
+//                return (T) Slices.utf8Slice(objects[index].toString());
+//            } else {
+//                return (T) objects[index];
+//            }
+//        }
 
         if (type.equals(BIGINT)) {
             return (T) PLong.INSTANCE.toObject(fieldValue);

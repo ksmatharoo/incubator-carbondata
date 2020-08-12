@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.carbondata.common.exceptions.sql.InvalidLoadOptionException;
 import org.apache.carbondata.common.logging.LogServiceFactory;
@@ -41,6 +42,8 @@ import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
+import org.apache.carbondata.core.indexstore.PrunedSegmentInfo;
+import org.apache.carbondata.core.indexstore.SegmentPrunerFactory;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.CarbonMetadata;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
@@ -378,6 +381,14 @@ public class CarbonTableReader {
       filteredPartitions = findRequiredPartitions(constraints, carbonTable, partitions);
     }
     try {
+      List<PrunedSegmentInfo> pruneSegment =
+          SegmentPrunerFactory.INSTANCE.getSegmentPruner(carbonTable)
+              .pruneSegment(carbonTable, filters, new String[0], new String[0]);
+      List<Segment> validCarbonSegs = pruneSegment.stream()
+          .filter(f -> f.getSegment().getLoadMetadataDetails().isCarbonFormat())
+          .map(PrunedSegmentInfo::getSegment).collect(Collectors.toList());
+      LOGGER.info("Pruned carbon Segments : " + validCarbonSegs);
+      CarbonInputFormat.setPrunedSegments(jobConf, validCarbonSegs);
       CarbonTableInputFormat<Object> carbonTableInputFormat =
           createInputFormat(jobConf, carbonTable.getAbsoluteTableIdentifier(),
               new DataMapFilter(carbonTable, filters, true), filteredPartitions);
@@ -413,16 +424,8 @@ public class CarbonTableReader {
         LOGGER.error("Size fo MultiblockList   " + multiBlockSplitList.size());
       }
 
-      ReadCommittedScope readCommitted =
-          carbonTableInputFormat.getReadCommitted(job, carbonTable.getAbsoluteTableIdentifier());
-      SegmentStatusManager statusManager = new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier(), jobConf);
-      SegmentStatusManager.ValidAndInvalidSegmentsInfo validAndInvalidSegments = statusManager
-          .getValidAndInvalidSegments(carbonTable.isChildTableForMV(),
-              readCommitted.getSegmentList(), readCommitted);
-      List<Segment> validSegments = validAndInvalidSegments.getValidSegments();
-      List<Segment> hbaseSegs = validSegments.stream().filter(
-          f -> f.getLoadMetadataDetails().getFileFormat().getFormat().equalsIgnoreCase("hbase"))
-          .collect(Collectors.toList());
+      List<Segment> hbaseSegs = pruneSegment.stream().filter(f -> !f.getSegment().isCarbonSegment() && f.getSegment().
+          getLoadMetadataDetails().getFileFormat().getFormat().equalsIgnoreCase("hbase")).map(PrunedSegmentInfo::getSegment).collect(Collectors.toList());
       if (hbaseSegs.size() > 0) {
         HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
             CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
@@ -509,11 +512,10 @@ public class CarbonTableReader {
     Domain rowIdDomain = null;
     Map<HiveColumnHandle, Domain> domains = constraints.getDomains().get();
     Map<String, List<Range>> rangesMap = new HashMap<>();
-    String[] rowIdNames = Arrays.stream(tableHandle.getRow().getHbaseColumns()).map(f -> f.getColName()).toArray(String[]::new);
     int rangeSize = 0;
     for (Map.Entry<HiveColumnHandle, Domain> entry : domains.entrySet()) {
       HiveColumnHandle handle = entry.getKey();
-      if (Utils.contains(handle.getName(), rowIdNames)) {
+      if (Utils.contains(handle.getName(), tableHandle.getRow().getHbaseColumns())) {
         rowIdDomain = entry.getValue();
         List<Range> rowIds = rowIdDomain != null ? rowIdDomain.getValues().getRanges().getOrderedRanges() : new ArrayList<>();
         rangeSize = rowIds.size();
