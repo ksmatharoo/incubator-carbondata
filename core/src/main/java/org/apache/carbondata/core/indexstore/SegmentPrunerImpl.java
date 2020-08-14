@@ -41,6 +41,7 @@ import org.apache.carbondata.core.readcommitter.TableStatusReadCommittedScope;
 import org.apache.carbondata.core.scan.expression.Expression;
 import org.apache.carbondata.core.scan.filter.FilterUtil;
 import org.apache.carbondata.core.scan.filter.executer.FilterExecuter;
+import org.apache.carbondata.core.scan.filter.executer.MinMaxPruneMetadata;
 import org.apache.carbondata.core.scan.filter.resolver.FilterResolverIntf;
 import org.apache.carbondata.core.segmentmeta.SegmentColumnMetaDataInfo;
 import org.apache.carbondata.core.segmentmeta.SegmentMetaDataInfo;
@@ -143,11 +144,13 @@ public class SegmentPrunerImpl implements SegmentPruner {
         .getSegmentProperties();
     FilterResolverIntf resolver =
         new DataMapFilter(segmentProperties, carbonTable, filter).getResolver();
-    // prepare filter executer using datmapFilter resolver
+    // prepare filter executor using datmapFilter resolver
     FilterExecuter filterExecuter =
         FilterUtil.getFilterExecuterTree(resolver, segmentProperties, null, null, false);
     // check if block has to be pruned based on segment minmax
-    if (filterExecuter.isScanRequired(max, min, minMaxFlag).isEmpty()) {
+    if (filterExecuter
+        .isScanRequired(new MinMaxPruneMetadata(max, min, minMaxFlag, segment.isCarbonSegment()))
+        .isEmpty()) {
       return null;
     }
     return new PrunedSegmentInfo(segment, segmentFile);

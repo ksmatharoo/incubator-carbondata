@@ -25,16 +25,16 @@ import scala.collection.JavaConverters._
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datamap.Segment
 import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.SegmentFileStore
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.segmentmeta.{SegmentColumnMetaDataInfo, SegmentMetaDataInfo}
-import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails, SegmentStatus,
-  SegmentStatusManager}
+import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails, SegmentStatus, SegmentStatusManager}
 import org.apache.carbondata.core.transaction.TransactionAction
-import org.apache.carbondata.core.util.ByteUtil
+import org.apache.carbondata.core.util.{ByteUtil, CarbonUtil}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.processing.loading.model.{CarbonDataLoadSchema, CarbonLoadModel}
 import org.apache.carbondata.processing.util.CarbonLoaderUtil
@@ -52,19 +52,31 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
     model.setCarbonDataLoadSchema(new CarbonDataLoadSchema(carbonTable))
     model.setDatabaseName(carbonTable.getDatabaseName)
     model.setTableName(carbonTable.getTableName)
-    val detailses = SegmentStatusManager.readLoadMetadata(CarbonTablePath
+
+    val existingLoadMetadataDetails = SegmentStatusManager.readLoadMetadata(CarbonTablePath
       .getMetadataPath(
         carbonTable.getTablePath))
-    val hbaseDetail = detailses.find(_.getLoadName.equals(loadingSegment))
+    val hbaseDetail = existingLoadMetadataDetails.find(_.getLoadName.equals(loadingSegment))
     if (hbaseDetail.isEmpty) {
       throw new MalformedCarbonCommandException(s"Segmentid $loadingSegment is not found")
     }
-    // TODO Update min values for incremental columns in SegmentMetaDataInfo
-    //    val fileStore = SegmentFileStore.readSegmentFile(CarbonTablePath.getSegmentFilePath
-    //    (carbonTable
-    //      .getTablePath, hbaseDetail.get.getSegmentFile))
 
-    model.setLoadMetadataDetails(detailses.toList.asJava)
+    val externalSchema = CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier)
+    val minMacColumnIdString = externalSchema.getParam("MinMaxColumns")
+    val minMaxColumns = if (null != minMacColumnIdString) {
+      CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier)
+        .getParam("MinMaxColumns").split(",").toSet
+    } else {
+      "".split(",").toSet
+    }
+
+    val currentLoadedLoadMetadata = existingLoadMetadataDetails.filter(detail => detail.getLoadName
+      .equalsIgnoreCase(loadingSegment))
+    val currentLoadedMetadataInfo = SegmentFileStore.readSegmentFile(
+      CarbonTablePath.getSegmentFilesLocation(carbonTable.getTablePath) + "/" +
+      currentLoadedLoadMetadata(0).getSegmentFile).getSegmentMetaDataInfo
+
+    model.setLoadMetadataDetails(existingLoadMetadataDetails.toList.asJava)
     val newLoadMetaEntry = new LoadMetadataDetails
     model.setFactTimeStamp(CarbonUpdateUtil.readCurrentTime)
     CarbonLoaderUtil.populateNewLoadMetaEntry(newLoadMetaEntry,
@@ -73,15 +85,29 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
       false)
     newLoadMetaEntry.setFileFormat(new FileFormat("hbase"))
     CarbonLoaderUtil.recordNewLoadMetadata(newLoadMetaEntry, model, true, false)
+
     val columnMinMaxInfo = new util.HashMap[String, SegmentColumnMetaDataInfo]()
-    carbonTable.getTableInfo.getFactTable.getListOfColumns.asScala.
-      map(f => (f.getColumnName, new SegmentColumnMetaDataInfo(false,
-        Array[Byte](0),
-        Array[Byte](0),
-        false))).foreach(f => columnMinMaxInfo.put(f._1, f._2))
+    carbonTable.getTableInfo
+      .getFactTable
+      .getListOfColumns
+      .asScala
+      .map(f => if (minMaxColumns.contains(f.getColumnName)) {
+        (f.getColumnUniqueId, new SegmentColumnMetaDataInfo(false,
+          currentLoadedMetadataInfo
+            .getSegmentColumnMetaDataInfoMap
+            .get(f.getColumnUniqueId)
+            .getColumnMaxValue,
+          "NOTUSEDMAX".getBytes(CarbonCommonConstants.DEFAULT_CHARSET),
+          false))
+      } else {
+        (f.getColumnUniqueId, new SegmentColumnMetaDataInfo(false,
+          Array[Byte](),
+          Array[Byte](),
+          false))
+      }).foreach(f => columnMinMaxInfo.put(f._1, f._2))
     val segmentMetaDataInto = new SegmentMetaDataInfo(columnMinMaxInfo)
     columnMinMaxInfo.put("rowtimestamp",
-      new SegmentColumnMetaDataInfo(false, ByteUtil.toBytes(maxTimeStamp), Array[Byte](0), false))
+      new SegmentColumnMetaDataInfo(false, ByteUtil.toBytes(maxTimeStamp), Array[Byte](), false))
     val segment = new Segment(
       model.getSegmentId,
       SegmentFileStore.genSegmentFileName(
@@ -98,8 +124,9 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
         new util.ArrayList[FileStatus](),
         segmentMetaDataInto,
         false)
-    val hbaseCurrentSuccessSegment = detailses.filter(det => det.getFileFormat.toString.equals("hbase") &&
-                                             det.getSegmentStatus == SegmentStatus.SUCCESS).head
+    val hbaseCurrentSuccessSegment = existingLoadMetadataDetails
+      .filter(det => det.getFileFormat.toString.equals("hbase") &&
+                     det.getSegmentStatus == SegmentStatus.SUCCESS).head
     hbaseCurrentSuccessSegment.setSegmentStatus(SegmentStatus.COMPACTED)
     hbaseCurrentSuccessSegment.setModificationOrdeletionTimesStamp(model.getFactTimeStamp)
     hbaseCurrentSuccessSegment.setMergedLoadName(newLoadMetaEntry.getLoadName)
@@ -109,7 +136,7 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
       newLoadMetaEntry.setDataSize("0")
       newLoadMetaEntry.setIndexSize("0")
       newLoadMetaEntry.setSegmentStatus(SegmentStatus.SUCCESS)
-      val allLoadMetadata = detailses :+ newLoadMetaEntry
+      val allLoadMetadata = existingLoadMetadataDetails :+ newLoadMetaEntry
       SegmentStatusManager.writeLoadDetailsIntoFile(CarbonTablePath.getTableStatusFilePath(
         carbonTable.getAbsoluteTableIdentifier.getTablePath),
         allLoadMetadata)

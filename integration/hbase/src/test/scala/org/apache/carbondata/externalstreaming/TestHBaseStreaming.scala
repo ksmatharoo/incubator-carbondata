@@ -98,6 +98,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     var options = Map("format" -> "HBase")
     options = options + ("defaultColumnFamily" -> "cf1")
     options = options + ("rowKeyColumnFamily" -> "rowkey")
+    options = options + ("MinMaxColumns" -> "col0")
     CarbonAddExternalStreamingSegmentCommand(Some("default"), "source", writeCat, None, options).processMetadata(
       sqlContext.sparkSession)
 
@@ -127,6 +128,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     var optionsNew = Map("format" -> "HBase")
     optionsNew = optionsNew + ("defaultColumnFamily" -> "cf1")
     optionsNew = optionsNew + ("rowKeyColumnFamily" -> "rowkey")
+    optionsNew = options + ("MinMaxColumns" -> "col0")
     CarbonAddExternalStreamingSegmentCommand(Some("default"),
       "sourceWithTimestamp",writeCatTimestamp, None,
       optionsNew).processMetadata(
@@ -180,6 +182,10 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     assert(rows.size() == 20)
     assert(sql("select * from sourceWithTimestamp where segmentid(1)").collectAsList().size() == 10)
     assert(sql("select * from sourceWithTimestamp where segmentid(2)").collectAsList().size() == 10)
+    assert(sql("select * from sourceWithTimestamp where col0 = 5").collectAsList().size() == 1)
+    assert(sql("select * from sourceWithTimestamp where col0 = 14").collectAsList().size() == 1)
+    assert(sql("select * from sourceWithTimestamp where col0 > 1 and col0 < 7").collectAsList().size() == 5)
+    assert(sql("select * from sourceWithTimestamp where col0 > 12 and col0 < 16").collectAsList().size() == 3)
   }
 
   override def afterAll(): Unit = {
