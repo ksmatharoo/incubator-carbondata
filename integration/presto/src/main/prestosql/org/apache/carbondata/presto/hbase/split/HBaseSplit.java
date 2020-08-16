@@ -176,7 +176,7 @@ public class HBaseSplit
                 JsonSerializationContext jsonSerializationContext) {
                 SliceOutput output = new DynamicSliceOutput(64);
                 TestingBlockEncodingSerde blockEncodingSerde = new TestingBlockEncodingSerde();
-                blockEncodingSerde.writeBlock(output, marker.getValueBlock().get());
+                blockEncodingSerde.writeBlock(output, marker.getValueBlock().isPresent()?marker.getValueBlock().get():null);
                 String encoded = Base64.getEncoder().encodeToString(output.slice().getBytes());
                 JsonObject jsonMerchant = new JsonObject();
 
@@ -215,7 +215,7 @@ public class HBaseSplit
                 byte[] decoded = Base64.getDecoder().decode(str[1]);
                 BasicSliceInput input = Slices.wrappedBuffer(decoded).getInput();
                 Block readBlock = blockEncodingSerde.readBlock(input);
-                return new Marker(getType(str[0]), Optional.of(readBlock), Marker.Bound.valueOf(str[2]));
+                return new Marker(getType(str[0]), readBlock==null?Optional.empty() : Optional.of(readBlock), Marker.Bound.valueOf(str[2]));
             }
         });
 //        mapper.registerModule(module);

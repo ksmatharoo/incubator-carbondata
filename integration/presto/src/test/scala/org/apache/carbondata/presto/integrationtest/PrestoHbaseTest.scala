@@ -156,4 +156,10 @@ class PrestoHbaseTest extends FunSuiteLike with BeforeAndAfterAll {
       .executeQuery("select count(*) from alldatatype")
     System.out.println(actualResult)
   }
+
+  test("test the result for alldatatypes with lessthan query ") {
+    val actualResult: List[Map[String, Any]] = prestoServer
+      .executeQuery("select * from alldatatype where col6<800")
+    System.out.println(actualResult)
+  }
 }

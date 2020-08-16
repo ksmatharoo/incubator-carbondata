@@ -103,7 +103,7 @@ public class Utils
     }
 
     public static HbaseColumn getHbaseColumn(HbaseCarbonTable table, HiveColumnHandle handle){
-        return table.getsMap().values().stream().filter(f -> !f.getCf().equals("rowkey") && f.getColNameWithoutCf().equals(handle.getName())).findAny().get();
+        return table.getsMap().values().stream().filter(f -> !f.getCf().equals("rowkey") && f.getColNameWithoutCf().equalsIgnoreCase(handle.getName())).findAny().get();
     }
 
     public static boolean containsAll(List<HiveColumnHandle> handles, HbaseColumn[] rowKeys){

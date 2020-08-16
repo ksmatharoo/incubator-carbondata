@@ -70,7 +70,9 @@ public final class TestingBlockEncodingSerde
     {
         // read the encoding name
         String encodingName = readLengthPrefixedString(input);
-
+        if (encodingName.isEmpty()) {
+            return null;
+        }
         // look up the encoding factory
         BlockEncoding blockEncoding = blockEncodings.get(encodingName);
         checkArgument(blockEncoding != null, "Unknown block encoding %s", encodingName);
@@ -82,6 +84,10 @@ public final class TestingBlockEncodingSerde
     @Override
     public void writeBlock(SliceOutput output, Block block)
     {
+        if (block ==null) {
+            writeLengthPrefixedString(output, "");
+            return;
+        }
         while (true) {
             // get the encoding name
             String encodingName = block.getEncodingName();

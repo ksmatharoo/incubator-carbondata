@@ -421,12 +421,12 @@ public class CarbonTableReader {
               inputSplits.get(j).stream().flatMap(f -> Arrays.stream(getLocations(f))).distinct()
                   .toArray(String[]::new)));
         }
-        LOGGER.error("Size fo MultiblockList   " + multiBlockSplitList.size());
       }
 
       List<Segment> hbaseSegs = pruneSegment.stream().filter(f -> !f.getSegment().isCarbonSegment() && f.getSegment().
           getLoadMetadataDetails().getFileFormat().getFormat().equalsIgnoreCase("hbase")).map(PrunedSegmentInfo::getSegment).collect(Collectors.toList());
       if (hbaseSegs.size() > 0) {
+        LOGGER.info("Pruned hbase Segments : " + hbaseSegs);
         HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
             CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
         SegmentFileStore.SegmentFile segmentFile = SegmentFileStore.readSegmentFile(CarbonTablePath
