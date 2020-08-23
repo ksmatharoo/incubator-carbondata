@@ -2,7 +2,7 @@ package org.apache.carbondata.externalstreaming
 
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
-import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
+import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandOffOptions, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
@@ -101,7 +101,7 @@ class DemoCarbonHBase extends QueryTest with BeforeAndAfterAll {
   }
 
   def handOff(): Unit = {
-    HandoffHbaseSegmentCommand(None, "historytable", Option.empty, 0).run(sqlContext.sparkSession)
+    HandoffHbaseSegmentCommand(None, "historytable", Option.empty, new HandOffOptions().setGraceTimeInMillis(0)).run(sqlContext.sparkSession)
   }
 
   override def afterAll(): Unit = {

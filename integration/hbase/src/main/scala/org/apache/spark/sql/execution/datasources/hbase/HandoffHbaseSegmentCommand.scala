@@ -54,8 +54,7 @@ case class HandoffHbaseSegmentCommand(
     databaseNameOp: Option[String],
     tableName: String,
     joinColumns: Option[Array[String]],
-    graceTimeInMillis: Long,
-    deleteRows: Boolean = true)
+    handOffOptions: HandOffOptions)
   extends DataCommand {
 
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
@@ -129,7 +128,7 @@ case class HandoffHbaseSegmentCommand(
       transactionManager.rollbackTransaction(transactionId);
       return Seq.empty
     }
-    val maxTimeStamp = rows.head.getLong(0) - graceTimeInMillis
+    val maxTimeStamp = rows.head.getLong(0) - handOffOptions.getGraceTimeInMillis
     val updated = loadDF.where(col(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).leq(lit(maxTimeStamp)))
     val setValue = CarbonProperties.getInstance()
       .getProperty(CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT,
@@ -168,7 +167,7 @@ case class HandoffHbaseSegmentCommand(
     }
 
     // delete rows
-    if (deleteRows) {
+    if (handOffOptions.getDeleteRows) {
       val hBaseRelationForDelete =
         new CarbonHBaseRelation(Map(
           HBaseTableCatalog.tableCatalog -> externalSchema.getHandOffSchema,
@@ -225,21 +224,20 @@ case class HandoffHbaseSegmentCommand(
     if (uCount > 0) {
       uDf = uDf.union(dDf)
       // TODO make it configurable
-      if (uCount < 1000) {
+      if (uCount < handOffOptions.getFilterJoinPushLimit) {
         val rows = uDf.select(joinColumns.get.map(col): _*).collect()
         val filter = joinColumns.get.zipWithIndex.map { j =>
           col(j._1).isInCollection(rows.map(r => lit(r.get(j._2))))
         }.reduce[Column]((l, r) => l.and(r))
         uWithTuples = tableDF.withColumn(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID,
           expr("getTupleId()"))
-          .filter(filter)
-          .select(Seq(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID)) ++
-                  joinColumns.get.map(col): _*)
-        uWithTuples.cache()
-        uWithTuples = uWithTuples.select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
+          .filter(filter).select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
       } else {
-        // TODO handle with join
+        uWithTuples = tableDF.withColumn(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID,
+          expr("getTupleId()")).join(uDf.select(joinColumns.get.map(col): _*),
+          joinColumns.get.map(c => tableDF.col(c).equalTo(uDf.col(c))).reduce[Column]((l, r) => l.and(r))).select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
       }
+      uWithTuples.cache()
     }
     if (uCount <= 0 && dDf.count() > 0) {
       val rows = dDf.select(joinColumns.get.map(col): _*).collect()

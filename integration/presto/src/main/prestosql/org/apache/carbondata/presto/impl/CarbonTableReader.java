@@ -429,15 +429,15 @@ public class CarbonTableReader {
         LOGGER.info("Pruned hbase Segments : " + hbaseSegs);
         HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
             CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
-        SegmentFileStore.SegmentFile segmentFile = SegmentFileStore.readSegmentFile(CarbonTablePath
-            .getSegmentFilePath(carbonTable.getTablePath(), hbaseSegs.get(0).getSegmentFileName()));
-        SegmentColumnMetaDataInfo rowtimestamp =
-            segmentFile.getSegmentMetaDataInfo().getSegmentColumnMetaDataInfoMap()
-                .get("rowtimestamp");
         long timestamp = 0;
-        if (rowtimestamp != null) {
-          timestamp = ByteUtil.toLong(rowtimestamp.getColumnMinValue(), 0,
-              rowtimestamp.getColumnMinValue().length) + 1;
+        if (!pruneSegment.get(0).isIgnoreTimeStamp()) {
+          SegmentColumnMetaDataInfo rowtimestamp =
+              pruneSegment.get(0).getSegmentFile().getSegmentMetaDataInfo().getSegmentColumnMetaDataInfoMap()
+                  .get("rowtimestamp");
+          if (rowtimestamp != null) {
+            timestamp = ByteUtil.toLong(rowtimestamp.getColumnMinValue(), 0,
+                rowtimestamp.getColumnMinValue().length) + 1;
+          }
         }
         List<HBaseSplit> hbaseSplits;
         if(Utils.isBatchGet(constraints, hbaseTable.getRow().getHbaseColumns())) {

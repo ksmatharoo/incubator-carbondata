@@ -1,9 +1,10 @@
 package org.apache.carbondata.externalstreaming
 
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
-import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
+import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandOffOptions, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
@@ -12,8 +13,8 @@ import org.apache.carbondata.hbase.HBaseConstants
 
 class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
   var htu: HBaseTestingUtility = _
-  var loadTimestamp:Long = 0
-  var hBaseConfPath:String = _
+  var loadTimestamp: Long = 0
+  var hBaseConfPath: String = _
 
   val handoffCat =
     s"""{
@@ -72,6 +73,7 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     options = options + ("delete_operation_value" -> "delete")
     options = options + ("defaultColumnFamily" -> "cf2")
     options = options + ("rowKeyColumnFamily" -> "rowkey")
+    options = options + ("MinMaxColumns" -> "id")
     CarbonAddExternalStreamingSegmentCommand(Some("default"),
       "scdhbaseCarbon",
       queryCat,
@@ -92,7 +94,7 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
     val prevRows = sql("select * from scdhbaseCarbon").collect()
     val columns = new Array[String](1)
     columns(0) = "id"
-    HandoffHbaseSegmentCommand(None, "scdhbaseCarbon", Some(columns), 0, false).run(sqlContext
+    HandoffHbaseSegmentCommand(None, "scdhbaseCarbon", Some(columns), new HandOffOptions().setDeleteRows(false).setGraceTimeInMillis(0)).run(sqlContext
       .sparkSession)
     checkAnswer(sql("select * from scdhbaseCarbon"), prevRows)
     checkAnswer(sql("select * from scdhbaseCarbon where segmentid(1)"), prevRows)
@@ -102,27 +104,44 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
       HBaseTableCatalog.newTable -> "5",
       HBaseRelation.HBASE_CONFIGFILE -> hBaseConfPath,
       HBaseRelation.TIMESTAMP -> l.toString)
-    frame.write.options(shcExampleTableOption).format("org.apache.spark.sql.execution.datasources.hbase").save()
-    HandoffHbaseSegmentCommand(None, "scdhbaseCarbon", Some(columns), 0, deleteRows = false).run(sqlContext
-      .sparkSession)
+    frame.write
+      .options(shcExampleTableOption)
+      .format("org.apache.spark.sql.execution.datasources.hbase")
+      .save()
+    HandoffHbaseSegmentCommand(None, "scdhbaseCarbon", Some(columns), new HandOffOptions().setDeleteRows(false).setGraceTimeInMillis(0).setFilterJoinPushLimit(0)).run(
+      sqlContext
+        .sparkSession)
     assert(sql("select count(*) from scdhbaseCarbon where excludesegmentId(4)").collectAsList()
              .get(0)
              .get(0) == 18)
-    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and id='id3'").collectAsList()
-             .size() == 1)
-    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and id='id4'").collectAsList()
-             .size() == 1)
-    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and operation_type='update'").collectAsList()
-             .size() == 2)
-    assert(sql("select * from scdhbaseCarbon where excludesegmentId(4) and operation_type='insert'").collectAsList()
-             .size() == 16)
+    assert(
+      sql("select * from scdhbaseCarbon where excludesegmentId(4) and id='id3'").collectAsList()
+        .size() == 1)
+    assert(
+      sql("select * from scdhbaseCarbon where excludesegmentId(4) and id='id4'").collectAsList()
+        .size() == 1)
+    assert(
+      sql("select * from scdhbaseCarbon where excludesegmentId(4) and operation_type='update'").collectAsList()
+
+        .size() == 2)
+    assert(
+      sql("select * from scdhbaseCarbon where excludesegmentId(4) and operation_type='insert'").collectAsList()
+        .size() == 16)
   }
 
   def generateData(numOrders: Int = 10): DataFrame = {
     import sqlContext.implicits._
-    sqlContext.sparkContext.parallelize(1 to numOrders, 4)
-      .map { x => ("id"+x, "id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
-      }.toDF("rowkey.id", "cf2.id", "cf2.name", "cf2.c_name", "cf2.quantity", "cf2.price", "cf2.operation_type")
+    sqlContext.sparkContext
+      .parallelize(1 to numOrders, 4)
+      .map { x => ("id" + x, "id" + x, s"order$x", s"customer$x", x * 10, x * 75, "insert")
+      }
+      .toDF("rowkey.id",
+        "cf2.id",
+        "cf2.name",
+        "cf2.c_name",
+        "cf2.quantity",
+        "cf2.price",
+        "cf2.operation_type")
   }
 
   def generateFullCDC(
@@ -133,22 +152,48 @@ class TestHBaseScdStreaming extends QueryTest with BeforeAndAfterAll {
       numNewOrders: Int
   ): DataFrame = {
     import sqlContext.implicits._
-    val ds1 = sqlContext.sparkContext.parallelize(numNewOrders+1 to (numOrders), 4)
-      .map {x =>
+    val ds1 = sqlContext.sparkContext
+      .parallelize(numNewOrders + 1 to (numOrders), 4)
+      .map { x =>
         if (x <= numNewOrders + numUpdatedOrders) {
-          ("id"+x, "id"+x, s"order$x",s"customer$x", x*10, x*75, "update")
+          ("id" + x, "id" + x, s"order$x", s"customer$x", x * 10, x * 75, "update")
         } else {
-          ("id"+x, "id"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
+          ("id" + x, "id" + x, s"order$x", s"customer$x", x * 10, x * 75, "insert")
         }
-      }.toDF("rowkey.id", "cf2.id", "cf2.name", "cf2.c_name", "cf2.quantity", "cf2.price", "cf2.operation_type")
+      }
+      .toDF("rowkey.id",
+        "cf2.id",
+        "cf2.name",
+        "cf2.c_name",
+        "cf2.quantity",
+        "cf2.price",
+        "cf2.operation_type")
     val ds2 = sqlContext.sparkContext.parallelize(1 to numNewOrders, 4)
-      .map {x => ("newid"+x,"newid"+x, s"order$x",s"customer$x", x*10, x*75, "insert")
+      .map { x => ("newid" + x, "newid" + x, s"order$x", s"customer$x", x * 10, x * 75, "insert")
       }.toDS().toDF()
     ds1.union(ds2)
   }
 
   override def afterAll(): Unit = {
-    sql("DROP TABLE IF EXISTS scdhbaseCarbon")
+    //    sql("DROP TABLE IF EXISTS scdhbaseCarbon")
     htu.shutdownMiniCluster()
   }
+
+  class HBaseTestingUtilityCus(path: String) extends HBaseTestingUtility {
+    override def getRandomDir: Path = {
+      println("HHHHH : " + path)
+      new Path(path)
+    }
+
+    @throws[Exception]
+    override def shutdownMiniCluster(): Unit = {
+      println("Shutting down minicluster")
+      this.shutdownMiniHBaseCluster()
+      this.shutdownMiniDFSCluster()
+      this.shutdownMiniZKCluster()
+//      this.cleanupTestDir
+      println("Minicluster is down")
+    }
+  }
+
 }

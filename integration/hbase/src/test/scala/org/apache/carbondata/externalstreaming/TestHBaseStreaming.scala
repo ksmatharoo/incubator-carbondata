@@ -21,7 +21,7 @@ package org.apache.carbondata.externalstreaming
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
-import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
+import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandOffOptions, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 import org.apache.spark.sql.functions._
@@ -155,7 +155,7 @@ class TestHBaseStreaming extends QueryTest with BeforeAndAfterAll {
     val prevRows2 = sql("select * from sourceWithTimestamp where col1='String0 extra'").collect()
     assert(prevRows2.length == 1)
     val prevRows = sql("select * from sourceWithTimestamp").collect()
-    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", Option.empty, 0, false).run(sqlContext.sparkSession)
+    HandoffHbaseSegmentCommand(None, "sourceWithTimestamp", Option.empty, new HandOffOptions().setDeleteRows(false).setGraceTimeInMillis(0)).run(sqlContext.sparkSession)
     checkAnswer(sql("select * from sourceWithTimestamp"), prevRows)
     val data = (10 until 20).map { i =>
       IntKeyRecord(i)

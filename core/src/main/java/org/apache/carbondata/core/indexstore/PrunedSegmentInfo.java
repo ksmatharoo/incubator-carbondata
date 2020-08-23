@@ -22,6 +22,7 @@ import org.apache.carbondata.core.metadata.SegmentFileStore;
 public class PrunedSegmentInfo {
   private Segment segment;
   private SegmentFileStore.SegmentFile segmentFile;
+  private boolean ignoreTimeStamp;
 
   public PrunedSegmentInfo(Segment segment, SegmentFileStore.SegmentFile segmentFile) {
     this.segment = segment;
@@ -34,5 +35,13 @@ public class PrunedSegmentInfo {
 
   public SegmentFileStore.SegmentFile getSegmentFile() {
     return segmentFile;
+  }
+
+  public boolean isIgnoreTimeStamp() {
+    return ignoreTimeStamp;
+  }
+
+  public void setIgnoreTimeStamp(boolean ignoreTimeStamp) {
+    this.ignoreTimeStamp = ignoreTimeStamp;
   }
 }

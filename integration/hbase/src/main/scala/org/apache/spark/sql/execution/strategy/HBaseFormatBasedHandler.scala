@@ -49,8 +49,8 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
 
     var params = Map(
       HBaseTableCatalog.tableCatalog -> externalSchema.getQuerySchema)
-    val segmentFile = prunedSegmentInfo.head.getSegmentFile
-    if (!segmentFile.getSegmentMetaDataInfo.getSegmentColumnMetaDataInfoMap.isEmpty) {
+    if (!prunedSegmentInfo.head.isIgnoreTimeStamp) {
+      val segmentFile = prunedSegmentInfo.head.getSegmentFile
       val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
         .getSegmentColumnMetaDataInfoMap
         .get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).getColumnMinValue,

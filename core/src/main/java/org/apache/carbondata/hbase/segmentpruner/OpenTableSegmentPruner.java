@@ -38,12 +38,7 @@ public class OpenTableSegmentPruner extends SegmentPrunerImpl {
         seg -> seg.getSegment().getLoadMetadataDetails().getFileFormat().toString()
             .equalsIgnoreCase("hbase")).collect(Collectors.toList());
     if (hbase.size() > 0) {
-      try {
-        hbase.get(0).getSegmentFile()
-            .setSegmentMetaDataInfo(new SegmentMetaDataInfo(new HashMap<>()));
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+      hbase.get(0).setIgnoreTimeStamp(true);
       return hbase;
     } else {
       return prunedSegmentInfos;

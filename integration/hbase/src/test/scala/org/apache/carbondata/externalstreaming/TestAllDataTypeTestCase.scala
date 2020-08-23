@@ -2,7 +2,7 @@ package org.apache.carbondata.externalstreaming
 
 import org.apache.hadoop.hbase.HBaseTestingUtility
 import org.apache.spark.sql.execution.command.management.CarbonAddExternalStreamingSegmentCommand
-import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandoffHbaseSegmentCommand, SparkHBaseConf}
+import org.apache.spark.sql.execution.datasources.hbase.{HBaseRelation, HBaseTableCatalog, HandOffOptions, HandoffHbaseSegmentCommand, SparkHBaseConf}
 import org.apache.spark.sql.test.util.QueryTest
 import org.scalatest.BeforeAndAfterAll
 
@@ -115,7 +115,7 @@ class TestAllDataTypeTestCase extends QueryTest with BeforeAndAfterAll {
 
   test("test handoff segment") {
     val prevRows = sql("select * from alldatatype").collect()
-    HandoffHbaseSegmentCommand(None, "alldatatype", Option.empty, 0, false).run(sqlContext.sparkSession)
+    HandoffHbaseSegmentCommand(None, "alldatatype", Option.empty, new HandOffOptions().setDeleteRows(false).setGraceTimeInMillis(0)).run(sqlContext.sparkSession)
     val frame = sql("select * from alldatatype")
     checkAnswer(frame, prevRows)
     val data = (10 until 20).map { i =>

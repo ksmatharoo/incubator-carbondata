@@ -162,4 +162,10 @@ class PrestoHbaseTest extends FunSuiteLike with BeforeAndAfterAll {
       .executeQuery("select * from alldatatype where col6<800")
     System.out.println(actualResult)
   }
+
+  test("test the result for scdhbaseCarbon with lessthan query ") {
+    val actualResult: List[Map[String, Any]] = prestoServer
+      .executeQuery("select * from scdhbaseCarbon where id < 'id10'")
+    System.out.println(actualResult)
+  }
 }
