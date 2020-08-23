@@ -29,12 +29,17 @@ import java.util.stream.Stream;
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.DataMapFilter;
+import org.apache.carbondata.core.datamap.DataMapStoreManager;
 import org.apache.carbondata.core.datamap.Segment;
+import org.apache.carbondata.core.datamap.TableDataMap;
 import org.apache.carbondata.core.datastore.block.SegmentProperties;
 import org.apache.carbondata.core.datastore.block.SegmentPropertiesAndSchemaHolder;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.indexstore.blockletindex.BlockletDataMapFactory;
 import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+import org.apache.carbondata.core.metadata.schema.table.column.CarbonDimension;
+import org.apache.carbondata.core.metadata.schema.table.column.CarbonMeasure;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
 import org.apache.carbondata.core.readcommitter.ReadCommittedScope;
 import org.apache.carbondata.core.readcommitter.TableStatusReadCommittedScope;
@@ -125,23 +130,51 @@ public class SegmentPrunerImpl implements SegmentPruner {
     Map<String, ColumnSchema> tableColumnSchemas =
         carbonTable.getTableInfo().getFactTable().getListOfColumns().stream()
             .collect(Collectors.toMap(ColumnSchema::getColumnUniqueId, ColumnSchema::clone));
-    // fill min,max and columnSchema values
-    for (Map.Entry<String, SegmentColumnMetaDataInfo> columnMetaData : segmentColumnMetaDataInfoMap
-        .entrySet()) {
-      ColumnSchema columnSchema = tableColumnSchemas.get(columnMetaData.getKey());
-      if (null != columnSchema) {
-        updateColumnSchemaForRestructuring(columnMetaData, columnSchema);
-        columnSchemas.add(columnSchema);
-        min[index] = columnMetaData.getValue().getColumnMinValue();
-        max[index] = columnMetaData.getValue().getColumnMaxValue();
-        minMaxFlag[index] = min[index].length != 0 && max[index].length != 0;
-        index++;
-      }
-    }
+    SegmentProperties segmentProperties;
+
     // get segmentProperties using created columnSchemas list
-    SegmentProperties segmentProperties = SegmentPropertiesAndSchemaHolder.getInstance()
-        .addSegmentProperties(carbonTable, columnSchemas, segment.getSegmentNo())
-        .getSegmentProperties();
+    if (segment.getLoadMetadataDetails().isCarbonFormat()) {
+      TableDataMap defaultDataMap = DataMapStoreManager.getInstance().getDefaultDataMap(carbonTable);
+      try {
+        segmentProperties = ((BlockletDataMapFactory)defaultDataMap.getDataMapFactory()).getSegmentProperties(segment);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      // fill min,max and columnSchema values
+      for (Map.Entry<String, SegmentColumnMetaDataInfo> columnMetaData : segmentColumnMetaDataInfoMap
+          .entrySet()) {
+        ColumnSchema columnSchema = tableColumnSchemas.get(columnMetaData.getKey());
+        if (null != columnSchema) {
+          updateColumnSchemaForRestructuring(columnMetaData, columnSchema);
+          columnSchemas.add(columnSchema);
+        }
+      }
+      segmentProperties = SegmentPropertiesAndSchemaHolder.getInstance()
+          .addSegmentProperties(carbonTable, columnSchemas, segment.getSegmentNo())
+          .getSegmentProperties();
+    }
+    for (CarbonDimension dimension : segmentProperties.getDimensions()) {
+      SegmentColumnMetaDataInfo dataInfo =
+          segmentColumnMetaDataInfoMap.get(dimension.getColumnSchema().getColumnUniqueId());
+      if (dataInfo != null) {
+        min[index] = dataInfo.getColumnMinValue();
+        max[index] = dataInfo.getColumnMaxValue();
+        minMaxFlag[index] = min[index].length != 0 && max[index].length != 0;
+      }
+      index++;
+    }
+    for (CarbonMeasure measure : segmentProperties.getMeasures()) {
+      SegmentColumnMetaDataInfo dataInfo =
+          segmentColumnMetaDataInfoMap.get(measure.getColumnSchema().getColumnUniqueId());
+      if (dataInfo != null) {
+        min[index] = dataInfo.getColumnMinValue();
+        max[index] = dataInfo.getColumnMaxValue();
+        minMaxFlag[index] = min[index].length != 0 && max[index].length != 0;
+      }
+      index++;
+    }
+
     FilterResolverIntf resolver =
         new DataMapFilter(segmentProperties, carbonTable, filter).getResolver();
     // prepare filter executor using datmapFilter resolver
