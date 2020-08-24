@@ -86,25 +86,26 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
     newLoadMetaEntry.setFileFormat(new FileFormat("hbase"))
     CarbonLoaderUtil.recordNewLoadMetadata(newLoadMetaEntry, model, true, false)
 
-    val columnMinMaxInfo = new util.HashMap[String, SegmentColumnMetaDataInfo]()
-    carbonTable.getTableInfo
+    val minMaxColumnId = carbonTable.getTableInfo
       .getFactTable
       .getListOfColumns
       .asScala
-      .map(f => if (minMaxColumns.contains(f.getColumnName)) {
-        (f.getColumnUniqueId, new SegmentColumnMetaDataInfo(false,
-          currentLoadedMetadataInfo
-            .getSegmentColumnMetaDataInfoMap
-            .get(f.getColumnUniqueId)
-            .getColumnMaxValue,
+      .filter(col => minMaxColumns.contains(col.getColumnName)).map(col => col.getColumnUniqueId)
+
+    val columnMinMaxInfo = new util.LinkedHashMap[String, SegmentColumnMetaDataInfo]()
+    currentLoadedMetadataInfo.getSegmentColumnMetaDataInfoMap.asScala.foreach(v =>
+      if(minMaxColumnId.contains(v._1)) {
+        (v._1, new SegmentColumnMetaDataInfo(v._2.isSortColumn,
+          v._2.getColumnMaxValue,
           "NOTUSEDMAX".getBytes(CarbonCommonConstants.DEFAULT_CHARSET),
-          false))
+          v._2.isColumnDrift))
       } else {
-        (f.getColumnUniqueId, new SegmentColumnMetaDataInfo(false,
+        (v._1, new SegmentColumnMetaDataInfo(v._2.isSortColumn,
           Array[Byte](),
           Array[Byte](),
-          false))
-      }).foreach(f => columnMinMaxInfo.put(f._1, f._2))
+          v._2.isColumnDrift))
+      }
+    )
     val segmentMetaDataInto = new SegmentMetaDataInfo(columnMinMaxInfo)
     columnMinMaxInfo.put("rowtimestamp",
       new SegmentColumnMetaDataInfo(false, ByteUtil.toBytes(maxTimeStamp), Array[Byte](), false))
