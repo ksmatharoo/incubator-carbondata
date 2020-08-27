@@ -282,9 +282,6 @@ case class HandoffHbaseSegmentCommand(
       timestamp,
       tuple._2.toArray,
       true)
-    HorizontalCompaction.tryHorizontalCompaction(sparkSession,
-      carbonTable,
-      isUpdateOperation = false)
   }
 
   override protected def opName: String = {

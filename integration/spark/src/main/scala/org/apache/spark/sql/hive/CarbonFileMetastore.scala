@@ -335,6 +335,7 @@ class CarbonFileMetastore extends CarbonMetaStore {
               table.setTableUniqueName(tableUniqueName)
               table.setTransactionalTable(true)
               table.setTablePath(tablePath)
+              table.getFactTable.getTableProperties.putAll(options.asJava)
               table.getFactTable.setTableName(tableName)
               table.setIdentifier(null)
               if (partitionSchema.isDefined && !partitionSchema.get.isEmpty) {

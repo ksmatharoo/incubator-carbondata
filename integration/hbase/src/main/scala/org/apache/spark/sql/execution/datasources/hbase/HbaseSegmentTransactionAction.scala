@@ -93,8 +93,8 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
       .filter(col => minMaxColumns.contains(col.getColumnName)).map(col => col.getColumnUniqueId)
 
     val columnMinMaxInfo = new util.LinkedHashMap[String, SegmentColumnMetaDataInfo]()
-    currentLoadedMetadataInfo.getSegmentColumnMetaDataInfoMap.asScala.foreach(v =>
-      if(minMaxColumnId.contains(v._1)) {
+    val stringToInfo = currentLoadedMetadataInfo.getSegmentColumnMetaDataInfoMap.asScala.map(v =>
+      if (minMaxColumnId.contains(v._1)) {
         (v._1, new SegmentColumnMetaDataInfo(v._2.isSortColumn,
           v._2.getColumnMaxValue,
           "NOTUSEDMAX".getBytes(CarbonCommonConstants.DEFAULT_CHARSET),
@@ -106,6 +106,7 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
           v._2.isColumnDrift))
       }
     )
+    columnMinMaxInfo.putAll(stringToInfo.asJava)
     val segmentMetaDataInto = new SegmentMetaDataInfo(columnMinMaxInfo)
     columnMinMaxInfo.put("rowtimestamp",
       new SegmentColumnMetaDataInfo(false, ByteUtil.toBytes(maxTimeStamp), Array[Byte](), false))

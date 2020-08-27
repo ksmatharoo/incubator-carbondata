@@ -50,4 +50,8 @@ public class HBaseSchemaInfo {
       return gson.toJson(HBaseSchemaInfo);
     }
   }
+
+  public LinkedHashMap<String, Map<String, Object>> getColumns() {
+    return columns;
+  }
 }
