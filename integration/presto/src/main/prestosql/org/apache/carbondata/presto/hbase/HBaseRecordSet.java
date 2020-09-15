@@ -223,8 +223,7 @@ public class HBaseRecordSet
     {
         FilterList andFilters = new FilterList(FilterList.Operator.MUST_PASS_ALL);
         // select count(rowKey) / rowKey from table_xxx;
-        if (this.columnHandles.size() == rowIdName.length
-                && Utils.containsAll(this.columnHandles, this.rowIdName)) {
+        if (this.columnHandles.size() == 0) {
             scan.setCaching(Constants.SCAN_CACHING_SIZE);
             scan.setCacheBlocks(false);
             andFilters.addFilter(new FirstKeyOnlyFilter());

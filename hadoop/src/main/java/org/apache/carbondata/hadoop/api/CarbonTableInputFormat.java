@@ -115,6 +115,12 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
    */
   @Override
   public List<InputSplit> getSplits(JobContext job) throws IOException {
+    List<InputSplit> splits = new LinkedList<>();
+    // get all valid segments and set them into the configuration
+    String[] prunedSegment = getPrunedSegment(job);
+    if (prunedSegment.length == 1 && prunedSegment[0].equalsIgnoreCase("None")) {
+      return splits;
+    }
     carbonTable = getOrCreateCarbonTable(job.getConfiguration());
     if (null == carbonTable) {
       throw new IOException("Missing/Corrupt schema file for table.");
@@ -124,8 +130,6 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
         CarbonCommonConstants.DICTIONARY_INCLUDE)) {
       DeprecatedFeatureException.globalDictNotSupported();
     }
-
-    List<InputSplit> splits = new LinkedList<>();
 
     if (CarbonProperties.isQueryStageInputEnabled()) {
       // If there are stage files, collect them and create splits so that they are
@@ -154,11 +158,7 @@ public class CarbonTableInputFormat<T> extends CarbonInputFormat<T> {
     }
     List<String> invalidSegmentIds = new ArrayList<>();
     List<Segment> streamSegments = null;
-    // get all valid segments and set them into the configuration
-    String[] prunedSegment = getPrunedSegment(job);
-    if (prunedSegment.length == 1 && prunedSegment[0].equalsIgnoreCase("None")) {
-      return splits;
-    }
+
     Set<String> prunedSegs = new HashSet<>(Arrays.asList(prunedSegment));
     SegmentStatusManager segmentStatusManager =
         new SegmentStatusManager(carbonTable.getAbsoluteTableIdentifier(),

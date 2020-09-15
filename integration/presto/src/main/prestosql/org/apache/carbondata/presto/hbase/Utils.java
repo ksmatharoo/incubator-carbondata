@@ -29,6 +29,7 @@ import io.airlift.log.Logger;
 import io.prestosql.plugin.hive.HiveColumnHandle;
 import io.prestosql.spi.predicate.Domain;
 import io.prestosql.spi.predicate.Range;
+import io.prestosql.spi.predicate.Ranges;
 import io.prestosql.spi.predicate.TupleDomain;
 import io.prestosql.spi.type.Type;
 
@@ -59,12 +60,14 @@ public class Utils
 
             if (columnHandle.length == rowIds.length) {
                 for (HiveColumnHandle handle : columnHandle) {
-                    for (Range range : domains.get(handle).getValues().getRanges().getOrderedRanges()) {
-                        if (range.isSingleValue()) {
-                            return true;
+                    Ranges ranges = domains.get(handle).getValues().getRanges();
+                    for (Range range : ranges.getOrderedRanges()) {
+                        if (!range.isSingleValue()) {
+                            return false;
                         }
                     }
                 }
+                return true;
             }
         }
         return false;

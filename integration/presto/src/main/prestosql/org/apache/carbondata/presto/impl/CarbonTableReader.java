@@ -363,6 +363,7 @@ public class CarbonTableReader {
     List<CarbonLocalInputSplit> result = new ArrayList<>();
     List<CarbonLocalMultiBlockSplit> multiBlockSplitList = new ArrayList<>();
     CarbonTable carbonTable = tableCacheModel.getCarbonTable();
+
     TableInfo tableInfo = tableCacheModel.getCarbonTable().getTableInfo();
     config.set(CarbonTableInputFormat.INPUT_SEGMENT_NUMBERS, "");
     String carbonTablePath = carbonTable.getAbsoluteTableIdentifier().getTablePath();
@@ -381,6 +382,9 @@ public class CarbonTableReader {
       filteredPartitions = findRequiredPartitions(constraints, carbonTable, partitions);
     }
     try {
+      if (checkPointQuery(constraints, carbonTable, extraSplits)) {
+        return new CarbonSplitsHolder(multiBlockSplitList, extraSplits);
+      }
       List<PrunedSegmentInfo> pruneSegment =
           SegmentPrunerFactory.INSTANCE.getSegmentPruner(carbonTable)
               .pruneSegment(carbonTable, filters, new String[0], new String[0]);
@@ -423,35 +427,56 @@ public class CarbonTableReader {
         }
       }
 
-      List<Segment> hbaseSegs = pruneSegment.stream().filter(f -> !f.getSegment().isCarbonSegment() && f.getSegment().
-          getLoadMetadataDetails().getFileFormat().getFormat().equalsIgnoreCase("hbase")).map(PrunedSegmentInfo::getSegment).collect(Collectors.toList());
-      if (hbaseSegs.size() > 0) {
-        LOGGER.info("Pruned hbase Segments : " + hbaseSegs);
-        HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
-            CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
-        long timestamp = 0;
-        if (!pruneSegment.get(0).isIgnoreTimeStamp()) {
-          SegmentColumnMetaDataInfo rowtimestamp =
-              pruneSegment.get(0).getSegmentFile().getSegmentMetaDataInfo().getSegmentColumnMetaDataInfoMap()
-                  .get("rowtimestamp");
-          if (rowtimestamp != null) {
-            timestamp = ByteUtil.toLong(rowtimestamp.getColumnMinValue(), 0,
-                rowtimestamp.getColumnMinValue().length) + 1;
-          }
-        }
-        List<HBaseSplit> hbaseSplits;
-        if(Utils.isBatchGet(constraints, hbaseTable.getRow().getHbaseColumns())) {
-          hbaseSplits = getSplitsForBatchGet(constraints, hbaseTable, timestamp);
-        } else {
-          hbaseSplits = getSplitsForScan(constraints, hbaseTable, timestamp);
-        }
-        extraSplits.addAll(hbaseSplits);
-      }
+      getHbaseSplits(constraints, carbonTable, extraSplits, pruneSegment);
 
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
     return new CarbonSplitsHolder(multiBlockSplitList, extraSplits);
+  }
+
+  private void getHbaseSplits(TupleDomain<HiveColumnHandle> constraints, CarbonTable carbonTable,
+      List<HBaseSplit> extraSplits, List<PrunedSegmentInfo> pruneSegment) throws IOException {
+    List<Segment> hbaseSegs = pruneSegment.stream().filter(f -> !f.getSegment().isCarbonSegment() && f.getSegment().
+        getLoadMetadataDetails().getFileFormat().getFormat().equalsIgnoreCase("hbase")).map(PrunedSegmentInfo::getSegment).collect(
+        Collectors.toList());
+    if (hbaseSegs.size() > 0) {
+      LOGGER.info("Pruned hbase Segments : " + hbaseSegs);
+      HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
+          CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
+      long timestamp = 0;
+      if (!pruneSegment.get(0).isIgnoreTimeStamp()) {
+        SegmentColumnMetaDataInfo rowtimestamp =
+            pruneSegment.get(0).getSegmentFile().getSegmentMetaDataInfo().getSegmentColumnMetaDataInfoMap()
+                .get("rowtimestamp");
+        if (rowtimestamp != null) {
+          timestamp = ByteUtil.toLong(rowtimestamp.getColumnMinValue(), 0,
+              rowtimestamp.getColumnMinValue().length) + 1;
+        }
+      }
+      List<HBaseSplit> hbaseSplits;
+      if(Utils.isBatchGet(constraints, hbaseTable.getRow().getHbaseColumns())) {
+        hbaseSplits = getSplitsForBatchGet(constraints, hbaseTable, timestamp);
+      } else {
+        hbaseSplits = getSplitsForScan(constraints, hbaseTable, timestamp);
+      }
+      extraSplits.addAll(hbaseSplits);
+    }
+  }
+
+  private boolean checkPointQuery(TupleDomain<HiveColumnHandle> constraints,
+      CarbonTable carbonTable, List<HBaseSplit> extraSplits) throws IOException {
+    if (carbonTable.getTableInfo().getFactTable().getTableProperties().get("pointquery") != null ||
+        carbonTable.getTableInfo().getFactTable().getTableProperties().get("custom.pruner") != null) {
+      HbaseCarbonTable hbaseTable = HbaseMetastoreUtil.getHbaseTable(
+          CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier()).getQuerySchema());
+      if(Utils.isBatchGet(constraints, hbaseTable.getRow().getHbaseColumns())) {
+        extraSplits.addAll(getSplitsForBatchGet(constraints, hbaseTable, 0));
+        LOGGER.info("Point query : " + extraSplits.size());
+        return true;
+      }
+    }
+    return false;
   }
 
   private List<HBaseSplit> getSplitsForScan(TupleDomain<HiveColumnHandle> constraints, HbaseCarbonTable tableHandle, long timestamp)
@@ -498,7 +523,6 @@ public class CarbonTableReader {
     for (int i = 0; i < startEndKeys.getFirst().length; i++) {
       String startRow = new String(startEndKeys.getFirst()[i]);
       String endRow = new String(startEndKeys.getSecond()[i]);
-      String cf = tableHandle.getsMap().values().iterator().next().getCf();
       splits.add(
           new HBaseSplit(hostAddresses, startRow, endRow, ranges, null, tableHandle, false, timestamp));
     }

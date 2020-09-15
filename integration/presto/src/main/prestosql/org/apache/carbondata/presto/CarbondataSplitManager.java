@@ -19,6 +19,7 @@ package org.apache.carbondata.presto;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -158,40 +159,18 @@ public class CarbondataSplitManager extends HiveSplitManager {
       long index = 0;
       for (CarbonLocalMultiBlockSplit split : splits.getMultiBlockSplits()) {
         index++;
-        Properties properties = new Properties();
-        for (Map.Entry<String, String> entry : table.getStorage().getSerdeParameters().entrySet()) {
-          properties.setProperty(entry.getKey(), entry.getValue());
-        }
-        properties.setProperty("tablePath", cache.getCarbonTable().getTablePath());
-        properties.setProperty("carbonSplit", split.getJsonString());
-        properties.setProperty("queryId", queryId);
-        properties.setProperty("index", String.valueOf(index));
-        properties.setProperty(CarbonInputFormat.TABLE_INFO, configuration.get(CarbonInputFormat.TABLE_INFO));
-        properties.setProperty(CarbonTableInputFormat.INPUT_SEGMENT_NUMBERS, "");
-        cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
-            schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0,
-            0, properties, new ArrayList(), getHostAddresses(split.getLocations()),
-            OptionalInt.empty(), false, new HashMap<>(),
-            Optional.empty(), false));
+        Map<String, String> extraProps = new HashMap<>();
+        extraProps.put("carbonSplit", split.getJsonString());
+        createSplit(schemaTableName, table, queryId, configuration, cache, cSplits, index,
+            getHostAddresses(split.getLocations()), extraProps);
       }
 
       for (HBaseSplit split : splits.getExtraSplits()) {
         index++;
-        Properties properties = new Properties();
-        for (Map.Entry<String, String> entry : table.getStorage().getSerdeParameters().entrySet()) {
-          properties.setProperty(entry.getKey(), entry.getValue());
-        }
-        properties.setProperty("tablePath", cache.getCarbonTable().getTablePath());
-        properties.setProperty("hbaseSplit", HBaseSplit.getJsonString(split));
-        properties.setProperty("queryId", queryId);
-        properties.setProperty("index", String.valueOf(index));
-        properties.setProperty(CarbonInputFormat.TABLE_INFO, configuration.get(CarbonInputFormat.TABLE_INFO));
-        properties.setProperty(CarbonTableInputFormat.INPUT_SEGMENT_NUMBERS, "");
-        cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
-            schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0,
-            0, properties, new ArrayList(), split.getAddresses(),
-            OptionalInt.empty(), false, new HashMap<>(),
-            Optional.empty(), false));
+        Map<String, String> extraProps = new HashMap<>();
+        extraProps.put("hbaseSplit", HBaseSplit.getJsonString(split));
+        createSplit(schemaTableName, table, queryId, configuration, cache, cSplits, index,
+            split.getAddresses(), extraProps);
       }
       statisticRecorder.logStatisticsAsTableDriver();
 
@@ -203,6 +182,26 @@ public class CarbondataSplitManager extends HiveSplitManager {
     } catch (Exception ex) {
       throw new RuntimeException(ex.getMessage(), ex);
     }
+  }
+
+  private void createSplit(SchemaTableName schemaTableName, Table table, String queryId,
+      Configuration configuration, CarbonTableCacheModel cache,
+      ImmutableList.Builder<ConnectorSplit> cSplits, long index, List<HostAddress> hostAddresses, Map<String, String> extraProperties) {
+    Properties properties = new Properties();
+    for (Map.Entry<String, String> entry : table.getStorage().getSerdeParameters().entrySet()) {
+      properties.setProperty(entry.getKey(), entry.getValue());
+    }
+    properties.setProperty("tablePath", cache.getCarbonTable().getTablePath());
+    properties.setProperty("queryId", queryId);
+    properties.setProperty("index", String.valueOf(index));
+    extraProperties.entrySet().forEach(f -> properties.setProperty(f.getKey(), f.getValue()));
+    properties
+        .setProperty(CarbonInputFormat.TABLE_INFO, configuration.get(CarbonInputFormat.TABLE_INFO));
+    properties.setProperty(CarbonTableInputFormat.INPUT_SEGMENT_NUMBERS, "");
+    cSplits.add(new HiveSplit(schemaTableName.getSchemaName(), schemaTableName.getTableName(),
+        schemaTableName.getTableName(), cache.getCarbonTable().getTablePath(), 0, 0, 0, 0,
+        properties, new ArrayList(), hostAddresses, OptionalInt.empty(), false, new HashMap<>(),
+        Optional.empty(), false));
   }
 
   private static List<HostAddress> getHostAddresses(String[] hosts) {
