@@ -136,7 +136,9 @@ public class HBaseGetRecordCursor
 //                                            }
                                     }
                                     try {
-                                        get.setTimeRange(split.getTimestamp(), Long.MAX_VALUE);
+                                        if (split.getTimestamp() > 0) {
+                                            get.setTimeRange(split.getTimestamp(), Long.MAX_VALUE);
+                                        }
                                     } catch (IOException e) {
                                         throw new RuntimeException(e);
                                     }

@@ -405,6 +405,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     val validSegments = SegmentPrunerFactory.INSTANCE.getSegmentPruner(table.carbonTable)
       .pruneSegment(table.carbonTable,
         carbonFilterExp, inputSegments.toArray, excludeSegments.toArray).asScala.toList
+    val segmentNameList = validSegments.map(seg => seg.getSegment.getSegmentNo)
+    LOGGER.info("Final selected segments : "+ segmentNameList)
     carbonSegmentToAccess = validSegments.filter(p => p
       .getSegment
       .getLoadMetadataDetails

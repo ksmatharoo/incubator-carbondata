@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datamap.DataMapFilter;
 import org.apache.carbondata.core.datamap.Segment;
@@ -50,19 +51,31 @@ import org.apache.carbondata.core.statusmanager.SegmentStatus;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.log4j.Logger;
 
 public class SegmentPrunerImpl implements SegmentPruner {
+
+  private static final Logger LOGGER = LogServiceFactory.getLogService(SegmentPrunerImpl.class.getName());
 
   @Override
   public List<PrunedSegmentInfo> pruneSegment(CarbonTable table, Expression filterExp,
       String[] inputSegments, String[] excludeSegment) {
     List<Segment> allSegments;
     try {
-      Set<String> excludeSegmentList = new HashSet<>(Arrays.asList(excludeSegment));
-      Set<String> inputSegmentList = new HashSet<>(Arrays.asList(inputSegments));
-      ReadCommittedScope readCommittedScope =
+      final Set<String> excludeSegmentList = new HashSet<>(Arrays.asList(excludeSegment));
+      final Set<String> inputSegmentList = new HashSet<>(Arrays.asList(inputSegments));
+      final ReadCommittedScope readCommittedScope =
           new TableStatusReadCommittedScope(table.getAbsoluteTableIdentifier(),
               FileFactory.getConfiguration());
+      final LoadMetadataDetails[] segmentList = readCommittedScope.getSegmentList();
+      final Stream<LoadMetadataDetails> successSegmentStream = Stream.of(segmentList).filter(loadMetadataDetails ->
+          (loadMetadataDetails.getSegmentStatus().equals(SegmentStatus.SUCCESS)
+              || loadMetadataDetails.getSegmentStatus().equals(SegmentStatus.LOAD_PARTIAL_SUCCESS)));
+      final String[] allSegmentNames = successSegmentStream.map(LoadMetadataDetails::getLoadName).toArray(String[]::new);
+      final String logString = String.format("%s-All Segment List:%s-Include segment list:%s- Exclude Segment List: %s",
+          table.getTableUniqueName(), Arrays.toString(allSegmentNames),
+          Arrays.toString(inputSegments), Arrays.toString(excludeSegment));
+      LOGGER.info(logString);
       List<LoadMetadataDetails> successLoadMetadataDetails =
           Stream.of(readCommittedScope.getSegmentList()).filter(loadMetadataDetail ->
               (loadMetadataDetail.getSegmentStatus().equals(SegmentStatus.SUCCESS)
@@ -86,7 +99,9 @@ public class SegmentPrunerImpl implements SegmentPruner {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
-    return allSegments.stream().map(segment -> {
+    String[] allSegmentNames =
+        allSegments.stream().map(Segment::getSegmentNo).toArray(String[]::new);
+    final List<PrunedSegmentInfo> prunedSegmentInfos = allSegments.stream().map(segment -> {
       SegmentFileStore.SegmentFile segmentFile;
       try {
         segmentFile = SegmentFileStore.readSegmentFile(
@@ -107,6 +122,11 @@ public class SegmentPrunerImpl implements SegmentPruner {
       }
       return getPrunedSegment(segment, table, filterExp, segmentMetaDataInfo, segmentFile);
     }).filter(Objects::nonNull).collect(Collectors.toList());
+    final String[] prunedSegments = prunedSegmentInfos.stream()
+        .map(prunedSegmentInfo -> prunedSegmentInfo.getSegment().getSegmentNo()).toArray(String[]::new);
+    LOGGER.info(String.format("FilterExp:%s-All Segments: %s-Pruned Segment%s", Objects.isNull(filterExp),
+        Arrays.toString(allSegmentNames), Arrays.toString(prunedSegments)));
+    return prunedSegmentInfos;
   }
 
   private PrunedSegmentInfo getPrunedSegment(Segment segment, CarbonTable carbonTable,

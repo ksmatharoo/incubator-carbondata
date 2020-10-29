@@ -20,7 +20,7 @@ package org.apache.spark.sql.execution.strategy
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.CarbonDatasourceHadoopRelation
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, ExpressionSet, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, Project}
 import org.apache.spark.sql.execution.datasources.hbase.{CarbonHBaseRelation, HBaseRelation, HBaseTableCatalog}
 import org.apache.spark.sql.execution.datasources.{DataSourceStrategy, LogicalRelation}
@@ -51,13 +51,15 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       HBaseTableCatalog.tableCatalog -> externalSchema.getQuerySchema)
     if (!prunedSegmentInfo.head.isIgnoreTimeStamp) {
       val segmentFile = prunedSegmentInfo.head.getSegmentFile
-      val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
-        .getSegmentColumnMetaDataInfoMap
-        .get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).getColumnMinValue,
-        0,
-        ByteUtil.SIZEOF_LONG) + 1
-      params = params + (HBaseRelation.MIN_STAMP -> info.toString,
-        HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
+      val  timestamp = segmentFile.getSegmentMetaDataInfo
+        .getSegmentColumnMetaDataInfoMap.get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN)
+      if (timestamp != null) {
+        val info = ByteUtil.toLong(timestamp.getColumnMinValue,
+          0,
+          ByteUtil.SIZEOF_LONG) + 1
+        params = params + (HBaseRelation.MIN_STAMP -> info.toString,
+          HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
+      }
     }
 
     val hBaseRelation = new CarbonHBaseRelation(params, Option.empty)(l.relation.sqlContext)
@@ -76,12 +78,26 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
         hbaseOutput
           .find(a => a.name.split("\\.")(1).equals(attr.name)).get
     }
+    val filterSet = ExpressionSet(filters.map{ f =>
+      f.transform{
+        case attr: AttributeReference if !attr.name.contains(".") =>
+          hbaseOutput
+            .find(a => a.name.split("\\.")(1).equals(attr.name)).get
+      }
+    })
+    val filterAttributes = filterSet.flatMap(_.references)
+    val projectionAttributes = ExpressionSet(updatedExp.output).flatMap(_.references)
+    val leftOutProjects = filterAttributes -- filterAttributes.intersect(projectionAttributes)
 
     val withProject = updatedExp match {
       case l: LogicalRelation =>
         Project(l.output.filterNot(_.name.startsWith(rowKeyColFamily)), l)
       case f@Filter(c, l:LogicalRelation) =>
         Filter(c, Project(l.output.filterNot(_.name.startsWith(rowKeyColFamily)), l))
+      case Filter(c, p: Project) =>
+        Filter(c, Project((p.output ++ leftOutProjects.seq).filterNot(_.name.startsWith(rowKeyColFamily)), l))
+      case Project(c, f: Filter) =>
+        Project((c ++ leftOutProjects.seq).filterNot(_.name.startsWith(rowKeyColFamily)), f)
       case others => others
     }
 

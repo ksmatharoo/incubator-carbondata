@@ -110,7 +110,7 @@ public final class CarbonCommonConstants {
   /**
    * default value
    */
-  public static final String CARBON_TIMESTAMP_DEFAULT_FORMAT = "yyyy-MM-dd HH:mm:ss";
+  public static final String CARBON_TIMESTAMP_DEFAULT_FORMAT = "yyyy-MM-dd HH:mm:ss:SSS";
 
   /**
    * CARBON_TIMESTAMP
@@ -2440,6 +2440,6 @@ public final class CarbonCommonConstants {
 
   public static final String CARBON_MERGE_WITHIN_SEGMENT = "carbon.merge.with.in.segment";
 
-  public static final String CARBON_MERGE_WITHIN_SEGMENT_DEFAULT = "true";
+  public static final String CARBON_MERGE_WITHIN_SEGMENT_DEFAULT = "false";
 
 }

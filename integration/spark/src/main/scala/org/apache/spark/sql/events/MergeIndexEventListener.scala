@@ -90,7 +90,8 @@ class MergeIndexEventListener extends OperationEventListener with Logging {
             loadModel.setOutputFilesInfoHolder(outputFilesInfoHolder)
             loadModel.getOutputFilesInfoHolder.setMergeIndexSize(indexSize)
             LOGGER.info("Total time taken for merge index " +
-                        (System.currentTimeMillis() - startTime))
+                        (System.currentTimeMillis() - startTime) + "for table: " +
+                        carbonTable.getTableUniqueName)
             // clear Block dataMap Cache
             MergeIndexUtil.clearBlockDataMapCache(carbonTable, Seq(loadModel.getSegmentId))
           }

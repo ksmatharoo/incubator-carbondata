@@ -55,6 +55,7 @@ import io.prestosql.spi.predicate.Marker;
 import io.prestosql.spi.predicate.Range;
 import io.prestosql.spi.predicate.TupleDomain;
 import io.prestosql.spi.type.BigintType;
+import io.prestosql.spi.type.BooleanType;
 import io.prestosql.spi.type.DateType;
 import io.prestosql.spi.type.DecimalType;
 import io.prestosql.spi.type.DoubleType;
@@ -237,13 +238,20 @@ public class HBaseSplit
         } else if (ids.equalsIgnoreCase(DateType.DATE.getDisplayName())) {
             return DateType.DATE;
         } else if (ids.contains("decimal")) {
-            return DecimalType.createDecimalType();
+            if (ids.indexOf("(") > 0) {
+                return DecimalType.createDecimalType(Integer.parseInt(ids.substring(ids.indexOf("(") + 1, ids.indexOf(","))),
+                    Integer.parseInt(ids.substring(ids.indexOf(".")+1, ids.indexOf(")"))));
+            } else {
+                return DecimalType.createDecimalType();
+            }
         } else if (ids.equalsIgnoreCase(BigintType.BIGINT.getDisplayName())) {
             return BigintType.BIGINT;
         } else if (ids.equalsIgnoreCase(TimestampType.TIMESTAMP.getDisplayName())) {
             return TimestampType.TIMESTAMP;
         } else if (ids.equalsIgnoreCase(DoubleType.DOUBLE.getDisplayName())) {
             return DoubleType.DOUBLE;
+        } else if (ids.equalsIgnoreCase(BooleanType.BOOLEAN.getDisplayName())) {
+            return BooleanType.BOOLEAN;
         }
         return null;
     }

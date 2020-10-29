@@ -1052,7 +1052,7 @@ public class SegmentStatusManager {
           // Update load metadate file after cleaning deleted nodes
           locked = carbonTableStatusLock.lockWithRetries();
           if (locked) {
-            LOG.info("Table status lock has been successfully acquired.");
+            LOG.info("Table status lock has been successfully acquired for table." + carbonTable.getTableUniqueName());
             // Again read status and check to verify updation required or not.
             LoadMetadataDetails[] details =
                 SegmentStatusManager.readLoadMetadata(carbonTable.getMetadataPath());

@@ -68,6 +68,7 @@ case class HandoffHbaseSegmentCommand(
     if (!carbonTable.getTableInfo.isTransactionalTable) {
       throw new MalformedCarbonCommandException("Unsupported operation on non transactional table")
     }
+    LOGGER.info(s"Handoff Started for table: ${carbonTable.getTableUniqueName}")
     // if insert overwrite in progress, do not allow add segment
     if (SegmentStatusManager.isOverwriteInProgressInTable(carbonTable)) {
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "handoff segment")
@@ -177,6 +178,7 @@ case class HandoffHbaseSegmentCommand(
         .map("`" + _.name + "`")
         .map(col): _*), false)
     }
+    LOGGER.info(s"Handoff finished for table: ${carbonTable.getTableUniqueName}")
     Seq.empty
   }
 
@@ -222,6 +224,7 @@ case class HandoffHbaseSegmentCommand(
     val uCount = uDf.count()
     var uWithTuples: Dataset[Row] = sparkSession.emptyDataFrame
     if (uCount > 0) {
+      LOGGER.info(s"Number of update count ${uCount} for table ${carbonTable.getTableUniqueName}")
       uDf = uDf.union(dDf)
       // TODO make it configurable
       if (uCount < handOffOptions.getFilterJoinPushLimit) {
@@ -239,16 +242,23 @@ case class HandoffHbaseSegmentCommand(
       }
       uWithTuples.cache()
     }
-    if (uCount <= 0 && dDf.count() > 0) {
-      val rows = dDf.select(joinColumns.get.map(col): _*).collect()
-      val filter = joinColumns.get.zipWithIndex.map { j =>
-        col(j._1).isInCollection(rows.map(r => lit(r.get(j._2))))
-      }.reduce[Column]((l, r) => l.and(r))
+    if (uCount <= 0) {
+      val dCount = dDf.count()
+      if (dCount > 0) {
+        LOGGER.info(s"Number of deleted count ${ dCount } for table ${
+          carbonTable
+            .getTableUniqueName
+        }")
+        val rows = dDf.select(joinColumns.get.map(col): _*).collect()
+        val filter = joinColumns.get.zipWithIndex.map { j =>
+          col(j._1).isInCollection(rows.map(r => lit(r.get(j._2))))
+        }.reduce[Column]((l, r) => l.and(r))
 
-      val dWithTuples = tableDF.withColumn(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID,
-        expr("getTupleId()"))
-        .filter(filter).select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
-      uWithTuples = uWithTuples.union(dWithTuples)
+        val dWithTuples = tableDF.withColumn(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID,
+          expr("getTupleId()"))
+          .filter(filter).select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
+        uWithTuples = uWithTuples.union(dWithTuples)
+      }
     }
 
     val executorErrors = ExecutionErrors(FailureCauses.NONE, "")
@@ -282,9 +292,6 @@ case class HandoffHbaseSegmentCommand(
       timestamp,
       tuple._2.toArray,
       true)
-    HorizontalCompaction.tryHorizontalCompaction(sparkSession,
-      carbonTable,
-      isUpdateOperation = false)
   }
 
   override protected def opName: String = {

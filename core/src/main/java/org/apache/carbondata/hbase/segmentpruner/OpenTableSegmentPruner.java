@@ -16,18 +16,21 @@
  */
 package org.apache.carbondata.hbase.segmentpruner;
 
-import java.io.IOException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.indexstore.PrunedSegmentInfo;
 import org.apache.carbondata.core.indexstore.SegmentPrunerImpl;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.scan.expression.Expression;
-import org.apache.carbondata.core.segmentmeta.SegmentMetaDataInfo;
+
+import org.apache.log4j.Logger;
 
 public class OpenTableSegmentPruner extends SegmentPrunerImpl {
+
+  private static final Logger LOGGER =
+      LogServiceFactory.getLogService(OpenTableSegmentPruner.class.getName());
 
   @Override
   public List<PrunedSegmentInfo> pruneSegment(CarbonTable table, Expression filterExp,
@@ -38,6 +41,7 @@ public class OpenTableSegmentPruner extends SegmentPrunerImpl {
         seg -> seg.getSegment().getLoadMetadataDetails().getFileFormat().toString()
             .equalsIgnoreCase("hbase")).collect(Collectors.toList());
     if (hbase.size() > 0) {
+      LOGGER.info("Selected Segments: " + hbase);
       hbase.get(0).setIgnoreTimeStamp(true);
       return hbase;
     } else {

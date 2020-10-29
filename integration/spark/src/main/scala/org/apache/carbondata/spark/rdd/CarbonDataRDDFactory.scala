@@ -769,39 +769,39 @@ object CarbonDataRDDFactory {
   def runCompaction(sparkSession: SparkSession,
       carbonLoadModel: CarbonLoadModel,
       operationContext: OperationContext): Unit = {
-    LOGGER.info("***************************************** Starting compaction")
-    try {
-      // compaction handling
-      if (carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.isHivePartitionTable) {
-        carbonLoadModel.setFactTimeStamp(System.currentTimeMillis())
-      }
-      val compactedSegments = new util.ArrayList[String]()
-      handleSegmentMerging(sparkSession.sqlContext,
-        carbonLoadModel
-          .getCopyWithPartition(carbonLoadModel.getCsvHeader, carbonLoadModel.getCsvDelimiter),
-        carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable,
-        compactedSegments,
-        operationContext)
-      carbonLoadModel.setMergedSegmentIds(compactedSegments)
-      LOGGER.info("***************************************** Finish compaction")
-    } catch {
-      case e: Exception =>
-        LOGGER.error(
-          "Auto-Compaction has failed. Ignoring this exception because the" +
-          " load is passed.", e)
-    }
-    LOGGER.info("***************************************** Starting clean files")
-      try {
-      CommonUtil.cleanGarbageData(sparkSession,
-        carbonLoadModel.getDatabaseName,
-        carbonLoadModel.getTableName,
-        carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
-      LOGGER.info("***************************************** finish clean files")
-    } catch {
-      case e: Exception =>
-        LOGGER.error(
-          "Clean Files failes after compaction", e)
-    }
+//    LOGGER.info("***************************************** Starting compaction")
+//    try {
+//      // compaction handling
+//      if (carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable.isHivePartitionTable) {
+//        carbonLoadModel.setFactTimeStamp(System.currentTimeMillis())
+//      }
+//      val compactedSegments = new util.ArrayList[String]()
+//      handleSegmentMerging(sparkSession.sqlContext,
+//        carbonLoadModel
+//          .getCopyWithPartition(carbonLoadModel.getCsvHeader, carbonLoadModel.getCsvDelimiter),
+//        carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable,
+//        compactedSegments,
+//        operationContext)
+//      carbonLoadModel.setMergedSegmentIds(compactedSegments)
+//      LOGGER.info("***************************************** Finish compaction")
+//    } catch {
+//      case e: Exception =>
+//        LOGGER.error(
+//          "Auto-Compaction has failed. Ignoring this exception because the" +
+//          " load is passed.", e)
+//    }
+//    LOGGER.info("***************************************** Starting clean files")
+//      try {
+//      CommonUtil.cleanGarbageData(sparkSession,
+//        carbonLoadModel.getDatabaseName,
+//        carbonLoadModel.getTableName,
+//        carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable)
+//      LOGGER.info("***************************************** finish clean files")
+//    } catch {
+//      case e: Exception =>
+//        LOGGER.error(
+//          "Clean Files failes after compaction", e)
+//    }
   }
   /**
    * clear datamap files for segment

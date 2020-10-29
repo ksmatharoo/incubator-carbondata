@@ -68,6 +68,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         tableName,
         tableInfoOp,
         partition)
+    LOGGER.info(s"Started Load for ${dbName}.${table}")
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     CarbonProperties.getInstance().addProperty("zookeeper.enable.lock", "false")
     val factPath = ""
@@ -151,7 +152,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         None,
         updateModel,
         operationContext)
-
+      LOGGER.info(s"Segment No. Assigned for table ${dbName}.${tableName} : ${carbonLoadModel.getSegmentId}")
       LOGGER.info("Sort Scope : " + carbonLoadModel.getSortScope)
       val (rows, loadResult) = insertData(loadParams)
       val info = CommonLoadUtils.makeAuditInfo(loadResult)
@@ -181,6 +182,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         }
         throw ex
     }
+    LOGGER.info(s"Finished Load for  ${dbName}.${table}")
     Seq.empty
   }
 

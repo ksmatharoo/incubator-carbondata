@@ -82,14 +82,11 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
       throw new ConcurrentOperationException(carbonTable, "insert overwrite", "delete segment")
     }
     val externalFormat = options.getOrElse("format", "HBase")
-    val externalSegment = new SegmentStatusManager(carbonTable
-      .getAbsoluteTableIdentifier).getValidAndInvalidSegments.getValidSegments.asScala.filter(
+    val segments = new SegmentStatusManager(carbonTable
+      .getAbsoluteTableIdentifier).getValidAndInvalidSegments.getValidSegments
+    val externalSegment = segments.asScala.filter(
       f => !f.getLoadMetadataDetails.isCarbonFormat
     )
-    if (externalSegment.nonEmpty) {
-      LOGGER.info("External Segment is already register. Ignoring the command")
-      return Seq.empty
-    }
     if (!validateFormat(externalFormat)) {
       throw new MalformedCarbonCommandException(
         "Invalid format: " + options.getOrElse("format", "HBase") + " Valid Formats are:" +
@@ -106,7 +103,13 @@ case class CarbonAddExternalStreamingSegmentCommand(dbName: Option[String],
     } else {
       schemaUpdator.updateExternalSchema(handOffSchema.get)
     }
-    writeMetaForSegment(sparkSession, carbonTable)
+    if (externalSegment.isEmpty) {
+      LOGGER.info(s"Registering External Segment for table: ${carbonTable.getTableUniqueName}")
+      writeMetaForSegment(sparkSession, carbonTable)
+    } else {
+      LOGGER.info(s"External Segment is already register for table: ${
+        carbonTable.getTableUniqueName} : Only External Schema file will be updated")
+    }
     writeExternalSchema(carbonTable, new ExternalSchema(querySchema, handOffSchemaString, options.asJava))
     Seq.empty
   }

@@ -34,13 +34,13 @@ import io.prestosql.spi.connector.RecordCursor;
 import io.prestosql.spi.connector.RecordSet;
 import io.prestosql.spi.predicate.Marker;
 import io.prestosql.spi.predicate.Range;
+import io.prestosql.spi.type.Decimals;
 import io.prestosql.spi.type.Type;
 import io.prestosql.spi.type.VarcharType;
 import org.apache.hadoop.hbase.TableName;
 import org.apache.hadoop.hbase.client.ResultScanner;
 import org.apache.hadoop.hbase.client.Scan;
 import org.apache.hadoop.hbase.filter.BinaryComparator;
-import org.apache.hadoop.hbase.filter.BinaryPrefixComparator;
 import org.apache.hadoop.hbase.filter.CompareFilter;
 import org.apache.hadoop.hbase.filter.Filter;
 import org.apache.hadoop.hbase.filter.FilterList;
@@ -55,6 +55,8 @@ import static io.prestosql.spi.type.BooleanType.BOOLEAN;
 import static io.prestosql.spi.type.DoubleType.DOUBLE;
 import static io.prestosql.spi.type.IntegerType.INTEGER;
 import static io.prestosql.spi.type.SmallintType.SMALLINT;
+import static io.prestosql.spi.type.TimestampType.TIMESTAMP;
+import static io.prestosql.spi.type.DateType.DATE;
 import static io.prestosql.spi.type.TinyintType.TINYINT;
 import static java.util.Objects.requireNonNull;
 
@@ -178,7 +180,9 @@ public class HBaseRecordSet
                                 });
                 Map<String, List<Range>> domainMap = this.split.getRanges();
                 FilterList filters = getFiltersFromDomains(domainMap);
-                scan = scan.setTimeRange(split.getTimestamp(), Long.MAX_VALUE);
+                if (split.getTimestamp() > 0) {
+                    scan = scan.setTimeRange(split.getTimestamp(), Long.MAX_VALUE);
+                }
                 if (filters.getFilters().size() != 0) {
                     scan.setFilter(filters);
                 }
@@ -288,23 +292,25 @@ public class HBaseRecordSet
         // type list support to pushdown
         if (type.equals(BOOLEAN)) {
             return true;
-        }
-        else if (type.equals(DOUBLE)) {
+        } else if (type.equals(DOUBLE)) {
             return true;
-        }
-        else if (type.equals(BIGINT)) {
+        } else if (type.equals(BIGINT)) {
             return true;
-        }
-        else if (type.equals(INTEGER)) {
+        } else if (type.equals(INTEGER)) {
             return true;
-        }
-        else if (type.equals(SMALLINT)) {
+        } else if (type.equals(SMALLINT)) {
             return true;
-        }
-        else if (type.equals(TINYINT)) {
+        } else if (type.equals(TINYINT)) {
             return true;
+        } else if (type.equals(TIMESTAMP)) {
+            return true;
+        } else if (type.equals(DATE)) {
+            // Fix me, currently shc stores as Long so we cannot push down the date filter
+            return false;
         }
         else if (type instanceof VarcharType) {
+            return true;
+        } else if (Decimals.isShortDecimal(type)) {
             return true;
         }
         else {

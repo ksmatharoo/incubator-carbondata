@@ -18,22 +18,32 @@ package org.apache.carbondata.core.indexstore;
 
 import java.util.Objects;
 
+import org.apache.carbondata.common.logging.LogServiceFactory;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 
+import org.apache.log4j.Logger;
+
 public class SegmentPrunerFactory {
+  private static final Logger LOG =
+      LogServiceFactory.getLogService(SegmentPrunerFactory.class.getName());
   public static final SegmentPrunerFactory INSTANCE = new SegmentPrunerFactory();
   private SegmentPrunerFactory() {
   }
   public SegmentPruner getSegmentPruner(CarbonTable carbonTable) {
+    SegmentPruner segmentPruner = null;
     String customPruner =
         carbonTable.getTableInfo().getFactTable().getTableProperties().get("custom.pruner");
     if (Objects.nonNull(customPruner)) {
       try {
-        return (SegmentPruner) Class.forName(customPruner).newInstance();
+         segmentPruner = (SegmentPruner) Class.forName(customPruner).newInstance();
       } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
         throw new RuntimeException(e);
       }
     }
-    return new SegmentPrunerImpl();
+    if (segmentPruner == null) {
+      segmentPruner = new SegmentPrunerImpl();
+    }
+    LOG.info("Segment pruner instantiated : " + segmentPruner.getClass().getName());
+    return segmentPruner;
   }
 }
