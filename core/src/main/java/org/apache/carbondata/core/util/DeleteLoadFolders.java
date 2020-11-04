@@ -233,14 +233,16 @@ public final class DeleteLoadFolders {
             if (oneLoad.getSegmentStatus() == SegmentStatus.INSERT_OVERWRITE_IN_PROGRESS
                 || oneLoad.getSegmentStatus() == SegmentStatus.INSERT_IN_PROGRESS) {
               if (segmentLock.lockWithRetries(1, 5)) {
-                LOGGER.info("Info: Acquired segment lock on segment:" + oneLoad.getLoadName());
+                LOGGER.info(String.format("Info: Acquired segment lock on segment:%s-%s", oneLoad.getLoadName(),
+                    absoluteTableIdentifier.getTableName()));
                 LoadMetadataDetails currentDetails =
                     getCurrentLoadStatusOfSegment(oneLoad.getLoadName(), metadataPath);
                 if (currentDetails != null && checkIfLoadCanBeDeleted(currentDetails,
                     isForceDelete)) {
                   oneLoad.setVisibility("false");
                   isDeleted = true;
-                  LOGGER.info("Info: Deleted the load " + oneLoad.getLoadName());
+                  LOGGER.info(String.format("Info: Deleted the load %s-%s", oneLoad.getLoadName(),
+                      absoluteTableIdentifier.getTableName()));
                 }
               } else {
                 LOGGER.info("Info: Load in progress for segment" + oneLoad.getLoadName());
@@ -249,11 +251,13 @@ public final class DeleteLoadFolders {
             } else {
               oneLoad.setVisibility("false");
               isDeleted = true;
-              LOGGER.info("Info: Deleted the load " + oneLoad.getLoadName());
+              LOGGER.info(String.format("Info: Deleted the load %s-%s", oneLoad.getLoadName(),
+                  absoluteTableIdentifier.getTableName()));
             }
           } finally {
             segmentLock.unlock();
-            LOGGER.info("Info: Segment lock on segment:" + oneLoad.getLoadName() + " is released");
+            LOGGER.info(String.format("Info: Segment lock on segment:%s is released-%s", oneLoad.getLoadName(),
+                absoluteTableIdentifier.getTableName()));
           }
         }
       }

@@ -182,7 +182,7 @@ case class CarbonAlterTableDropHivePartitionCommand(
       val preStatusEvent = AlterTableDropPartitionPreStatusEvent(table)
       OperationListenerBus.getInstance().fireEvent(preStatusEvent, operationContext)
 
-      SegmentFileStore.commitDropPartitions(table, uniqueId, tobeUpdatedSegs, tobeDeletedSegs, uuid)
+//      SegmentFileStore.commitDropPartitions(table, uniqueId, tobeUpdatedSegs, tobeDeletedSegs, uuid)
 
       val postStatusEvent = AlterTableDropPartitionPostStatusEvent(table)
       OperationListenerBus.getInstance().fireEvent(postStatusEvent, operationContext)
@@ -190,7 +190,7 @@ case class CarbonAlterTableDropHivePartitionCommand(
       DataMapStoreManager.getInstance().clearDataMaps(table.getAbsoluteTableIdentifier)
     } finally {
       AlterTableUtil.releaseLocks(locks)
-      SegmentFileStore.cleanSegments(table, null, true)
+//      SegmentFileStore.cleanSegments(table, null, true)
     }
     Seq.empty[Row]
   }

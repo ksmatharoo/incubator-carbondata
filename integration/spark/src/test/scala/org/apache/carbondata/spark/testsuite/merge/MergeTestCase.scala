@@ -29,11 +29,31 @@ import org.apache.spark.sql.test.util.QueryTest
 import org.apache.spark.sql.types.{BooleanType, DateType, IntegerType, StringType, StructField, StructType}
 import org.scalatest.BeforeAndAfterAll
 
+import org.apache.carbondata.core.constants.CarbonCommonConstants
+import org.apache.carbondata.core.util.CarbonProperties
+
 /**
  * Test Class for join query with orderby and limit
  */
 
 class MergeTestCase extends QueryTest with BeforeAndAfterAll {
+
+  val withTransaction = true
+  CarbonProperties.getInstance
+    .addProperty(CarbonCommonConstants.CARBON_MERGE_WITHIN_SEGMENT,
+      "false")
+  def withTransaction(code: => Unit): Unit = {
+    if (withTransaction) {
+      val transactionId = sql("start transaction").collect().head.getString(0)
+      try {
+        code
+      } finally {
+        sql(s"commit transaction '$transactionId'")
+      }
+    } else {
+      code
+    }
+  }
 
   override def beforeAll {
 
@@ -83,6 +103,22 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
     (dwSelframe, odsframe)
   }
 
+  private def initializePartition = {
+    val initframe = generateData(10)
+    initframe.write
+      .format("carbondata")
+      .option("tableName", "order")
+      .option("partitionColumns", "c_name")
+      .mode(SaveMode.Overwrite)
+      .save()
+
+    val dwframe = sqlContext.read.format("carbondata").option("tableName", "order").load()
+    val dwSelframe = dwframe.as("A")
+
+    val odsframe = generateFullCDC(10, 2, 2, 1, 2).as("B")
+    (dwSelframe, odsframe)
+  }
+
   test("test basic merge update with all mappings") {
     sql("drop table if exists order")
     val (dwSelframe, odsframe) = initialize
@@ -93,9 +129,10 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
       "quantity" -> "B.quantity",
       "price" -> "B.price",
       "state" -> "B.state").asInstanceOf[Map[Any, Any]]
-
-    dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).whenMatched(
-      col("A.state") =!= col("B.state")).updateExpr(updateMap).execute()
+    withTransaction {
+      dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).whenMatched(
+        col("A.state") =!= col("B.state")).updateExpr(updateMap).execute()
+    }
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
   }
 
@@ -105,8 +142,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
 
     val updateMap = Map(col("id") -> col("A.id"),
       col("state") -> col("B.state")).asInstanceOf[Map[Any, Any]]
-
-    dwSelframe.merge(odsframe, "A.id=B.id").whenMatched("A.state <> B.state").updateExpr(updateMap).execute()
+    withTransaction {
+      dwSelframe.merge(odsframe, "A.id=B.id")
+        .whenMatched("A.state <> B.state")
+        .updateExpr(updateMap)
+        .execute()
+    }
 
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
   }
@@ -118,9 +159,10 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
     val updateMap = Map("id" -> "A.id",
       "price" -> "B.price * 100",
       "state" -> "B.state").asInstanceOf[Map[Any, Any]]
-
-    dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).whenMatched(
-      col("A.state") =!= col("B.state")).updateExpr(updateMap).execute()
+    withTransaction {
+      dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).whenMatched(
+        col("A.state") =!= col("B.state")).updateExpr(updateMap).execute()
+    }
 
     checkAnswer(sql("select price from order where where state = 2"), Seq(Row(22500), Row(30000)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
@@ -132,8 +174,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
 
     val updateMap = Map(col("id") -> col("A.id"),
       col("state") -> col("B.state")).asInstanceOf[Map[Any, Any]]
-
-    dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).whenMatched().updateExpr(updateMap).execute()
+    withTransaction {
+      dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id")))
+        .whenMatched()
+        .updateExpr(updateMap)
+        .execute()
+    }
 
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
   }
@@ -148,10 +194,11 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
       col("quantity") -> "B.quantity",
       col("price") -> col("B.price"),
       col("state") -> col("B.state")).asInstanceOf[Map[Any, Any]]
-
-    dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).
-      whenNotMatched(col("A.id").isNull.and(col("B.id").isNotNull)).
-      insertExpr(insertMap).execute()
+    withTransaction {
+      dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).
+        whenNotMatched(col("A.id").isNull.and(col("B.id").isNotNull)).
+        insertExpr(insertMap).execute()
+    }
 
     checkAnswer(sql("select count(*) from order where id like 'newid%'"), Seq(Row(2)))
   }
@@ -175,10 +222,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
     matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)))
     matches ++= Seq(WhenNotMatched().addAction(InsertAction(insertMap)))
 
-    val st = System.currentTimeMillis()
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
     checkAnswer(sql("select count(*) from order where id like 'newid%'"), Seq(Row(2)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
   }
@@ -201,10 +250,13 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
 
     matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)))
     matches ++= Seq(WhenNotMatched(Some(col("A.id").isNull.and(col("B.id").isNotNull))).addAction(InsertAction(insertMap)))
-
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
+    sql("select * from order").show()
     checkAnswer(sql("select count(*) from order where id like 'newid%'"), Seq(Row(2)))
     checkAnswer(sql("select count(*) from order"), Seq(Row(12)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
@@ -228,10 +280,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
 
     matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)))
     matches ++= Seq(WhenNotMatched(Some(col("A.id").isNull.and(col("B.id").isNotNull))).addAction(InsertAction(insertMap)))
-
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
     checkAnswer(sql("select count(*) from order where id like 'newid%'"), Seq(Row(2)))
     checkAnswer(sql("select count(*) from order"), Seq(Row(12)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
@@ -244,10 +298,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
 
     var matches = Seq.empty[MergeMatch]
     matches ++= Seq(WhenNotMatchedAndExistsOnlyOnTarget().addAction(DeleteAction()))
-
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
     checkAnswer(sql("select count(*) from order"), Seq(Row(8)))
   }
 
@@ -262,10 +318,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
 
     matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)))
     matches ++= Seq(WhenNotMatchedAndExistsOnlyOnTarget().addAction(DeleteAction()))
-
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
     checkAnswer(sql("select count(*) from order"), Seq(Row(8)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
   }
@@ -289,10 +347,12 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
     matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)))
     matches ++= Seq(WhenNotMatched().addAction(InsertAction(insertMap)))
     matches ++= Seq(WhenNotMatchedAndExistsOnlyOnTarget().addAction(DeleteAction()))
-
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
     checkAnswer(sql("select count(*) from order where id like 'newid%'"), Seq(Row(2)))
     checkAnswer(sql("select count(*) from order"), Seq(Row(10)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
@@ -328,16 +388,17 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
       col("quantity") -> col("A.quantity"),
       col("price") -> expr("A.price"),
       col("state") -> col("A.state")).asInstanceOf[Map[Any, Any]]
-
-    dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).
-      whenMatched(col("A.state") =!= col("B.state")).
-      updateExpr(updateMap).insertExpr(insertMap_u).
-      whenNotMatched().
-      insertExpr(insertMap).
-      whenNotMatchedAndExistsOnlyOnTarget().
-      delete().
-      insertExpr(insertMap_d).
-      execute()
+    withTransaction {
+      dwSelframe.merge(odsframe, col("A.id").equalTo(col("B.id"))).
+        whenMatched(col("A.state") =!= col("B.state")).
+        updateExpr(updateMap).insertExpr(insertMap_u).
+        whenNotMatched().
+        insertExpr(insertMap).
+        whenNotMatchedAndExistsOnlyOnTarget().
+        delete().
+        insertExpr(insertMap_d).
+        execute()
+    }
     sql("select * from order").show()
     checkAnswer(sql("select count(*) from order where c_name = 'delete'"), Seq(Row(2)))
     checkAnswer(sql("select count(*) from order where c_name = 'insert'"), Seq(Row(2)))
@@ -381,10 +442,60 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
     matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)).addAction(InsertInHistoryTableAction(insertMap_u, TableIdentifier("order_hist"))))
     matches ++= Seq(WhenNotMatched().addAction(InsertAction(insertMap)))
     matches ++= Seq(WhenNotMatchedAndExistsOnlyOnTarget().addAction(DeleteAction()).addAction(InsertInHistoryTableAction(insertMap_d, TableIdentifier("order_hist"))))
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
+    checkAnswer(sql("select count(*) from order"), Seq(Row(10)))
+    checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
+    checkAnswer(sql("select price from order where id = 'newid1'"), Seq(Row(7500)))
+    checkAnswer(sql("select count(*) from order_hist where c_name = 'delete'"), Seq(Row(2)))
+    checkAnswer(sql("select count(*) from order_hist where c_name = 'insert'"), Seq(Row(2)))
+  }
 
-    CarbonMergeDataSetCommand(dwSelframe,
-      odsframe,
-      MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext.sparkSession)
+  test("test merge update with insert, insert with condition and expression and delete with insert history action with partition") {
+    sql("drop table if exists order")
+    sql("drop table if exists order_hist")
+    sql("create table order_hist(id string, name string, quantity int, price int, state int) PARTITIONED BY (c_name String) STORED AS carbondata")
+    val (dwSelframe, odsframe) = initializePartition
+
+    var matches = Seq.empty[MergeMatch]
+    val updateMap = Map(col("id") -> col("A.id"),
+      col("price") -> expr("B.price + 1"),
+      col("state") -> col("B.state"))
+
+    val insertMap = Map(col("id") -> col("B.id"),
+      col("name") -> col("B.name"),
+      col("c_name") -> col("B.c_name"),
+      col("quantity") -> col("B.quantity"),
+      col("price") -> expr("B.price * 100"),
+      col("state") -> col("B.state"))
+
+    val insertMap_u = Map(col("id") -> col("id"),
+      col("name") -> col("name"),
+      col("c_name") -> lit("insert"),
+      col("quantity") -> col("quantity"),
+      col("price") -> expr("price"),
+      col("state") -> col("state"))
+
+    val insertMap_d = Map(col("id") -> col("id"),
+      col("name") -> col("name"),
+      col("c_name") -> lit("delete"),
+      col("quantity") -> col("quantity"),
+      col("price") -> expr("price"),
+      col("state") -> col("state"))
+
+    matches ++= Seq(WhenMatched(Some(col("A.state") =!= col("B.state"))).addAction(UpdateAction(updateMap)).addAction(InsertInHistoryTableAction(insertMap_u, TableIdentifier("order_hist"))))
+    matches ++= Seq(WhenNotMatched().addAction(InsertAction(insertMap)))
+    matches ++= Seq(WhenNotMatchedAndExistsOnlyOnTarget().addAction(DeleteAction()).addAction(InsertInHistoryTableAction(insertMap_d, TableIdentifier("order_hist"))))
+    withTransaction {
+      CarbonMergeDataSetCommand(dwSelframe,
+        odsframe,
+        MergeDataSetMatches(col("A.id").equalTo(col("B.id")), matches.toList)).run(sqlContext
+        .sparkSession)
+    }
     checkAnswer(sql("select count(*) from order"), Seq(Row(10)))
     checkAnswer(sql("select count(*) from order where state = 2"), Seq(Row(2)))
     checkAnswer(sql("select price from order where id = 'newid1'"), Seq(Row(7500)))
@@ -432,19 +543,70 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
       col("current") -> lit(true),
       col("effectiveDate") -> col("B.effectiveDate"),
       col("endDate") -> lit(null)).asInstanceOf[Map[Any, Any]]
-
-    customer.merge(updates, "A.customerId=B.customerId").
-      whenMatched((col("A.address") =!= col("B.address")).and(col("A.current").equalTo(lit(true)))).
-      updateExpr(updateMap).
-      insertExpr(insertMap_u).
-      whenNotMatched(col("A.customerId").isNull.and(col("B.customerId").isNotNull)).
-      insertExpr(insertMap).
-      execute()
-
+    withTransaction {
+      customer.merge(updates, "A.customerId=B.customerId").
+        whenMatched((col("A.address") =!=
+                     col("B.address")).and(col("A.current").equalTo(lit(true)))).
+        updateExpr(updateMap).
+        insertExpr(insertMap_u).
+        whenNotMatched(col("A.customerId").isNull.and(col("B.customerId").isNotNull)).
+        insertExpr(insertMap).
+        execute()
+    }
     checkAnswer(sql("select count(*) from customers"), Seq(Row(6)))
     checkAnswer(sql("select count(*) from customers where current='true'"), Seq(Row(4)))
     checkAnswer(sql("select count(*) from customers where effectivedate is not null and enddate is not null"), Seq(Row(1)))
 
+  }
+
+  test("check the ccd with partition") {
+    sql("drop table if exists target")
+
+    val initframe = sqlContext.sparkSession.createDataFrame(Seq(
+      Row("a", "0"),
+      Row("b", "1"),
+      Row("c", "2"),
+      Row("d", "3")
+    ).asJava, StructType(Seq(StructField("key", StringType), StructField("value", StringType))))
+
+    initframe.write
+      .format("carbondata")
+      .option("tableName", "target")
+      .option("partitionColumns", "value")
+      .mode(SaveMode.Overwrite)
+      .save()
+    val target = sqlContext.read.format("carbondata").option("tableName", "target").load()
+    var ccd =
+      sqlContext.sparkSession.createDataFrame(Seq(
+        Row("a", "10", false,  0),
+        Row("a", null, true, 1),   // a was updated and then deleted
+        Row("b", null, true, 2),   // b was just deleted once
+        Row("c", null, true, 3),   // c was deleted and then updated twice
+        Row("c", "20", false, 4),
+        Row("c", "200", false, 5),
+        Row("e", "100", false, 6)  // new key
+      ).asJava,
+        StructType(Seq(StructField("key", StringType),
+          StructField("newValue", StringType),
+          StructField("deleted", BooleanType), StructField("time", IntegerType))))
+    ccd.createOrReplaceTempView("changes")
+
+    ccd = sql("SELECT key, latest.newValue as newValue, latest.deleted as deleted FROM ( SELECT key, max(struct(time, newValue, deleted)) as latest FROM changes GROUP BY key)")
+
+    val updateMap = Map("key" -> "B.key", "value" -> "B.newValue").asInstanceOf[Map[Any, Any]]
+
+    val insertMap = Map("key" -> "B.key", "value" -> "B.newValue").asInstanceOf[Map[Any, Any]]
+    withTransaction {
+      target.as("A").merge(ccd.as("B"), "A.key=B.key").
+        whenMatched("B.deleted=false").
+        updateExpr(updateMap).
+        whenNotMatched("B.deleted=false").
+        insertExpr(insertMap).
+        whenMatched("B.deleted=true").
+        delete().execute()
+    }
+    checkAnswer(sql("select count(*) from target"), Seq(Row(3)))
+    checkAnswer(sql("select * from target order by key"), Seq(Row("c", "200"), Row("d", "3"), Row("e", "100")))
   }
 
   test("check the ccd ") {
@@ -483,14 +645,15 @@ class MergeTestCase extends QueryTest with BeforeAndAfterAll {
     val updateMap = Map("key" -> "B.key", "value" -> "B.newValue").asInstanceOf[Map[Any, Any]]
 
     val insertMap = Map("key" -> "B.key", "value" -> "B.newValue").asInstanceOf[Map[Any, Any]]
-
-    target.as("A").merge(ccd.as("B"), "A.key=B.key").
-      whenMatched("B.deleted=false").
-      updateExpr(updateMap).
-      whenNotMatched("B.deleted=false").
-      insertExpr(insertMap).
-      whenMatched("B.deleted=true").
-      delete().execute()
+    withTransaction {
+      target.as("A").merge(ccd.as("B"), "A.key=B.key").
+        whenMatched("B.deleted=false").
+        updateExpr(updateMap).
+        whenNotMatched("B.deleted=false").
+        insertExpr(insertMap).
+        whenMatched("B.deleted=true").
+        delete().execute()
+    }
     checkAnswer(sql("select count(*) from target"), Seq(Row(3)))
     checkAnswer(sql("select * from target order by key"), Seq(Row("c", "200"), Row("d", "3"), Row("e", "100")))
   }

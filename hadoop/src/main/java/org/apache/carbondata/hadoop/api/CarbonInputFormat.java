@@ -103,12 +103,15 @@ public abstract class CarbonInputFormat<T> extends FileInputFormat<Void, T> {
   // comma separated list of input segment numbers
   public static final String INPUT_SEGMENT_NUMBERS =
       "mapreduce.input.carboninputformat.segmentnumbers";
+  // comma separated list of input segment numbers
+  public static final String PRUNED_SEGMENT_NUMBERS =
+      "mapreduce.input.carboninputformat.prunedsegmentnumbers";
   private static final String VALIDATE_INPUT_SEGMENT_IDs =
       "mapreduce.input.carboninputformat.validsegments";
   private static final String FILTER_PREDICATE =
       "mapreduce.input.carboninputformat.filter.predicate";
   private static final String COLUMN_PROJECTION = "mapreduce.input.carboninputformat.projection";
-  private static final String TABLE_INFO = "mapreduce.input.carboninputformat.tableinfo";
+  public static final String TABLE_INFO = "mapreduce.input.carboninputformat.tableinfo";
   private static final String CARBON_TRANSACTIONAL_TABLE =
       "mapreduce.input.carboninputformat.transactional";
   private static final String CARBON_READ_SUPPORT = "mapreduce.input.carboninputformat.readsupport";
@@ -169,7 +172,7 @@ public abstract class CarbonInputFormat<T> extends FileInputFormat<Void, T> {
   /**
    * Get TableInfo object from `configuration`
    */
-  protected static TableInfo getTableInfo(Configuration configuration) throws IOException {
+  public static TableInfo getTableInfo(Configuration configuration) throws IOException {
     String tableInfoStr = configuration.get(TABLE_INFO);
     if (tableInfoStr == null) {
       return null;
@@ -293,6 +296,14 @@ m filterExpression
    */
   public static void setSegmentsToAccess(Configuration configuration, List<Segment> validSegments) {
     configuration.set(INPUT_SEGMENT_NUMBERS, CarbonUtil.convertToString(validSegments));
+  }
+
+  public static void setPrunedSegments(Configuration configuration, List<Segment> prunedSegments) {
+    if (!prunedSegments.isEmpty()) {
+      configuration.set(PRUNED_SEGMENT_NUMBERS, CarbonUtil.convertToString(prunedSegments));
+    } else {
+      configuration.set(PRUNED_SEGMENT_NUMBERS, "None");
+    }
   }
 
   /**
@@ -493,8 +504,8 @@ m filterExpression
     QueryStatistic statistic = new QueryStatistic();
 
     // get tokens for all the required FileSystem for table path
-    TokenCache.obtainTokensForNamenodes(job.getCredentials(),
-        new Path[] { new Path(carbonTable.getTablePath()) }, job.getConfiguration());
+//    TokenCache.obtainTokensForNamenodes(job.getCredentials(),
+//        new Path[] { new Path(carbonTable.getTablePath()) }, job.getConfiguration());
     List<ExtendedBlocklet> prunedBlocklets =
         getPrunedBlocklets(job, carbonTable, expression, segmentIds, invalidSegments,
             segmentsToBeRefreshed);

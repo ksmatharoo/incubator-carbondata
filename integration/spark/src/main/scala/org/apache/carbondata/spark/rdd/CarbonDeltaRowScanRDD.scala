@@ -53,7 +53,8 @@ class CarbonDeltaRowScanRDD[T: ClassTag](
     classOf[SparkDataTypeConverterImpl],
     override val readSupportClz: Class[_ <: CarbonReadSupport[_]] =
     SparkReadSupport.readSupportClass,
-    deltaVersionToRead: String) extends
+    deltaVersionToRead: String,
+    updateTimeStamp: Long) extends
   CarbonScanRDD[T](
     spark,
     columnProjection,
@@ -67,7 +68,9 @@ class CarbonDeltaRowScanRDD[T: ClassTag](
     readSupportClz) {
   override def internalGetPartitions: Array[Partition] = {
     val table = CarbonTable.buildFromTableInfo(getTableInfo)
-    val updateStatusManager = new SegmentUpdateStatusManager(table, deltaVersionToRead)
+    val updateStatusManager = new SegmentUpdateStatusManager(table,
+      deltaVersionToRead,
+      updateTimeStamp + "")
 
     val parts = super.internalGetPartitions
     parts.map { p =>
@@ -78,13 +81,16 @@ class CarbonDeltaRowScanRDD[T: ClassTag](
       }.asJava
       new CarbonSparkPartition(partition.rddId, partition.index,
         new CarbonMultiBlockSplit(splits, partition.multiBlockSplit.getLocations))
-    }.filter(p => p.multiBlockSplit.getAllSplits.size() > 0).asInstanceOf[Array[Partition]]
+    }.filter(p => p.multiBlockSplit.getAllSplits.size() > 0).zipWithIndex.map{ case (p, index) =>
+      new CarbonSparkPartition(p.rddId, index, p.multiBlockSplit)
+    }.asInstanceOf[Array[Partition]]
   }
 
   override def createInputFormat(conf: Configuration): CarbonTableInputFormat[Object] = {
     val format = super.createInputFormat(conf)
     conf.set("updateDeltaVersion", deltaVersionToRead)
     conf.set("readDeltaOnly", "true")
+    conf.set("updateStatusVersion", ""+updateTimeStamp)
     format
   }
 }

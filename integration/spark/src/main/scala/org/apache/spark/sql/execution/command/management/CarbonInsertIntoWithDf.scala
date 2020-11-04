@@ -61,13 +61,14 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
     val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
     ThreadLocalSessionInfo
       .setConfigurationToCurrentThread(sparkSession.sessionState.newHadoopConf())
-    val (sizeInBytes, table, dbName, logicalPartitionRelation, finalPartition) = CommonLoadUtils
+    val (sizeInBytes, table, dbName, catalogTable, finalPartition) = CommonLoadUtils
       .processMetadataCommon(
         sparkSession,
         databaseNameOp,
         tableName,
         tableInfoOp,
         partition)
+    LOGGER.info(s"Started Load for ${dbName}.${table}")
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     CarbonProperties.getInstance().addProperty("zookeeper.enable.lock", "false")
     val factPath = ""
@@ -110,7 +111,11 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
       // Clean up the old invalid segment data before creating a new entry for new load.
       SegmentStatusManager.deleteLoadsAndUpdateMetadata(table, false, currPartitions)
       // add the start entry for the new load in the table status file
-      if (updateModel.isEmpty && !table.isHivePartitionTable) {
+      if ((updateModel.isEmpty || updateModel.isDefined && updateModel.get.loadAsNewSegment)
+          && !table.isHivePartitionTable) {
+        if (updateModel.isDefined ) {
+          carbonLoadModel.setFactTimeStamp(updateModel.get.updatedTimeStamp)
+        }
         CarbonLoaderUtil.readAndUpdateLoadProgressInTableMeta(
           carbonLoadModel,
           isOverwriteTable)
@@ -136,7 +141,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         isOverwriteTable,
         carbonLoadModel,
         hadoopConf,
-        logicalPartitionRelation,
+        catalogTable,
         dateFormat,
         timeStampFormat,
         options,
@@ -147,7 +152,7 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         None,
         updateModel,
         operationContext)
-
+      LOGGER.info(s"Segment No. Assigned for table ${dbName}.${tableName} : ${carbonLoadModel.getSegmentId}")
       LOGGER.info("Sort Scope : " + carbonLoadModel.getSortScope)
       val (rows, loadResult) = insertData(loadParams)
       val info = CommonLoadUtils.makeAuditInfo(loadResult)
@@ -177,12 +182,13 @@ case class CarbonInsertIntoWithDf(databaseNameOp: Option[String],
         }
         throw ex
     }
+    LOGGER.info(s"Finished Load for  ${dbName}.${table}")
     Seq.empty
   }
 
   def insertData(loadParams: CarbonLoadParams): (Seq[Row], LoadMetadataDetails) = {
     var rows = Seq.empty[Row]
-    val loadDataFrame = if (updateModel.isDefined) {
+    val loadDataFrame = if (updateModel.isDefined && !updateModel.get.loadAsNewSegment) {
       Some(CommonLoadUtils.getDataFrameWithTupleID(Some(dataFrame)))
     } else {
       Some(dataFrame)

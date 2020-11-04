@@ -64,6 +64,7 @@ import org.apache.carbondata.core.datastore.page.encoding.ColumnPageEncoder;
 import org.apache.carbondata.core.datastore.page.encoding.DefaultEncodingFactory;
 import org.apache.carbondata.core.datastore.page.encoding.EncodedColumnPage;
 import org.apache.carbondata.core.exception.InvalidConfigurationException;
+import org.apache.carbondata.core.extrenalschema.ExternalSchema;
 import org.apache.carbondata.core.indexstore.BlockletDetailInfo;
 import org.apache.carbondata.core.indexstore.blockletindex.SegmentIndexFileStore;
 import org.apache.carbondata.core.localdictionary.generator.ColumnLocalDictionaryGenerator;
@@ -2139,6 +2140,11 @@ public final class CarbonUtil {
       LOGGER.error("CarbonData file is not present in the table location");
       throw new IOException("CarbonData file is not present in the table location");
     }
+    return getTableInfo(tableName, configuration, fistFilePath);
+  }
+
+  public static org.apache.carbondata.format.TableInfo getTableInfo(String tableName,
+      Configuration configuration, String fistFilePath) throws IOException {
     CarbonHeaderReader carbonHeaderReader = new CarbonHeaderReader(fistFilePath, configuration);
     List<ColumnSchema> columnSchemaList = carbonHeaderReader.readSchema();
     // only columnSchema is the valid entry, reset all dummy entries.
@@ -3016,6 +3022,11 @@ public final class CarbonUtil {
       for (ColumnSchema columnSchema : wrapperColumnSchema) {
         // check whether the column is local dictionary column or not
         if (columnSchema.isLocalDictColumn()) {
+          if (columnSchema.getColumnName().equalsIgnoreCase("rowid") || columnSchema.getColumnName()
+              .equalsIgnoreCase("rowkey") || columnSchema.getColumnName()
+              .equalsIgnoreCase("rowmd5")) {
+            continue;
+          }
           columnLocalDictGenMap.put(columnSchema.getColumnName(),
               new ColumnLocalDictionaryGenerator(localDictionaryThreshold,
                   columnSchema.getDataType() == DataTypes.VARCHAR ?
@@ -3043,6 +3054,7 @@ public final class CarbonUtil {
                 + " table %s", stringBuilder.toString(), carbonTable.getTableUniqueName()));
       }
     }
+    columnLocalDictGenMap.remove("rowid");
     return columnLocalDictGenMap;
   }
 
@@ -3382,5 +3394,19 @@ public final class CarbonUtil {
       return CarbonCommonConstants.INDEX_CACHE_EXPIRATION_TIME_IN_SECONDS_DEFAULT;
     }
     return Integer.parseInt(cacheExpirationTime);
+  }
+
+
+  public static ExternalSchema getExternalSchema(AbsoluteTableIdentifier absoluteTableIdentifier)
+      throws IOException {
+    String externalSchemaPath =
+        CarbonTablePath.getMetadataPath(absoluteTableIdentifier.getTablePath()) + "/"
+            + "externalSchema";
+    CarbonFile carbonFile = FileFactory.getCarbonFile(externalSchemaPath);
+    ExternalSchema externalSchema = new ExternalSchema();
+    try (DataInputStream dataInputStream = carbonFile.getDataInputStream(1024)) {
+      externalSchema.readFields(dataInputStream);
+    }
+    return externalSchema;
   }
 }

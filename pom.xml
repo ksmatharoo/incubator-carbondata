@@ -99,8 +99,8 @@
     <module>core</module>
     <module>processing</module>
     <module>hadoop</module>
-    <module>mv/plan</module>
-    <module>mv/core</module>
+<!--    <module>mv/plan</module>-->
+<!--    <module>mv/core</module>-->
     <module>index/secondary-index</module>
     <module>index/bloom</module>
     <module>index/lucene</module>
@@ -109,28 +109,37 @@
     <module>geo</module>
     <module>integration/spark</module>
     <module>integration/hive</module>
-    <module>integration/flink</module>
-    <module>integration/flink-build</module>
-    <module>integration/flink-proxy</module>
+    <module>/integration/hbase</module>
+<!--    <module>integration/flink</module>-->
+<!--    <module>integration/flink-build</module>-->
+<!--    <module>integration/flink-proxy</module>-->
     <module>integration/presto</module>
     <module>sdk/sdk</module>
     <module>tools/cli</module>
-    <module>examples/spark</module>
-    <module>examples/flink</module>
+<!--    <module>examples/spark</module>-->
+<!--    <module>examples/flink</module>-->
     <module>assembly</module>
+
   </modules>
 
   <properties>
     <!--    default properties-->
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <snappy.version>1.1.2.6</snappy.version>
-    <hadoop.version>2.7.2</hadoop.version>
     <httpclient.version>4.3.4</httpclient.version>
     <httpcore.version>4.3-alpha1</httpcore.version>
     <scala.binary.version>2.11</scala.binary.version>
     <scala.version>2.11.8</scala.version>
     <hadoop.deps.scope>compile</hadoop.deps.scope>
-    <spark.version>2.3.4</spark.version>
+
+    <cdh.version>cdh6.3.2</cdh.version>
+    <spark.version>2.4.0-${cdh.version}</spark.version>
+    <hadoop.version>3.0.0-${cdh.version}</hadoop.version>
+    <hive.version>2.1.1-${cdh.version}</hive.version>
+    <htrace.version>4.2.0-incubating</htrace.version>
+    <avro.version>1.8.2-${cdh.version}</avro.version>
+    <avro.hadoop.version>hadoop2</avro.hadoop.version>
+
     <spark.deps.scope>compile</spark.deps.scope>
     <scala.deps.scope>compile</scala.deps.scope>
     <dev.path>${basedir}/dev</dev.path>
@@ -138,7 +147,7 @@
     <hdfs.url>local</hdfs.url>
     <presto.jdbc.url>localhost:8086</presto.jdbc.url>
     <!--    prestosql by default-->
-    <presto.version>316</presto.version>
+    <presto.version>323</presto.version>
     <presto.groupid>io.prestosql</presto.groupid>
     <presto.hadoop.groupid>io.prestosql.hadoop</presto.hadoop.groupid>
     <presto.hadoop.artifactid>hadoop-apache</presto.hadoop.artifactid>
@@ -163,6 +172,10 @@
       <releases>
         <enabled>true</enabled>
       </releases>
+    </repository>
+    <repository>
+      <id>cloudera</id>
+      <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
     </repository>
   </repositories>
 
@@ -273,7 +286,7 @@
       </dependency>
       <dependency>
         <groupId>org.apache.spark</groupId>
-        <artifactId>spark-hive-thriftserver_${scala.binary.version}</artifactId>
+        <artifactId>spark-hive_${scala.binary.version}</artifactId>
         <version>${spark.version}</version>
         <scope>${spark.deps.scope}</scope>
       </dependency>
@@ -529,7 +542,7 @@
     <profile>
       <id>hadoop-2.8</id>
       <properties>
-        <hadoop.version>2.8.3</hadoop.version>
+        <hadoop.version>3.0.0-${cdh.version}</hadoop.version>
         <httpclient.version>4.5.2</httpclient.version>
       </properties>
     </profile>
@@ -568,6 +581,8 @@
                 <sourceDirectory>${basedir}/integration/spark/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/java</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/sdk/sdk/src/main/java</sourceDirectory>
@@ -584,7 +599,7 @@
     <profile>
       <id>spark-2.4</id>
       <properties>
-        <spark.version>2.4.5</spark.version>
+        <spark.version>2.4.0-${cdh.version}</spark.version>
         <scala.binary.version>2.11</scala.binary.version>
         <scala.version>2.11.8</scala.version>
       </properties>
@@ -613,6 +628,8 @@
                 <sourceDirectory>${basedir}/integration/spark/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/integration/hive/src/main/java</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/scala</sourceDirectory>
+                <sourceDirectory>${basedir}/integration/hbase/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/java</sourceDirectory>
                 <sourceDirectory>${basedir}/streaming/src/main/scala</sourceDirectory>
                 <sourceDirectory>${basedir}/sdk/sdk/src/main/java</sourceDirectory>
@@ -718,7 +735,7 @@
         <activeByDefault>true</activeByDefault>
       </activation>
       <properties>
-        <presto.version>316</presto.version>
+        <presto.version>323</presto.version>
         <scala.version>2.11.8</scala.version>
         <airlift.version>0.36</airlift.version>
         <presto.groupid>io.prestosql</presto.groupid>

@@ -21,8 +21,9 @@ import java.io.File
 import java.sql.SQLException
 import java.util
 
+import scala.util.Random
+
 import org.apache.commons.io.FileUtils
-import org.apache.commons.lang.RandomStringUtils
 import org.scalatest.{BeforeAndAfterAll, FunSuiteLike}
 
 import org.apache.carbondata.common.logging.LogServiceFactory
@@ -112,7 +113,7 @@ class PrestoTestNonTransactionalTableFiles extends FunSuiteLike with BeforeAndAf
     // Build Varchar Column data
     var varcharValue: String = {
       if (varcharDataGen) {
-        RandomStringUtils.randomAlphabetic(32001)
+        Random.nextString(32001)
       } else {
         "a"
       }

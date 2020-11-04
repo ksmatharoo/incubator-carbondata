@@ -336,6 +336,14 @@ public final class FileFactory {
     return path.delete();
   }
 
+  public static boolean deleteAllCarbonFilesOfDirNonRecursive(CarbonFile path) {
+    CarbonFile[] files = path.listFiles();
+    for (int i = 0; i < files.length; i++) {
+      files[i].delete();
+    }
+    return path.delete();
+  }
+
   public static boolean mkdirs(String filePath) throws IOException {
     return getCarbonFile(filePath).mkdirs();
   }
@@ -584,7 +592,7 @@ public final class FileFactory {
         .startsWith(CarbonCommonConstants.VIEWFSURL_PREFIX) || lowerPath
         .startsWith(CarbonCommonConstants.S3N_PREFIX) || lowerPath
         .startsWith(CarbonCommonConstants.S3A_PREFIX) || lowerPath
-        .startsWith(CarbonCommonConstants.S3_PREFIX)) {
+        .startsWith(CarbonCommonConstants.S3_PREFIX) || lowerPath.startsWith("file:/")) {
       return path;
     } else if (defaultFs != null) {
       return defaultFs + CarbonCommonConstants.FILE_SEPARATOR + path;

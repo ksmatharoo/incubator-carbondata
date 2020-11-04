@@ -229,7 +229,7 @@ public class WritableReadSupport<T> implements CarbonReadSupport<T> {
     } else if (dataType == DataTypes.BINARY) {
       return new BytesWritable((byte[]) obj);
     } else if (dataType == DataTypes.DATE) {
-      return new DateWritableV2((Integer) obj);
+      return new DateWritable((Integer) obj);
     } else if (dataType == DataTypes.TIMESTAMP) {
       WritableTimestampObjectInspector ins = new WritableTimestampObjectInspector();
       return ins.getPrimitiveWritableObject(ins.create(new Timestamp((long) obj / 1000)));

@@ -55,6 +55,11 @@ public class FalseFilterExecutor implements FilterExecuter {
   }
 
   @Override
+  public BitSet isScanRequired(MinMaxPruneMetadata minMaxPruneMetadata) {
+    return new BitSet();
+  }
+
+  @Override
   public void readColumnChunks(RawBlockletColumnChunks blockChunkHolder) {
     // Do Nothing
   }

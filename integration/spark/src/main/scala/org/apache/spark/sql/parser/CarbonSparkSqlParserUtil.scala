@@ -387,7 +387,7 @@ object CarbonSparkSqlParserUtil {
       CarbonEnv.getDatabaseName(table.identifier.database)(sparkSession).toLowerCase(),
       table.identifier.table.toLowerCase()
     )
-    val tableInfo = if (isExternal) {
+    val tableInfo = if (isExternal && fields.isEmpty) {
       if (partitionColumnNames.nonEmpty) {
         throw new MalformedCarbonCommandException(
           "Partition is not supported for external table")
@@ -555,7 +555,8 @@ object CarbonSparkSqlParserUtil {
    * @return returns <true> if lower case conversion is needed else <false>
    */
   def needToConvertToLowerCase(key: String): Boolean = {
-    val noConvertList = Array(CarbonCommonConstants.COMPRESSOR, "PATH", "bad_record_path")
+    val noConvertList = Array(CarbonCommonConstants.COMPRESSOR, "PATH", "bad_record_path",
+      "custom.pruner")
     !noConvertList.exists(x => x.equalsIgnoreCase(key))
   }
 

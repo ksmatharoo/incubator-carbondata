@@ -136,6 +136,9 @@ object CarbonInternalMetastore {
 
   def refreshIndexInfo(dbName: String, tableName: String,
       carbonTable: CarbonTable, needLock: Boolean = true)(sparkSession: SparkSession): Unit = {
+    if (null != carbonTable) {
+      return
+    }
     val indexTableExists = CarbonInternalScalaUtil.isIndexTableExists(carbonTable)
     // tables created without property "indexTableExists", will return null, for those tables enter
     // into below block, gather the actual data from hive and then set this property to true/false

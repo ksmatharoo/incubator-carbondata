@@ -116,18 +116,28 @@ case class AlterTableModel(
     var alterSql: String,
     customSegmentIds: Option[List[String]] = None)
 
-case class UpdateTableModel(
-    isUpdate: Boolean,
-    updatedTimeStamp: Long,
+class UpdateTableModel(
+    var isUpdate: Boolean,
+    var updatedTimeStamp: Long,
     var executorErrors: ExecutionErrors,
-    deletedSegments: Seq[Segment])
+    var deletedSegments: Array[Segment],
+    var loadAsNewSegment: Boolean = false) extends Serializable {
+  def copyFrom(updateTableModel: UpdateTableModel): UpdateTableModel = {
+    updatedTimeStamp = updateTableModel.updatedTimeStamp
+    executorErrors = updateTableModel.executorErrors
+    deletedSegments = updateTableModel.deletedSegments
+    loadAsNewSegment = updateTableModel.loadAsNewSegment
+    this
+  }
+}
 
 case class CompactionModel(compactionSize: Long,
     compactionType: CompactionType,
     carbonTable: CarbonTable,
     isDDLTrigger: Boolean,
     currentPartitions: Option[Seq[PartitionSpec]],
-    customSegmentIds: Option[List[String]])
+    customSegmentIds: Option[List[String]],
+    compactWithInSegment : Boolean = false)
 
 case class CompactionCallableModel(carbonLoadModel: CarbonLoadModel,
     carbonTable: CarbonTable,
@@ -135,7 +145,8 @@ case class CompactionCallableModel(carbonLoadModel: CarbonLoadModel,
     sqlContext: SQLContext,
     compactionType: CompactionType,
     currentPartitions: Option[Seq[PartitionSpec]],
-    compactedSegments: java.util.List[String])
+    compactedSegments: java.util.List[String],
+    compactWithInSegment: Boolean = false)
 
 case class AlterPartitionModel(carbonLoadModel: CarbonLoadModel,
     segmentId: String,

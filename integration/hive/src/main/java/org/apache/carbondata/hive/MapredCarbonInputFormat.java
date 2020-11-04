@@ -19,6 +19,7 @@ package org.apache.carbondata.hive;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,12 +29,14 @@ import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.exception.InvalidConfigurationException;
 import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
+import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.schema.SchemaReader;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.core.scan.expression.Expression;
 import org.apache.carbondata.core.scan.model.QueryModel;
 import org.apache.carbondata.core.scan.model.QueryModelBuilder;
+import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.util.DataTypeConverterImpl;
 import org.apache.carbondata.core.util.ObjectSerializationUtil;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
@@ -101,10 +104,30 @@ public class MapredCarbonInputFormat extends CarbonTableInputFormat<ArrayWritabl
         // persisted in the schema
         carbonTable = SchemaReader.readCarbonTableFromStore(absoluteTableIdentifier);
       } else {
-        // InferSchema from data file
-        carbonTable = CarbonTable.buildFromTableInfo(SchemaReader
-            .inferSchema(absoluteTableIdentifier, false));
-        carbonTable.setTransactionalTable(false);
+        SegmentStatusManager.ValidAndInvalidSegmentsInfo segments = new SegmentStatusManager(absoluteTableIdentifier).getValidAndInvalidSegments();
+        if (segments != null && segments.getValidSegments().size() > 0) {
+          String segmentFile =
+              segments.getValidSegments().get(segments.getValidSegments().size() - 1)
+                  .getLoadMetadataDetails().getSegmentFile();
+          SegmentFileStore segmentFileStore = new SegmentFileStore(validInputPath, segmentFile);
+          segmentFileStore.readIndexFiles(configuration);
+          Iterator<List<String>> iterator = segmentFileStore.getIndexFilesMap().values().iterator();
+          String filePath = null;
+          if (iterator.hasNext()) {
+            filePath = iterator.next().get(0);
+          }
+          if (filePath == null) {
+            return;
+          }
+          carbonTable = CarbonTable.buildFromTableInfo(SchemaReader
+              .inferSchemaFromFile(absoluteTableIdentifier, filePath, configuration));
+          carbonTable.setTransactionalTable(true);
+        } else {
+          // InferSchema from data file
+          carbonTable = CarbonTable
+              .buildFromTableInfo(SchemaReader.inferSchema(absoluteTableIdentifier, false));
+          carbonTable.setTransactionalTable(false);
+        }
       }
       configuration.set(CARBON_TABLE, ObjectSerializationUtil.convertObjectToString(carbonTable));
       setTableInfo(configuration, carbonTable.getTableInfo());
@@ -115,9 +138,15 @@ public class MapredCarbonInputFormat extends CarbonTableInputFormat<ArrayWritabl
 
   private static CarbonTable getCarbonTable(Configuration configuration, String path)
       throws IOException, InvalidConfigurationException {
-    populateCarbonTable(configuration, path);
     // read it from schema file in the store
     String carbonTableStr = configuration.get(CARBON_TABLE);
+    if (carbonTableStr == null) {
+      populateCarbonTable(configuration, path);
+      carbonTableStr = configuration.get(CARBON_TABLE);
+      if (carbonTableStr == null) {
+        return null;
+      }
+    }
     return (CarbonTable) ObjectSerializationUtil.convertStringToObject(carbonTableStr);
   }
 
@@ -132,6 +161,9 @@ public class MapredCarbonInputFormat extends CarbonTableInputFormat<ArrayWritabl
           jobContext.getConfiguration().get("location"));
     } catch (Exception e) {
       throw new IOException("Unable read Carbon Schema: ", e);
+    }
+    if (carbonTable == null) {
+      return new InputSplit[0];
     }
     List<String> partitionNames = new ArrayList<>();
     if (carbonTable.isHivePartitionTable()) {

@@ -38,7 +38,7 @@ public class CarbonColumnVectorImpl implements CarbonColumnVector {
 
   private BigDecimal[] decimals;
 
-  private byte[] byteArr;
+  protected byte[] byteArr;
 
   private byte[][] bytes;
 
