@@ -33,8 +33,10 @@ public class ColumnLocalDictionaryGenerator implements LocalDictionaryGenerator 
    * dictionary holder to hold dictionary values
    */
   private DictionaryStore dictionaryHolder;
+  private int lvLength;
 
   public ColumnLocalDictionaryGenerator(int threshold, int lvLength) {
+    this.lvLength = lvLength;
     // adding 1 to threshold for null value
     int newThreshold = threshold + 1;
     this.dictionaryHolder = new MapBasedDictionaryStore(newThreshold);
@@ -85,5 +87,10 @@ public class ColumnLocalDictionaryGenerator implements LocalDictionaryGenerator 
   @Override
   public byte[] getDictionaryKeyBasedOnValue(int value) {
     return this.dictionaryHolder.getDictionaryKeyBasedOnValue(value);
+  }
+
+  @Override
+  public int getLVLength() {
+    return lvLength;
   }
 }

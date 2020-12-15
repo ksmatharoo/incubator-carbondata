@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.execution.datasources.hbase
 
+import java.util
 import java.util.UUID
 
 import scala.collection.JavaConverters._
@@ -29,8 +30,9 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hive.CarbonRelation
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.expressions.{GenericInternalRow, GenericRow}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, GenericInternalRow, GenericRow}
 import org.apache.spark.sql.execution.LogicalRDD
+import org.apache.spark.sql.types.{LongType, StringType, TimestampType}
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
@@ -45,6 +47,7 @@ import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentSta
 import org.apache.carbondata.core.transaction.{TransactionActionType, TransactionManager}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.core.util.{ByteUtil, CarbonProperties, CarbonUtil}
+import org.apache.carbondata.hbase.{HBaseConstants, HBaseUtil}
 import org.apache.carbondata.processing.loading.FailureCauses
 import org.apache.carbondata.tranaction.SessionTransactionManager
 import org.apache.carbondata.hbase.HBaseConstants._
@@ -58,6 +61,16 @@ case class HandoffHbaseSegmentCommand(
   extends DataCommand {
 
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
+
+  override def output: Seq[Attribute] = {
+    Seq(
+      AttributeReference("maxrowtimestamp", LongType, nullable = true)(),
+      AttributeReference("timestampcolumn", LongType, nullable = true)(),
+      AttributeReference("noOfRowsInserted", LongType, nullable = true)(),
+      AttributeReference("noOfRowsUpdated", LongType, nullable = true)(),
+      AttributeReference("noOfRowsDeleted", LongType, nullable = true)()
+    )
+  }
 
   override def processData(sparkSession: SparkSession): Seq[Row] = {
     Checker.validateTableExists(databaseNameOp, tableName, sparkSession)
@@ -126,8 +139,10 @@ case class HandoffHbaseSegmentCommand(
       .collect()
     if (rows.isEmpty || rows.head.isNullAt(0)) {
       transactionManager.rollbackTransaction(transactionId);
-      return Seq.empty
+      return Seq(Row(null, null, 0L, 0L, 0L))
     }
+
+    val statsMap = new util.HashMap[String, Object]()
     val maxTimeStamp = rows.head.getLong(0) - handOffOptions.getGraceTimeInMillis
     val updated = loadDF.where(col(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).leq(lit(maxTimeStamp)))
     val setValue = CarbonProperties.getInstance()
@@ -148,15 +163,16 @@ case class HandoffHbaseSegmentCommand(
           detail,
           transactionManager,
           transactionId,
-          externalSchema)
+          externalSchema,
+          statsMap)
       } else {
-        insertData(sparkSession, carbonTable, columnsToSelect, header, updated)
+        insertData(sparkSession, carbonTable, columnsToSelect, header, updated, statsMap)
       }
       val segmentId = transactionManager
         .getAndSetCurrentTransactionSegment(transactionId,
           carbonTable.getDatabaseName + DOT + carbonTable.getTableName)
       transactionManager.recordTransactionAction(transactionId,
-        new HbaseSegmentTransactionAction(carbonTable, segmentId, detail.getLoadName, maxTimeStamp),
+        new HbaseSegmentTransactionAction(carbonTable, segmentId, detail.getLoadName, maxTimeStamp, statsMap),
         TransactionActionType.COMMIT_SCOPE)
       if (isTransactionStarted) {
         transactionManager.commitTransaction(transactionId)
@@ -177,14 +193,16 @@ case class HandoffHbaseSegmentCommand(
         .map("`" + _.name + "`")
         .map(col): _*), false)
     }
-    Seq.empty
+    Seq(getStatsRow(statsMap, joinColumns.isDefined))
   }
 
   private def insertData(sparkSession: SparkSession,
       carbonTable: CarbonTable,
       tableCols: Seq[Column],
       header: String,
-      updated: Dataset[Row]) = {
+      updated: Dataset[Row],
+      statsMap : java.util.Map[String, Object]) = {
+    statsMap.put("noOfRowsInserted", updated.count())
     CarbonInsertIntoWithDf(
       databaseNameOp = Some(carbonTable.getDatabaseName),
       tableName = carbonTable.getTableName,
@@ -203,7 +221,8 @@ case class HandoffHbaseSegmentCommand(
       loadMetadataDetails: LoadMetadataDetails,
       transactionManager: SessionTransactionManager,
       transactionId: String,
-      externalSchema: ExternalSchema) = {
+      externalSchema: ExternalSchema,
+      statsMap : java.util.Map[String, Object]) = {
     val operationTypeColumn = updateColumnFamily(externalSchema.getParam(
       CABON_HBASE_DEFAULT_COLUMN_FAMILY),
       externalSchema.getParam(CARBON_HBASE_OPERATION_TYPE_COLUMN))
@@ -219,10 +238,12 @@ case class HandoffHbaseSegmentCommand(
           .getTableName
       } WHERE excludesegmentId(${ loadMetadataDetails.getLoadName })")
 
+    statsMap.put("noOfRowsInserted", iDf.count())
     val uCount = uDf.count()
     var uWithTuples: Dataset[Row] = sparkSession.emptyDataFrame
     if (uCount > 0) {
       uDf = uDf.union(dDf)
+      statsMap.put("noOfRowsDeleted", dDf.count())
       // TODO make it configurable
       if (uCount < handOffOptions.getFilterJoinPushLimit) {
         val rows = uDf.select(joinColumns.get.map(col): _*).collect()
@@ -239,16 +260,21 @@ case class HandoffHbaseSegmentCommand(
       }
       uWithTuples.cache()
     }
-    if (uCount <= 0 && dDf.count() > 0) {
-      val rows = dDf.select(joinColumns.get.map(col): _*).collect()
-      val filter = joinColumns.get.zipWithIndex.map { j =>
-        col(j._1).isInCollection(rows.map(r => lit(r.get(j._2))))
-      }.reduce[Column]((l, r) => l.and(r))
+    statsMap.put("noOfRowsUpdated", uCount)
+    if (uCount <= 0) {
+      val dCount = dDf.count()
+      statsMap.put("noOfRowsDeleted", dCount)
+      if(dCount > 0) {
+        val rows = dDf.select(joinColumns.get.map(col): _*).collect()
+        val filter = joinColumns.get.zipWithIndex.map { j =>
+          col(j._1).isInCollection(rows.map(r => lit(r.get(j._2))))
+        }.reduce[Column]((l, r) => l.and(r))
 
-      val dWithTuples = tableDF.withColumn(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID,
-        expr("getTupleId()"))
-        .filter(filter).select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
-      uWithTuples = uWithTuples.union(dWithTuples)
+        val dWithTuples = tableDF.withColumn(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID,
+          expr("getTupleId()"))
+          .filter(filter).select(col(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID))
+        uWithTuples = uWithTuples.union(dWithTuples)
+      }
     }
 
     val executorErrors = ExecutionErrors(FailureCauses.NONE, "")
@@ -284,7 +310,26 @@ case class HandoffHbaseSegmentCommand(
       true)
   }
 
+  private def getStatsRow(statsMap: java.util.Map[String, Object], isSCD: Boolean) = {
+    Row {
+      if (isSCD) {
+        Row(statsMap.get("rowtimestamp"),
+          statsMap.get("statsColumnMax"),
+          statsMap.get("noOfRowsInserted"),
+          statsMap.get("noOfRowsUpdated"),
+          statsMap.get("noOfRowsDeleted"))
+      } else {
+        Row(statsMap.get("rowtimestamp"),
+          statsMap.get("statsColumnMax"),
+          statsMap.get("noOfRowsInserted"),
+          0L,
+          0L)
+      }
+    }
+  }
+
   override protected def opName: String = {
     "ALTER SEGMENT ON TABLE tableName HANDOFF STREAMING SEGMENT "
   }
+
 }

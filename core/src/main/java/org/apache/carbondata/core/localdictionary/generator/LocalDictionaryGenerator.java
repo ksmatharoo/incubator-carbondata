@@ -46,4 +46,6 @@ public interface LocalDictionaryGenerator {
    * @return dictionary key based on value
    */
   byte[] getDictionaryKeyBasedOnValue(int value);
+
+  int getLVLength();
 }

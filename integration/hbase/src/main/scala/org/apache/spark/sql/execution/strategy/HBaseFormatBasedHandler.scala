@@ -51,13 +51,15 @@ class HBaseFormatBasedHandler extends ExternalFormatHandler {
       HBaseTableCatalog.tableCatalog -> externalSchema.getQuerySchema)
     if (!prunedSegmentInfo.head.isIgnoreTimeStamp) {
       val segmentFile = prunedSegmentInfo.head.getSegmentFile
-      val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
-        .getSegmentColumnMetaDataInfoMap
-        .get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).getColumnMinValue,
-        0,
-        ByteUtil.SIZEOF_LONG) + 1
-      params = params + (HBaseRelation.MIN_STAMP -> info.toString,
-        HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
+      if(!segmentFile.getSegmentMetaDataInfo.getSegmentColumnMetaDataInfoMap.isEmpty) {
+        val info = ByteUtil.toLong(segmentFile.getSegmentMetaDataInfo
+          .getSegmentColumnMetaDataInfoMap
+          .get(CARBON_HABSE_ROW_TIMESTAMP_COLUMN).getColumnMinValue,
+          0,
+          ByteUtil.SIZEOF_LONG) + 1
+        params = params + (HBaseRelation.MIN_STAMP -> info.toString,
+          HBaseRelation.MAX_STAMP -> Long.MaxValue.toString)
+      }
     }
 
     val hBaseRelation = new CarbonHBaseRelation(params, Option.empty)(l.relation.sqlContext)

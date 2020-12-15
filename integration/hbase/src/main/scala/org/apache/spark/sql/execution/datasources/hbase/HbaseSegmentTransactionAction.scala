@@ -36,13 +36,15 @@ import org.apache.carbondata.core.statusmanager.{FileFormat, LoadMetadataDetails
 import org.apache.carbondata.core.transaction.TransactionAction
 import org.apache.carbondata.core.util.{ByteUtil, CarbonUtil}
 import org.apache.carbondata.core.util.path.CarbonTablePath
+import org.apache.carbondata.hbase.HBaseConstants
 import org.apache.carbondata.processing.loading.model.{CarbonDataLoadSchema, CarbonLoadModel}
 import org.apache.carbondata.processing.util.CarbonLoaderUtil
 
 class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
     loadingSegment: String,
     prevSegment: String,
-    maxTimeStamp: Long) extends TransactionAction {
+    maxTimeStamp: Long,
+    statsMap : java.util.Map[String, Object]) extends TransactionAction {
 
   private val LOGGER = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
 
@@ -62,10 +64,10 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
     }
 
     val externalSchema = CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier)
-    val minMacColumnIdString = externalSchema.getParam("MinMaxColumns")
+    val minMacColumnIdString = externalSchema.getParam(HBaseConstants.CARBON_HBASE_MINMAXCOLUMN)
     val minMaxColumns = if (null != minMacColumnIdString) {
       CarbonUtil.getExternalSchema(carbonTable.getAbsoluteTableIdentifier)
-        .getParam("MinMaxColumns").split(",").toSet
+        .getParam(HBaseConstants.CARBON_HBASE_MINMAXCOLUMN).split(",").toSet
     } else {
       "".split(",").toSet
     }
@@ -110,6 +112,11 @@ class HbaseSegmentTransactionAction(carbonTable: CarbonTable,
     val segmentMetaDataInto = new SegmentMetaDataInfo(columnMinMaxInfo)
     columnMinMaxInfo.put("rowtimestamp",
       new SegmentColumnMetaDataInfo(false, ByteUtil.toBytes(maxTimeStamp), Array[Byte](), false))
+    statsMap.put("rowtimestamp", maxTimeStamp)
+    statsMap.put("statsColumnMax",
+      ByteUtil.toLong(columnMinMaxInfo
+        .get(HBaseConstants.CARBON_HBASE_STATS_COLUMN)
+        .getColumnMinValue, 0, ByteUtil.SIZEOF_LONG))
     val segment = new Segment(
       model.getSegmentId,
       SegmentFileStore.genSegmentFileName(

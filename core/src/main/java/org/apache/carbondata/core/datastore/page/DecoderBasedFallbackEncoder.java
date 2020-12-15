@@ -114,8 +114,18 @@ public class DecoderBasedFallbackEncoder implements Callable<FallbackEncodedColu
     for (int i = 0; i < pageSize; i++) {
       int index = reverseInvertedIndex[i] * 2;
       int keyArray = (int) keyGenerator.getKeyArray(bytes, index)[0];
-      actualDataColumnPage
-          .putBytes(rowId++, localDictionaryGenerator.getDictionaryKeyBasedOnValue(keyArray));
+      if (actualDataColumnPage instanceof LVByteBufferColumnPage) {
+        byte[] dictionaryKeyBasedOnValue =
+            localDictionaryGenerator.getDictionaryKeyBasedOnValue(keyArray);
+        byte[] out =
+            new byte[dictionaryKeyBasedOnValue.length - localDictionaryGenerator.getLVLength()];
+        System.arraycopy(dictionaryKeyBasedOnValue, localDictionaryGenerator.getLVLength(), out, 0,
+            out.length);
+        actualDataColumnPage.putBytes(rowId++, out);
+      } else {
+        actualDataColumnPage
+            .putBytes(rowId++, localDictionaryGenerator.getDictionaryKeyBasedOnValue(keyArray));
+      }
     }
 
     // get column spec for existing column page

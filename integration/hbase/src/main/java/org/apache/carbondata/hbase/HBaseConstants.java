@@ -45,4 +45,9 @@ public interface HBaseConstants {
   String CARBON_HBASE_UPDATE_OPERATION_VALUE = "update_operation_value";
 
   String CARBON_HBASE_DELETE_OPERATION_VALUE = "delete_operation_value";
+
+  String CARBON_HBASE_MINMAXCOLUMN = "MinMaxColumns";
+
+  String CARBON_HBASE_STATS_COLUMN = "STATSCOLUMNNAME";
+
 }
