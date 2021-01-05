@@ -18,6 +18,7 @@
 package org.apache.spark.sql.execution.command.mutation
 
 import java.util
+import java.util.Objects
 
 import scala.collection.JavaConverters._
 
@@ -32,6 +33,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.execution.command.ExecutionErrors
 import org.apache.spark.sql.optimizer.CarbonFilters
 import org.apache.spark.sql.util.SparkSQLUtil
+import org.apache.spark.transaction.DeleteTransactionAction
 
 import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
@@ -43,7 +45,7 @@ import org.apache.carbondata.core.mutate.{CarbonUpdateUtil, DeleteDeltaBlockDeta
 import org.apache.carbondata.core.mutate.data.{BlockMappingVO, RowCountDetailsVO}
 import org.apache.carbondata.core.readcommitter.TableStatusReadCommittedScope
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus, SegmentStatusManager, SegmentUpdateStatusManager}
-import org.apache.carbondata.core.transaction.TransactionManager
+import org.apache.carbondata.core.transaction.{TransactionActionType, TransactionManager}
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil, ThreadLocalSessionInfo}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.core.writer.CarbonDeleteDeltaWriterImpl
@@ -52,7 +54,7 @@ import org.apache.carbondata.hadoop.api.{CarbonInputFormat, CarbonTableInputForm
 import org.apache.carbondata.processing.exception.MultipleMatchingException
 import org.apache.carbondata.processing.loading.FailureCauses
 import org.apache.carbondata.spark.DeleteDelataResultImpl
-import org.apache.carbondata.tranaction.SessionTransactionManager
+import org.apache.carbondata.tranaction.{DeleteActionMetadata, SessionTransactionManager}
 
 object DeleteExecution {
   val LOGGER = LogServiceFactory.getLogService(this.getClass.getName)
@@ -64,27 +66,36 @@ object DeleteExecution {
       dataRdd: RDD[Row],
       timestamp: String,
       isUpdateOperation: Boolean,
-      executorErrors: ExecutionErrors): (Seq[Segment], Long) = {
+      executorErrors: ExecutionErrors,
+      deleteActionMetadata:DeleteActionMetadata,
+      transactionId:String=null): Unit = {
 
     val (res, blockMappingVO) = deleteDeltaExecutionInternal(databaseNameOp,
       tableName, sparkSession, dataRdd, timestamp, isUpdateOperation, executorErrors)
-    var segmentsTobeDeleted = Seq.empty[Segment]
-    var operatedRowCount = 0L
     // if no loads are present then no need to do anything.
     if (res.flatten.isEmpty) {
-      return (segmentsTobeDeleted, operatedRowCount)
+      return (Seq.empty[Segment], 0L)
     }
     val carbonTable = CarbonEnv.getCarbonTable(databaseNameOp, tableName)(sparkSession)
-    // update new status file
-    segmentsTobeDeleted =
-      checkAndUpdateStatusFiles(executorErrors,
-        res, carbonTable, timestamp,
-        blockMappingVO, isUpdateOperation)
-
-    if (executorErrors.failureCauses == FailureCauses.NONE) {
-      operatedRowCount = res.flatten.map(_._2._3).sum
+    val deleteTransactionAction = new DeleteTransactionAction(
+      databaseNameOp,
+      tableName,
+      sparkSession,
+      executorErrors,
+      res,
+      carbonTable,
+      timestamp,
+      blockMappingVO,
+      isUpdateOperation,
+      deleteActionMetadata)
+    if (Objects.nonNull(transactionId)) {
+      TransactionManager.getInstance()
+        .recordTransactionAction(transactionId,
+          deleteTransactionAction,
+          TransactionActionType.COMMIT_SCOPE)
+    } else {
+      deleteTransactionAction.commit()
     }
-    (segmentsTobeDeleted, operatedRowCount)
   }
 
   /**

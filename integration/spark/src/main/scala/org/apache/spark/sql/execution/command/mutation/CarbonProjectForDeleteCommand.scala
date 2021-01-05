@@ -17,26 +17,25 @@
 
 package org.apache.spark.sql.execution.command.mutation
 
-import scala.collection.JavaConverters._
-
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.strategy.MixedFormatHandler
 import org.apache.spark.sql.types.LongType
+import org.apache.spark.transaction.DeletePostTransactionAction
 
 import org.apache.carbondata.common.exceptions.sql.MalformedCarbonCommandException
 import org.apache.carbondata.common.logging.LogServiceFactory
-import org.apache.carbondata.core.datamap.DataMapStoreManager
-import org.apache.carbondata.core.datamap.status.DataMapStatusManager
 import org.apache.carbondata.core.exception.ConcurrentOperationException
 import org.apache.carbondata.core.features.TableOperation
 import org.apache.carbondata.core.locks.{CarbonLockFactory, CarbonLockUtil, LockUsage}
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager
-import org.apache.carbondata.events.{DeleteFromTablePostEvent, DeleteFromTablePreEvent, IndexServerLoadEvent, OperationContext, OperationListenerBus}
+import org.apache.carbondata.core.transaction.{TransactionActionType, TransactionManager}
+import org.apache.carbondata.events.{DeleteFromTablePreEvent, OperationContext, OperationListenerBus}
 import org.apache.carbondata.processing.loading.FailureCauses
+import org.apache.carbondata.tranaction.{DeleteActionMetadata, SessionTransactionManager}
 
 /**
  * IUD update delete and compaction framework.
@@ -86,7 +85,10 @@ private[sql] case class CarbonProjectForDeleteCommand(
     val deleteFromTablePreEvent: DeleteFromTablePreEvent =
       DeleteFromTablePreEvent(sparkSession, carbonTable)
     OperationListenerBus.getInstance.fireEvent(deleteFromTablePreEvent, operationContext)
-
+    val transactionId = TransactionManager.getInstance()
+      .getTransactionManager
+      .asInstanceOf[SessionTransactionManager]
+      .getTransactionId(sparkSession, carbonTable.getTableUniqueName)
     val metadataLock = CarbonLockFactory
       .getCarbonLockObj(carbonTable.getAbsoluteTableIdentifier,
         LockUsage.METADATA_LOCK)
@@ -115,41 +117,43 @@ private[sql] case class CarbonProjectForDeleteCommand(
       // handle the clean up of IUD.
       CarbonUpdateUtil.cleanUpDeltaFiles(carbonTable, false)
 
-      val (deletedSegments, deletedRowCount) = DeleteExecution.deleteDeltaExecution(
+      val deleteActionMetadata = new DeleteActionMetadata
+      DeleteExecution.deleteDeltaExecution(
         databaseNameOp,
         tableName,
         sparkSession,
         dataRdd,
         timestamp,
         isUpdateOperation = false,
-        executorErrors)
+        executorErrors,
+        deleteActionMetadata,
+        transactionId)
+
 
       // Check for any failures occured during delete delta execution
       if (executorErrors.failureCauses != FailureCauses.NONE) {
         throw new Exception(executorErrors.errorMsg)
       }
 
-      // call IUD Compaction.
-      HorizontalCompaction.tryHorizontalCompaction(sparkSession, carbonTable,
-        isUpdateOperation = false)
-
-      val allDataMapSchemas = DataMapStoreManager.getInstance
-        .getDataMapSchemasOfTable(carbonTable).asScala
-        .filter(dataMapSchema => null != dataMapSchema.getRelationIdentifier &&
-                                 !dataMapSchema.isIndexDataMap).asJava
-      if (!allDataMapSchemas.isEmpty) {
-        DataMapStatusManager.truncateDataMap(allDataMapSchemas)
+      val deletePostTransactionAction = new DeletePostTransactionAction(sparkSession,
+        carbonTable,
+        deleteActionMetadata,
+        operationContext,
+        timestamp,
+        metadataLock,
+        updateLock,
+        compactionLock,
+        lockStatus)
+      if (null == transactionId) {
+        deletePostTransactionAction.commit()
+        return Seq(Row(deleteActionMetadata.getDeletedRowCount))
+      } else {
+        TransactionManager.getInstance()
+          .recordTransactionAction(transactionId,
+            deletePostTransactionAction,
+            TransactionActionType.COMMIT_SCOPE)
       }
-
-      // prepriming for delete command
-      DeleteExecution.reloadDistributedSegmentCache(carbonTable,
-        deletedSegments, operationContext)(sparkSession)
-
-      // trigger post event for Delete from table
-      val deleteFromTablePostEvent: DeleteFromTablePostEvent =
-        DeleteFromTablePostEvent(sparkSession, carbonTable)
-      OperationListenerBus.getInstance.fireEvent(deleteFromTablePostEvent, operationContext)
-      Seq(Row(deletedRowCount))
+      Seq(Row(0L))
     } catch {
       case e: HorizontalCompactionException =>
         LOGGER.error("Delete operation passed. Exception in Horizontal Compaction." +

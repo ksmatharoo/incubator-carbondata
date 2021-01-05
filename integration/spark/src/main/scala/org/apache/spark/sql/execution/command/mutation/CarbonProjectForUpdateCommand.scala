@@ -43,6 +43,7 @@ import org.apache.carbondata.core.statusmanager.SegmentStatusManager
 import org.apache.carbondata.core.util.CarbonProperties
 import org.apache.carbondata.events.{OperationContext, OperationListenerBus, UpdateTablePostEvent, UpdateTablePreEvent}
 import org.apache.carbondata.processing.loading.FailureCauses
+import org.apache.carbondata.tranaction.DeleteActionMetadata
 
 private[sql] case class CarbonProjectForUpdateCommand(
     plan: LogicalPlan,
@@ -156,21 +157,23 @@ private[sql] case class CarbonProjectForUpdateCommand(
           }
           // handle the clean up of IUD.
           CarbonUpdateUtil.cleanUpDeltaFiles(carbonTable, false)
-
+          val deleteActionMetadata = new DeleteActionMetadata
           // do delete operation.
-          val (segmentsToBeDeleted, updatedRowCountTemp) = DeleteExecution.deleteDeltaExecution(
+          DeleteExecution.deleteDeltaExecution(
             databaseNameOp,
             tableName,
             sparkSession,
             dataSet.rdd,
             currentTime + "",
             isUpdateOperation = true,
-            executionErrors)
+            executionErrors,
+            deleteActionMetadata:DeleteActionMetadata)
 
           if (executionErrors.failureCauses != FailureCauses.NONE) {
             throw new Exception(executionErrors.errorMsg)
           }
-
+          val segmentsToBeDeleted = deleteActionMetadata.getSegmentsToBeDeleted.asScala
+          val updatedRowCountTemp = deleteActionMetadata.getDeletedRowCount
           updatedRowCount = updatedRowCountTemp
           // do update operation.
           performUpdate(dataSet,
