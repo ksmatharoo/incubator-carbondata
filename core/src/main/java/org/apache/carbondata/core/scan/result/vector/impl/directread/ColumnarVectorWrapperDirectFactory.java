@@ -20,51 +20,57 @@ package org.apache.carbondata.core.scan.result.vector.impl.directread;
 import java.util.BitSet;
 
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
+import org.apache.carbondata.core.scan.result.vector.ColumnVectorInfo;
 
 /**
  * Factory to create ColumnarVectors for inverted index and delete delta queries.
  */
 public final class ColumnarVectorWrapperDirectFactory {
 
-  /**
-   * Gets carbon vector wrapper to fill the underlying vector based on inverted index and delete
-   * delta.
-   *
-   * @param columnVector     Actual vector to be filled.
-   * @param invertedIndex    Inverted index of column page
-   * @param nullBitset       row locations of nulls in bitset
-   * @param deletedRows      deleted rows locations in bitset.
-   * @param isnullBitsExists whether nullbitset present on this page, usually for dimension columns
-   *                         there is no null bitset.
-   * @return wrapped CarbonColumnVector
-   */
-  public static CarbonColumnVector getDirectVectorWrapperFactory(CarbonColumnVector columnVector,
-      int[] invertedIndex, BitSet nullBitset, BitSet deletedRows, boolean isnullBitsExists,
-      boolean isDictVector) {
-    // If it is sequential data filler then add the null bitset.
-    if (columnVector instanceof SequentialFill) {
-      // If it has inverted index then create a dummy delete rows bitset so that it goes to
-      // ColumnarVectorWrapperDirectWithDeleteDeltaAndInvertedIndex, here it does the sequential
-      // filling using another vector.
-      if ((invertedIndex != null && invertedIndex.length > 0)) {
-        if (deletedRows == null) {
-          deletedRows = new BitSet();
+    /**
+     * Gets carbon vector wrapper to fill the underlying vector based on inverted index and delete
+     * delta.
+     *
+     * @param vectorInfo       vectorInfo used to get the complex child vector
+     * @param columnVector     Actual vector to be filled.
+     * @param invertedIndex    Inverted index of column page
+     * @param nullBitset       row locations of nulls in bitset
+     * @param deletedRows      deleted rows locations in bitset.
+     * @param isnullBitsExists whether nullbitset present on this page, usually for dimension columns
+     *                         there is no null bitset.
+     * @return wrapped CarbonColumnVector
+     */
+    public static CarbonColumnVector getDirectVectorWrapperFactory(ColumnVectorInfo vectorInfo,
+        CarbonColumnVector columnVector, int[] invertedIndex, BitSet nullBitset, BitSet deletedRows,
+        boolean isnullBitsExists, boolean isDictVector) {
+        // If it is sequential data filler then add the null bitset.
+        if (columnVector instanceof SequentialFill) {
+           if (columnVector.getType().isComplexType() && !vectorInfo.vectorStack.isEmpty()) {
+            // update to child vector, as it is child vector filling flow
+            columnVector = vectorInfo.vectorStack.peek();
+           }
+            // If it has inverted index then create a dummy delete rows bitset so that it goes to
+            // ColumnarVectorWrapperDirectWithDeleteDeltaAndInvertedIndex, here it does the sequential
+            // filling using another vector.
+            if ((invertedIndex != null && invertedIndex.length > 0)) {
+                if (deletedRows == null) {
+                    deletedRows = new BitSet();
+                }
+            } else if (deletedRows == null) {
+                ((SequentialFill) columnVector).setNullBits(nullBitset);
+            }
         }
-      } else if (deletedRows == null) {
-        ((SequentialFill) columnVector).setNullBits(nullBitset);
-      }
+        if ((invertedIndex != null && invertedIndex.length > 0) && (deletedRows == null)) {
+            return new ColumnarVectorWrapperDirectWithInvertedIndex(columnVector, invertedIndex,
+                    isnullBitsExists);
+        } else if ((invertedIndex == null || invertedIndex.length == 0) && deletedRows != null) {
+            return new ColumnarVectorWrapperDirectWithDeleteDelta(columnVector, deletedRows, nullBitset);
+        } else if ((invertedIndex != null && invertedIndex.length > 0) && deletedRows != null) {
+            return new ColumnarVectorWrapperDirectWithDeleteDeltaAndInvertedIndex(columnVector,
+                    deletedRows, invertedIndex, nullBitset, isnullBitsExists, isDictVector);
+        } else {
+            return columnVector;
+        }
     }
-    if ((invertedIndex != null && invertedIndex.length > 0) && (deletedRows == null)) {
-      return new ColumnarVectorWrapperDirectWithInvertedIndex(columnVector, invertedIndex,
-          isnullBitsExists);
-    } else if ((invertedIndex == null || invertedIndex.length == 0) && deletedRows != null) {
-      return new ColumnarVectorWrapperDirectWithDeleteDelta(columnVector, deletedRows, nullBitset);
-    } else if ((invertedIndex != null && invertedIndex.length > 0) && deletedRows != null) {
-      return new ColumnarVectorWrapperDirectWithDeleteDeltaAndInvertedIndex(columnVector,
-          deletedRows, invertedIndex, nullBitset, isnullBitsExists, isDictVector);
-    } else {
-      return columnVector;
-    }
-  }
 
 }

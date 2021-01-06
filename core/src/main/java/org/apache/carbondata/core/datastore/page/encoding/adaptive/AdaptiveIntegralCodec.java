@@ -54,7 +54,7 @@ import org.apache.carbondata.format.Encoding;
 public class AdaptiveIntegralCodec extends AdaptiveCodec {
 
   public AdaptiveIntegralCodec(DataType srcDataType, DataType targetDataType,
-      SimpleStatsResult stats, boolean isInvertedIndex) {
+                               SimpleStatsResult stats, boolean isInvertedIndex) {
     super(srcDataType, targetDataType, stats, isInvertedIndex);
   }
 
@@ -73,7 +73,7 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
           throw new IllegalStateException("already encoded");
         }
         Compressor compressor =
-            CompressorFactory.getInstance().getCompressor(input.getColumnCompressorName());
+                CompressorFactory.getInstance().getCompressor(input.getColumnCompressorName());
         result = encodeAndCompressPage(input, converter, compressor);
         ByteBuffer bytes = writeInvertedIndexIfRequired(result);
         encodedPage.freeMemory();
@@ -96,7 +96,7 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
       @Override
       protected ColumnPageEncoderMeta getEncoderMeta(ColumnPage inputPage) {
         return new ColumnPageEncoderMeta(inputPage.getColumnSpec(), targetDataType, stats,
-            inputPage.getColumnCompressorName());
+                inputPage.getColumnCompressorName());
       }
 
       @Override
@@ -122,10 +122,10 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
 
       @Override
       public void decodeAndFillVector(byte[] input, int offset, int length,
-          ColumnVectorInfo vectorInfo, BitSet nullBits, boolean isLVEncoded, int pageSize,
-          ReusableDataBuffer reusableDataBuffer) {
+                                      ColumnVectorInfo vectorInfo, BitSet nullBits, boolean isLVEncoded, int pageSize,
+                                      ReusableDataBuffer reusableDataBuffer) {
         Compressor compressor =
-            CompressorFactory.getInstance().getCompressor(meta.getCompressorName());
+                CompressorFactory.getInstance().getCompressor(meta.getCompressorName());
         byte[] unCompressData;
         if (null != reusableDataBuffer && compressor.supportReusableBuffer()) {
           int uncompressedLength = compressor.unCompressedLength(input, offset, length);
@@ -136,13 +136,11 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
         }
         if (DataTypes.isDecimal(meta.getSchemaDataType())) {
           TableSpec.ColumnSpec columnSpec = meta.getColumnSpec();
-          DecimalConverterFactory.DecimalConverter decimalConverter =
-              DecimalConverterFactory.INSTANCE
+          vectorInfo.decimalConverter = DecimalConverterFactory.INSTANCE
                   .getDecimalConverter(columnSpec.getPrecision(), columnSpec.getScale());
-          vectorInfo.decimalConverter = decimalConverter;
         }
         converter.decodeAndFillVector(unCompressData, vectorInfo, nullBits, meta.getStoreDataType(),
-            pageSize);
+                pageSize);
       }
 
       @Override
@@ -200,7 +198,7 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
       } else if (targetDataType == DataTypes.INT) {
         encodedPage.putInt(rowId, (int) value);
       } else if (targetDataType == DataTypes.LONG) {
-        encodedPage.putLong(rowId, (long) value);
+        encodedPage.putLong(rowId, value);
       } else {
         throw new RuntimeException("internal error: " + debugInfo());
       }
@@ -285,16 +283,12 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
 
     @Override
     public void decodeAndFillVector(byte[] pageData, ColumnVectorInfo vectorInfo, BitSet nullBits,
-        DataType pageDataType, int pageSize) {
+                                    DataType pageDataType, int pageSize) {
       CarbonColumnVector vector = vectorInfo.vector;
-      DataType vectorDataType = vector.getType();
       BitSet deletedRows = vectorInfo.deletedRows;
-      vector = ColumnarVectorWrapperDirectFactory
-          .getDirectVectorWrapperFactory(vector, vectorInfo.invertedIndex, nullBits, deletedRows,
-              true, false);
-      fillVector(pageData, vector, vectorDataType, pageDataType, pageSize, vectorInfo, nullBits);
+      fillVector(pageData, vector, pageDataType, pageSize, vectorInfo, nullBits);
       if ((deletedRows == null || deletedRows.isEmpty())
-          && !(vectorInfo.vector instanceof SequentialFill)) {
+              && !(vectorInfo.vector instanceof SequentialFill)) {
         for (int i = nullBits.nextSetBit(0); i >= 0; i = nullBits.nextSetBit(i + 1)) {
           vector.putNull(i);
         }
@@ -305,17 +299,23 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
 
     }
 
-    private void fillVector(byte[] pageData, CarbonColumnVector vector, DataType vectorDataType,
-        DataType pageDataType, int pageSize, ColumnVectorInfo vectorInfo, BitSet nullBits) {
+    private void fillVector(byte[] pageData, CarbonColumnVector vector, DataType pageDataType,
+                            int pageSize, ColumnVectorInfo vectorInfo, BitSet nullBits) {
+      // get the updated values if it is decode of child vector
+      pageSize = ColumnVectorInfo.getUpdatedPageSizeForChildVector(vectorInfo, pageSize);
+      vector = ColumnarVectorWrapperDirectFactory
+              .getDirectVectorWrapperFactory(vectorInfo, vector, null, nullBits, vectorInfo.deletedRows,
+                      true, false);
+      DataType vectorDataType = vector.getType();
       int rowId = 0;
       if (pageDataType == DataTypes.BOOLEAN || pageDataType == DataTypes.BYTE) {
         if (vectorDataType == DataTypes.SHORT) {
           for (int i = 0; i < pageSize; i++) {
-            vector.putShort(i, (short) pageData[i]);
+            vector.putShort(i, pageData[i]);
           }
         } else if (vectorDataType == DataTypes.INT) {
           for (int i = 0; i < pageSize; i++) {
-            vector.putInt(i, (int) pageData[i]);
+            vector.putInt(i, pageData[i]);
           }
         } else if (vectorDataType == DataTypes.LONG) {
           for (int i = 0; i < pageSize; i++) {
@@ -325,7 +325,7 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
           for (int i = 0; i < pageSize; i++) {
             vector.putLong(i, (long) pageData[i] * 1000);
           }
-        } else if (vectorDataType == DataTypes.BOOLEAN) {
+        } else if (vectorDataType == DataTypes.BOOLEAN || vectorDataType == DataTypes.BYTE) {
           vector.putBytes(0, pageSize, pageData, 0);
         } else if (DataTypes.isDecimal(vectorDataType)) {
           DecimalConverterFactory.DecimalConverter decimalConverter = vectorInfo.decimalConverter;
@@ -340,32 +340,33 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
           }
         }
       } else if (pageDataType == DataTypes.SHORT) {
-        int size = pageSize * DataTypes.SHORT.getSizeInBytes();
+        int shortSizeInBytes = DataTypes.SHORT.getSizeInBytes();
+        int size = pageSize * shortSizeInBytes;
         if (vectorDataType == DataTypes.SHORT) {
-          for (int i = 0; i < size; i += DataTypes.SHORT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += shortSizeInBytes) {
             vector.putShort(rowId++, (ByteUtil.toShortLittleEndian(pageData, i)));
           }
         } else if (vectorDataType == DataTypes.INT) {
-          for (int i = 0; i < size; i += DataTypes.SHORT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += shortSizeInBytes) {
             vector.putInt(rowId++, (ByteUtil.toShortLittleEndian(pageData, i)));
           }
         } else if (vectorDataType == DataTypes.LONG) {
-          for (int i = 0; i < size; i += DataTypes.SHORT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += shortSizeInBytes) {
             vector.putLong(rowId++, (ByteUtil.toShortLittleEndian(pageData, i)));
           }
         } else if (vectorDataType == DataTypes.TIMESTAMP) {
-          for (int i = 0; i < size; i += DataTypes.SHORT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += shortSizeInBytes) {
             vector.putLong(rowId++, ((long) ByteUtil.toShortLittleEndian(pageData, i)) * 1000);
           }
         } else if (DataTypes.isDecimal(vectorDataType)) {
           DecimalConverterFactory.DecimalConverter decimalConverter = vectorInfo.decimalConverter;
           decimalConverter.fillVector(pageData, pageSize, vectorInfo, nullBits, pageDataType);
         } else if (vectorDataType == DataTypes.FLOAT) {
-          for (int i = 0; i < size; i += DataTypes.SHORT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += shortSizeInBytes) {
             vector.putFloat(rowId++, (ByteUtil.toShortLittleEndian(pageData, i)));
           }
         } else {
-          for (int i = 0; i < size; i += DataTypes.SHORT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += shortSizeInBytes) {
             vector.putDouble(rowId++, ByteUtil.toShortLittleEndian(pageData, i));
           }
         }
@@ -389,7 +390,7 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
         } else if (DataTypes.isDecimal(vectorDataType)) {
           DecimalConverterFactory.DecimalConverter decimalConverter = vectorInfo.decimalConverter;
           decimalConverter
-              .fillVector(pageData, pageSize, vectorInfo, nullBits, DataTypes.SHORT_INT);
+                  .fillVector(pageData, pageSize, vectorInfo, nullBits, DataTypes.SHORT_INT);
         } else if (vectorDataType == DataTypes.FLOAT) {
           for (int i = 0; i < pageSize; i++) {
             int shortInt = ByteUtil.valueOf3Bytes(pageData, i * 3);
@@ -402,35 +403,37 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
           }
         }
       } else if (pageDataType == DataTypes.INT) {
-        int size = pageSize * DataTypes.INT.getSizeInBytes();
+        int intSizeInBytes = DataTypes.INT.getSizeInBytes();
+        int size = pageSize * intSizeInBytes;
         if (vectorDataType == DataTypes.INT) {
-          for (int i = 0; i < size; i += DataTypes.INT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += intSizeInBytes) {
             vector.putInt(rowId++, ByteUtil.toIntLittleEndian(pageData, i));
           }
         } else if (vectorDataType == DataTypes.LONG) {
-          for (int i = 0; i < size; i += DataTypes.INT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += intSizeInBytes) {
             vector.putLong(rowId++, ByteUtil.toIntLittleEndian(pageData, i));
           }
         } else if (vectorDataType == DataTypes.TIMESTAMP) {
-          for (int i = 0; i < size; i += DataTypes.INT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += intSizeInBytes) {
             vector.putLong(rowId++, (long) ByteUtil.toIntLittleEndian(pageData, i) * 1000);
           }
         } else if (DataTypes.isDecimal(vectorDataType)) {
           DecimalConverterFactory.DecimalConverter decimalConverter = vectorInfo.decimalConverter;
           decimalConverter.fillVector(pageData, pageSize, vectorInfo, nullBits, pageDataType);
         } else {
-          for (int i = 0; i < size; i += DataTypes.INT.getSizeInBytes()) {
+          for (int i = 0; i < size; i += intSizeInBytes) {
             vector.putDouble(rowId++, ByteUtil.toIntLittleEndian(pageData, i));
           }
         }
       } else if (pageDataType == DataTypes.LONG) {
-        int size = pageSize * DataTypes.LONG.getSizeInBytes();
+        int longSizeInBytes = DataTypes.LONG.getSizeInBytes();
+        int size = pageSize * longSizeInBytes;
         if (vectorDataType == DataTypes.LONG) {
-          for (int i = 0; i < size; i += DataTypes.LONG.getSizeInBytes()) {
+          for (int i = 0; i < size; i += longSizeInBytes) {
             vector.putLong(rowId++, ByteUtil.toLongLittleEndian(pageData, i));
           }
         } else if (vectorDataType == DataTypes.TIMESTAMP) {
-          for (int i = 0; i < size; i += DataTypes.LONG.getSizeInBytes()) {
+          for (int i = 0; i < size; i += longSizeInBytes) {
             vector.putLong(rowId++, ByteUtil.toLongLittleEndian(pageData, i) * 1000);
           }
         } else if (DataTypes.isDecimal(vectorDataType)) {
@@ -438,8 +441,9 @@ public class AdaptiveIntegralCodec extends AdaptiveCodec {
           decimalConverter.fillVector(pageData, pageSize, vectorInfo, nullBits, pageDataType);
         }
       } else {
-        int size = pageSize * DataTypes.DOUBLE.getSizeInBytes();
-        for (int i = 0; i < size; i += DataTypes.DOUBLE.getSizeInBytes()) {
+        int doubleSizeInBytes = DataTypes.DOUBLE.getSizeInBytes();
+        int size = pageSize * doubleSizeInBytes;
+        for (int i = 0; i < size; i += doubleSizeInBytes) {
           vector.putDouble(rowId++, ByteUtil.toDoubleLittleEndian(pageData, i));
         }
       }

@@ -70,10 +70,10 @@ public class LocalDictDimensionDataChunkStore implements DimensionDataChunkStore
     }
     BitSet nullBitset = new BitSet();
     CarbonColumnVector dictionaryVector = ColumnarVectorWrapperDirectFactory
-        .getDirectVectorWrapperFactory(vector.getDictionaryVector(), invertedIndex, nullBitset,
+        .getDirectVectorWrapperFactory(vectorInfo, vector.getDictionaryVector(), invertedIndex, nullBitset,
             vectorInfo.deletedRows, false, true);
     vector = ColumnarVectorWrapperDirectFactory
-        .getDirectVectorWrapperFactory(vector, invertedIndex, nullBitset, vectorInfo.deletedRows,
+        .getDirectVectorWrapperFactory(vectorInfo, vector, invertedIndex, nullBitset, vectorInfo.deletedRows,
             false, false);
     for (int i = 0; i < rowsNum; i++) {
       int surrogate = CarbonUtil.getSurrogateInternal(data, i * columnValueSize, columnValueSize);

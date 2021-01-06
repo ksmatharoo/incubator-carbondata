@@ -63,11 +63,8 @@ public class SliceStreamReader extends CarbonColumnVectorImpl implements PrestoV
       int[] dataArray;
       if (isLocalDict) {
         dataArray = (int[]) ((CarbonColumnVectorImpl) getDictionaryVector()).getDataArray();
-        int[] temp = new int[batchSize];
-        System.arraycopy(dataArray, 0, temp, 0, batchSize);
-        dataArray = temp;
       } else {
-        dataArray = ((int[]) getDataArray()).clone();
+        dataArray = (int[]) getDataArray();
       }
       return new DictionaryBlock(batchSize, dictionaryBlock, dataArray);
     }
@@ -96,12 +93,12 @@ public class SliceStreamReader extends CarbonColumnVectorImpl implements PrestoV
     for (int i = 0; i < dictionary.getDictionarySize(); i++) {
       if (dictionary.getDictionaryValue(i) != null) {
         System.arraycopy(dictionary.getDictionaryValue(i), 0, singleArrayDictValues, dictOffsets[i],
-            dictionary.getDictionaryValue(i).length);
+                dictionary.getDictionaryValue(i).length);
       }
     }
     dictOffsets[dictOffsets.length - 1] = size;
     dictionaryBlock = new VariableWidthBlock(dictionary.getDictionarySize(),
-        Slices.wrappedBuffer(singleArrayDictValues), dictOffsets, Optional.of(nulls));
+            Slices.wrappedBuffer(singleArrayDictValues), dictOffsets, Optional.of(nulls));
     this.isLocalDict = true;
   }
 
@@ -143,10 +140,6 @@ public class SliceStreamReader extends CarbonColumnVectorImpl implements PrestoV
     }
   }
 
-  @Override public void putArray(int rowId, int offset, int length) {
-    type.writeSlice(builder, wrappedBuffer(byteArr), offset, length);
-  }
-
   @Override
   public void reset() {
     builder = type.createBlockBuilder(null, batchSize);
@@ -158,7 +151,7 @@ public class SliceStreamReader extends CarbonColumnVectorImpl implements PrestoV
       putNull(rowId);
     } else {
       if (dictionaryBlock == null) {
-        putByteArray(rowId, ByteUtil.toBytes((String) value));
+        putByteArray(rowId, (byte []) value);
       } else {
         putInt(rowId, (int) value);
       }

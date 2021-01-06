@@ -20,10 +20,11 @@ package org.apache.carbondata.core.scan.result.vector.impl.directread;
 import java.math.BigDecimal;
 import java.util.BitSet;
 
+import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 
 /**
- * Column vector for column pages which has delete delta, so it uses delta biset to filter out
+ * Column vector for column pages which has delete delta, so it uses delta bitset to filter out
  * data before filling to actual vector.
  */
 class ColumnarVectorWrapperDirectWithDeleteDelta extends AbstractCarbonColumnarVector {
@@ -39,6 +40,11 @@ class ColumnarVectorWrapperDirectWithDeleteDelta extends AbstractCarbonColumnarV
     super(vectorWrapper);
     this.deletedRows = deletedRows;
     this.nullBits = nullBits;
+  }
+
+  @Override
+  public DataType getType() {
+    return columnVector.getType();
   }
 
   @Override

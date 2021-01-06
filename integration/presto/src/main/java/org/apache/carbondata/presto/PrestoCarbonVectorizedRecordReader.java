@@ -26,6 +26,7 @@ import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionary
 import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionaryKeyGeneratorFactory;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
 import org.apache.carbondata.core.metadata.datatype.StructField;
+import org.apache.carbondata.core.metadata.schema.table.column.CarbonDimension;
 import org.apache.carbondata.core.scan.executor.QueryExecutor;
 import org.apache.carbondata.core.scan.executor.QueryExecutorFactory;
 import org.apache.carbondata.core.scan.executor.exception.QueryExecutionException;
@@ -78,7 +79,7 @@ class PrestoCarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
   private CarbonPrestoDecodeReadSupport readSupport;
 
   public PrestoCarbonVectorizedRecordReader(QueryExecutor queryExecutor, QueryModel queryModel,
-      AbstractDetailQueryResultIterator iterator, CarbonPrestoDecodeReadSupport readSupport) {
+                                            AbstractDetailQueryResultIterator iterator, CarbonPrestoDecodeReadSupport readSupport) {
     this.queryModel = queryModel;
     this.iterator = iterator;
     this.queryExecutor = queryExecutor;
@@ -92,7 +93,7 @@ class PrestoCarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
    */
   @Override
   public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptContext)
-      throws IOException, UnsupportedOperationException {
+          throws IOException, UnsupportedOperationException {
     // The input split can contain single HDFS block or multiple blocks, so firstly get all the
     // blocks and then set them in the query model.
     List<CarbonInputSplit> splitList;
@@ -110,7 +111,7 @@ class PrestoCarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
     queryModel.setTableBlockInfos(tableBlockInfoList);
     queryModel.setVectorReader(true);
     queryExecutor =
-        QueryExecutorFactory.getQueryExecutor(queryModel, taskAttemptContext.getConfiguration());
+            QueryExecutorFactory.getQueryExecutor(queryModel, taskAttemptContext.getConfiguration());
     iterator = (AbstractDetailQueryResultIterator) queryExecutor.execute(queryModel);
   }
 
@@ -163,6 +164,19 @@ class PrestoCarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
     return 0;
   }
 
+  public StructField fillChildFields(CarbonDimension dimension) {
+    List<CarbonDimension> listOfChildDimensions =
+            dimension.getListOfChildDimensions();
+    List<StructField> childFields = null;
+    if (listOfChildDimensions != null) {
+      childFields = new ArrayList<>();
+      for (CarbonDimension childDimension : listOfChildDimensions) {
+        childFields.add(fillChildFields(childDimension));
+      }
+    }
+    return new StructField(dimension.getColName(), dimension.getDataType(), childFields);
+  }
+
   /**
    * Returns the ColumnarBatch object that will be used for all rows returned by this reader.
    * This object is reused. Calling this enables the vectorized reader. This should be called
@@ -173,28 +187,32 @@ class PrestoCarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
     List<ProjectionDimension> queryDimension = queryModel.getProjectionDimensions();
     List<ProjectionMeasure> queryMeasures = queryModel.getProjectionMeasures();
     StructField[] fields = new StructField[queryDimension.size() + queryMeasures.size()];
-    for (int i = 0; i < queryDimension.size(); i++) {
-      ProjectionDimension dim = queryDimension.get(i);
+    for (ProjectionDimension dim : queryDimension) {
       if (dim.getDimension().isComplex()) {
+        List<CarbonDimension> childDimensions = dim.getDimension().getListOfChildDimensions();
+        List<StructField> childFields = new ArrayList<StructField>();
+        for (CarbonDimension childDimension : childDimensions) {
+          childFields.add(fillChildFields(childDimension));
+        }
         fields[dim.getOrdinal()] =
-            new StructField(dim.getColumnName(), dim.getDimension().getDataType());
+                new StructField(dim.getColumnName(), dim.getDimension().getDataType(), childFields);
       } else if (dim.getDimension().getDataType() == DataTypes.DATE) {
         DirectDictionaryGenerator generator = DirectDictionaryKeyGeneratorFactory
-            .getDirectDictionaryGenerator(dim.getDimension().getDataType());
+                .getDirectDictionaryGenerator(dim.getDimension().getDataType());
         fields[dim.getOrdinal()] = new StructField(dim.getColumnName(), generator.getReturnType());
       } else {
         fields[dim.getOrdinal()] =
-            new StructField(dim.getColumnName(), dim.getDimension().getDataType());
+                new StructField(dim.getColumnName(), dim.getDimension().getDataType());
       }
     }
 
     for (ProjectionMeasure msr : queryMeasures) {
       fields[msr.getOrdinal()] =
-          new StructField(msr.getColumnName(), msr.getMeasure().getDataType());
+              new StructField(msr.getColumnName(), msr.getMeasure().getDataType());
     }
 
     columnarBatch =
-        CarbonVectorBatch.allocate(fields, readSupport, queryModel.isDirectVectorFill());
+            CarbonVectorBatch.allocate(fields, readSupport, queryModel.isDirectVectorFill());
     CarbonColumnVector[] vectors = new CarbonColumnVector[fields.length];
     boolean[] filteredRows = new boolean[columnarBatch.capacity()];
     for (int i = 0; i < fields.length; i++) {
@@ -251,14 +269,14 @@ class PrestoCarbonVectorizedRecordReader extends AbstractRecordReader<Object> {
    * @param recorder
    */
   private void  logStatistics(
-      Long taskId,
-      Long queryStartTime,
-      QueryStatisticsRecorder recorder
+          Long taskId,
+          Long queryStartTime,
+          QueryStatisticsRecorder recorder
   ) {
     if (null != recorder) {
       QueryStatistic queryStatistic = new QueryStatistic();
       queryStatistic.addFixedTimeStatistic(QueryStatisticsConstants.EXECUTOR_PART,
-          System.currentTimeMillis() - queryStartTime);
+              System.currentTimeMillis() - queryStartTime);
       recorder.recordStatistics(queryStatistic);
       // print executor query statistics for each task_id
       TaskStatistics statistics = recorder.statisticsForTask(taskId, queryStartTime);

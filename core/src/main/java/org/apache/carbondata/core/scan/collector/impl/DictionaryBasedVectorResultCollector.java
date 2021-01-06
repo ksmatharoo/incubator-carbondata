@@ -46,7 +46,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
    * logger of result collector factory
    */
   private static final Logger LOGGER =
-      LogServiceFactory.getLogService(DictionaryBasedVectorResultCollector.class.getName());
+          LogServiceFactory.getLogService(DictionaryBasedVectorResultCollector.class.getName());
 
   protected ProjectionDimension[] queryDimensions;
 
@@ -70,7 +70,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
     super(blockExecutionInfos);
     this.isDirectVectorFill = blockExecutionInfos.isDirectVectorFill();
     if (this.isDirectVectorFill) {
-      LOGGER.info("Direct pagewise vector fill collector is used to scan and collect the data");
+      LOGGER.info("Direct page-wise vector fill collector is used to scan and collect the data");
     }
     // initialize only if the current block is not a restructured block else the initialization
     // will be taken care by RestructureBasedVectorResultCollector
@@ -98,6 +98,14 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
         columnVectorInfo.dimension = queryDimensions[i];
         columnVectorInfo.ordinal = queryDimensions[i].getDimension().getOrdinal();
         allColumnInfo[queryDimensions[i].getOrdinal()] = columnVectorInfo;
+      } else if (queryDimensions[i].getDimension().isComplex()) {
+        ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
+        complexList.add(columnVectorInfo);
+        columnVectorInfo.dimension = queryDimensions[i];
+        columnVectorInfo.ordinal = queryDimensions[i].getDimension().getOrdinal();
+        columnVectorInfo.genericQueryType =
+                executionInfo.getComlexDimensionInfoMap().get(columnVectorInfo.ordinal);
+        allColumnInfo[queryDimensions[i].getOrdinal()] = columnVectorInfo;
       } else if (queryDimensions[i].getDimension().getDataType() != DataTypes.DATE) {
         ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
         noDictInfoList.add(columnVectorInfo);
@@ -109,16 +117,8 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
         dictInfoList.add(columnVectorInfo);
         columnVectorInfo.dimension = queryDimensions[i];
         columnVectorInfo.directDictionaryGenerator = DirectDictionaryKeyGeneratorFactory
-            .getDirectDictionaryGenerator(queryDimensions[i].getDimension().getDataType());
+                .getDirectDictionaryGenerator(queryDimensions[i].getDimension().getDataType());
         columnVectorInfo.ordinal = queryDimensions[i].getDimension().getOrdinal();
-        allColumnInfo[queryDimensions[i].getOrdinal()] = columnVectorInfo;
-      } else if (queryDimensions[i].getDimension().isComplex()) {
-        ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
-        complexList.add(columnVectorInfo);
-        columnVectorInfo.dimension = queryDimensions[i];
-        columnVectorInfo.ordinal = queryDimensions[i].getDimension().getOrdinal();
-        columnVectorInfo.genericQueryType =
-            executionInfo.getComlexDimensionInfoMap().get(columnVectorInfo.ordinal);
         allColumnInfo[queryDimensions[i].getOrdinal()] = columnVectorInfo;
       } else {
         ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
@@ -138,7 +138,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
       }
       ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
       columnVectorInfo.measureVectorFiller = MeasureDataVectorProcessor.MeasureVectorFillerFactory
-          .getMeasureVectorFiller(queryMeasures[i].getMeasure().getDataType());
+              .getMeasureVectorFiller(queryMeasures[i].getMeasure().getDataType());
       columnVectorInfo.ordinal = queryMeasures[i].getMeasure().getOrdinal();
       columnVectorInfo.measure = queryMeasures[i];
       this.measureColumnInfo[j++] = columnVectorInfo;
@@ -160,7 +160,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
 
   @Override
   public void collectResultInColumnarBatch(BlockletScannedResult scannedResult,
-      CarbonColumnarBatch columnarBatch) {
+                                           CarbonColumnarBatch columnarBatch) {
     if (isDirectVectorFill) {
       collectResultInColumnarBatchDirect(scannedResult, columnarBatch);
     } else {
@@ -183,16 +183,16 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
         }
         fillColumnVectorDetails(columnarBatch, rowCounter, requiredRows);
         filteredRows = scannedResult.markFilteredRows(columnarBatch, rowCounter, requiredRows,
-            columnarBatch.getRowCounter());
+                columnarBatch.getRowCounter());
         fillResultToColumnarBatch(scannedResult, columnarBatch, rowCounter, availableRows,
-            requiredRows);
+                requiredRows);
         columnarBatch.setActualSize(columnarBatch.getActualSize() + requiredRows - filteredRows);
       }
     }
   }
 
   void fillResultToColumnarBatch(BlockletScannedResult scannedResult,
-      CarbonColumnarBatch columnarBatch, int rowCounter, int availableRows, int requiredRows) {
+                                 CarbonColumnarBatch columnarBatch, int rowCounter, int availableRows, int requiredRows) {
     scannedResult.fillColumnarDictionaryBatch(dictionaryInfo);
     scannedResult.fillColumnarNoDictionaryBatch(noDictionaryInfo);
     scannedResult.fillColumnarMeasureBatch(measureColumnInfo, measureInfo.getMeasureOrdinals());
@@ -216,7 +216,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
       allColumnInfo[i].vector = columnarBatch.columnVectors[i];
       if (null != allColumnInfo[i].dimension) {
         allColumnInfo[i].vector
-            .setBlockDataType(dimensionInfo.dataType[i]);
+                .setBlockDataType(dimensionInfo.dataType[i]);
       }
     }
   }
@@ -225,7 +225,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
    * Fill the vector during the page decoding.
    */
   private void collectResultInColumnarBatchDirect(BlockletScannedResult scannedResult,
-      CarbonColumnarBatch columnarBatch) {
+                                                  CarbonColumnarBatch columnarBatch) {
     int numberOfPages = scannedResult.numberOfpages();
     while (scannedResult.getCurrentPageCounter() < numberOfPages) {
       int currentPageRowCount = scannedResult.getCurrentPageRowCount();
@@ -251,12 +251,12 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
 
   private void fillResultToColumnarBatch(BlockletScannedResult scannedResult) {
     scannedResult.fillDataChunks(dictionaryInfo, noDictionaryInfo, measureColumnInfo,
-        measureInfo.getMeasureOrdinals());
+            measureInfo.getMeasureOrdinals(), complexInfo);
 
   }
 
   private void fillColumnVectorDetails(CarbonColumnarBatch columnarBatch,
-      BitSet deltaBitSet) {
+                                       BitSet deltaBitSet) {
     for (int i = 0; i < allColumnInfo.length; i++) {
       allColumnInfo[i].vectorOffset = columnarBatch.getRowCounter();
       allColumnInfo[i].vector = columnarBatch.columnVectors[i];
